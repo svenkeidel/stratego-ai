@@ -1,0 +1,226 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{mathtools}
+%\setlength{\mathindent}{0pt}
+\allowdisplaybreaks
+
+\usepackage{listings}
+\lstset{mathescape=true}
+\newcommand{\lst}[1]{\lstinline!#1!}
+
+\begin{document}
+
+\section*{Abstract Machine for System S}
+
+\newcommand{\state}[1]{\ensuremath \langle #1 \rangle}
+\newcommand{\transition}[2]{\ensuremath \state{#1} & \longrightarrow \state{#2}}
+\newcommand{\termrule}[3]{\ensuremath #1 \xrightarrow{#2} #3}
+\newcommand{\fail}{\ensuremath \uparrow}
+\newcommand{\cont}[2]{\ensuremath \mathbf{#1}(#2)}
+\newcommand{\return}{\ensuremath \hookleftarrow}
+\newcommand{\seq}{\ensuremath \mbox{\lst{$s_1$ ; $s_2$}}}
+\newcommand{\leftalt}{\ensuremath \mathrel{\vcenter{\hbox{+}}\mkern-17mu{\leftarrow}}}
+\newcommand{\fix}[2]{\ensuremath \mu #1 (#2)}
+\newcommand{\path}[2]{\ensuremath #1(#2)}
+\newcommand{\all}[1]{\ensuremath \square(#1)}
+\newcommand{\match}[1]{\ensuremath \mbox{\lst{match}($#1$)}}
+\newcommand{\build}[1]{\ensuremath \mbox{\lst{build}($#1$)}}
+\newcommand{\where}[1]{\ensuremath \mbox{\lst{where}($#1$)}}
+\newcommand{\test}[1]{\ensuremath \mbox{\lst{test}($#1$)}}
+\newcommand{\scope}[2]{\ensuremath \lbrace #1 : #2 \rbrace}
+\newcommand{\vars}[1]{\ensuremath \mathbf{#1}}
+\newcommand{\alt}{\ensuremath \; | \;}
+
+\begin{alignat*}{2}
+  t, t' &\in \mathit{Term} && \\
+  s &\in \mathit{Program} && \\
+  i &\in \mathbb{N}^+ && \\
+  \varsigma &\in \Sigma &=& \mathit{Term} \times \mathit{Program} \times \mathit{Env} \times \mathit{Kont} \\
+  \rho &\in \mathit{Env} &=& \mathit{Var} \mapsto_{\mathit{fin}} \mathit{Term} \\
+  \kappa &\in \mathit{Kont} &::=&\, \cont{test}{t,\rho,\kappa} \alt \cont{neg}{t,\rho,\kappa} \alt \cont{seq}{s,\kappa} \alt \cont{lchoice}{t,s,\kappa} \\
+  &&|&\; \cont{path}{t,\kappa} \alt \cont{cong}{i,t,t',\kappa} \alt \cont{where}{t,\kappa}
+\end{alignat*}
+%
+\begin{align*}
+  \varsigma & \longmapsto_{\mathit{S2}} \varsigma' \\
+  \hline & \\
+  \transition{t,\test{s},\rho,\kappa}{t,s,\rho, \cont{test}{t,\rho,\kappa}} \\
+  \transition{t,\return,\rho,\cont{test}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{test}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\neg s,\rho,\kappa}{t,s,\rho,\cont{neg}{t,\rho,\kappa}} \\
+  \transition{\fail,\return,\epsilon,\cont{neg}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
+  \transition{t,\return,\rho,\cont{neg}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,s_1;s_2,\rho,\kappa}{t,s_1,\rho,\cont{seq}{s_2,\kappa}} \\
+  \transition{t,\return,\rho,\cont{seq}{s_2,\kappa}}{t,s_2,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{seq}{s_2,\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,s_1 \leftalt s_2,\rho,\kappa}{t,s_1,\rho,\cont{lchoice}{t,s_2,\kappa}} \\
+  \transition{t,\return,\rho,\cont{lchoice}{t',s_2,\kappa}}{t,\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{lchoice}{t',s_2,\kappa}}{t',s_2,\rho,\kappa} \\
+  \notag \\
+  \transition{t,\fix{x}{s},\rho,\kappa}{t,s[x \coloneqq \fix{x}{s}],\rho,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
+             {t_i,s,\rho,\cont{path}{f(\overline{t_n}),\kappa}} \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa}\ \text{if}\ i > n \\
+  \transition{t_i',\return,\rho,\cont{path}{f(\overline{t_n}),\kappa}}
+             {f(\overline{t_n}[i \mapsto t_i']),s,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{path}{f(\overline{t_n}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),f(\overline{s_n}),\rho,\kappa}
+             {t_1,s_1,\rho,\cont{cong}{1,f(\overline{t_n}),f(\overline{s_n}),\kappa}} \\
+  \transition{t_i',\return,\rho,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {t_{i+1},s_{i+1},\rho,\cont{cong}{i+1,f(\overline{t_n}[i \mapsto t_i']),f(\overline{s_n}),\kappa}} \\
+  \transition{t_n',\return,\rho,\cont{cong}{n,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {f(\overline{t_n}[n \mapsto t_n']),\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\all{s},\rho,\kappa}
+             {f(\overline{t_n}),f(\overbrace{s,\ldots,s}^{n \text{ times}}),\rho,\kappa} \\
+  \notag \\
+  \transition{t,\match{x},\rho,\kappa}
+             {t,\return,\rho[x \mapsto t],\kappa} \text{ if } x \notin \text{dom}(\rho) \\
+  \transition{t,\match{x},\rho,\kappa}
+             {t,\return,\rho,\kappa} \text{ if } \rho(x) = t \\
+  \transition{t,\match{x},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \text{ if } \rho(x) \neq t \\
+  \transition{f(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
+             {t_1,\match{t_1'},\rho,\cont{match}{1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
+  \transition{t,\return,\rho,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {t_{i+1},\match{t_{i+1}'},\rho,\cont{match}{i+1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
+  \transition{t,\return,\rho,\cont{match}{n,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {f(\overline{t_n}),\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \transition{g(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\build{t'},\rho,\kappa}
+             {\rho(t'),\return,\rho,\kappa} \text{ if } \text{vars}(t') \subseteq \text{dom}(\rho) \\
+  \transition{t,\build{t'},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \text{ if } \text{vars}(t') \not\subseteq \text{dom}(\rho) \\
+  \notag \\
+  \transition{t,\where{s},\rho,\kappa}{t,s,\rho,\cont{where}{t,\kappa}} \\
+  \transition{t',\return,\rho,\cont{where}{t,\kappa}}{t,s,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{where}{t,\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\scope{\vars{x}}{s},\rho,\kappa}
+             {t,s,\rho \backslash \vars{x},\cont{scope}{\rho,\vars{x},\kappa}} \\
+  \transition{t,\return,\rho,\cont{scope}{\rho',\vars{x},\kappa}}
+             {t,\return,(\rho \backslash \vars{x}) \cup (\rho' | \vars{x}),\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{scope}{\rho,\vars{x},\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+\end{align*}
+
+\clearpage
+
+\section*{Abstract Machine for System S after AAM transformation}
+
+\newcommand{\tick}{\ensuremath \mathit{tick}}
+\newcommand{\alloc}{\ensuremath \mathit{alloc}}
+
+\begin{alignat*}{2}
+  t, t' &\in \mathit{Term} && \\
+  \tau &\in \mathit{Time} && \\
+  s &\in \mathit{Program} && \\
+  a &\in \mathit{Addr} && \\
+  i &\in \mathbb{N}^+ && \\
+  \varsigma &\in \Sigma &=& \mathit{Term} \times \mathit{Program} \times \mathit{Env} \times Store \times \mathit{Addr} \times \mathit{Time} \\
+  \rho &\in \mathit{Env} &=& \mathit{Var} \mapsto_{\mathit{fin}} \mathit{Addr} \\
+  \sigma &\in \mathit{Store} &=& \mathit{Addr} \mapsto_{\mathit{fin}} \mathcal{P}(\mathit{Storable}) \\
+  \nu &\in \mathit{Storeable} &=& \mathit{Term} + \mathit{Kont} \\
+  \kappa &\in \mathit{Kont} &::=&\, \cont{test}{t,\rho,a} \alt \cont{neg}{t,\rho,a} \alt \cont{seq}{s,a} \alt \cont{lchoice}{t,s,a} \\
+  &&|&\; \cont{path}{t,a} \alt \cont{cong}{i,t,t',a} \alt \cont{where}{t,a}
+\end{alignat*}
+%
+\begin{align*}
+  \tick &: \Sigma \times \mathit{Kont} \rightarrow Time \\
+  \alloc &: \Sigma \times \mathit{Kont} \rightarrow Addr
+\end{align*}
+%
+\begin{align*}
+  \varsigma & \longmapsto_{\mathit{AS2}} \varsigma', \text{where } \kappa \in \sigma(a),\ b = \alloc(\varsigma,\kappa),\ u = \tick(\varsigma,\kappa) \\
+  \hline & \\
+  \transition{t,\test{s},\rho,\kappa}{t,s,\rho, \cont{test}{t,\rho,\kappa}} \\
+  \transition{t,\return,\rho,\cont{test}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{test}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\neg s,\rho,\kappa}{t,s,\rho,\cont{neg}{t,\rho,\kappa}} \\
+  \transition{\fail,\return,\epsilon,\cont{neg}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
+  \transition{t,\return,\rho,\cont{neg}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,s_1;s_2,\rho,\kappa}{t,s_1,\rho,\cont{seq}{s_2,\kappa}} \\
+  \transition{t,\return,\rho,\cont{seq}{s_2,\kappa}}{t,s_2,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{seq}{s_2,\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,s_1 \leftalt s_2,\rho,\kappa}{t,s_1,\rho,\cont{lchoice}{t,s_2,\kappa}} \\
+  \transition{t,\return,\rho,\cont{lchoice}{t',s_2,\kappa}}{t,\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{lchoice}{t',s_2,\kappa}}{t',s_2,\rho,\kappa} \\
+  \notag \\
+  \transition{t,\fix{x}{s},\rho,\kappa}{t,s[x \coloneqq \fix{x}{s}],\rho,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
+             {t_i,s,\rho,\cont{path}{f(\overline{t_n}),\kappa}} \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa}\ \text{if}\ i > n \\
+  \transition{t_i',\return,\rho,\cont{path}{f(\overline{t_n}),\kappa}}
+             {f(\overline{t_n}[i \mapsto t_i']),s,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{path}{f(\overline{t_n}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),f(\overline{s_n}),\rho,\kappa}
+             {t_1,s_1,\rho,\cont{cong}{1,f(\overline{t_n}),f(\overline{s_n}),\kappa}} \\
+  \transition{t_i',\return,\rho,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {t_{i+1},s_{i+1},\rho,\cont{cong}{i+1,f(\overline{t_n}[i \mapsto t_i']),f(\overline{s_n}),\kappa}} \\
+  \transition{t_n',\return,\rho,\cont{cong}{n,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {f(\overline{t_n}[n \mapsto t_n']),\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\all{s},\rho,\kappa}
+             {f(\overline{t_n}),f(\overbrace{s,\ldots,s}^{n \text{ times}}),\rho,\kappa} \\
+  \notag \\
+  \transition{t,\match{x},\rho,\kappa}
+             {t,\return,\rho[x \mapsto t],\kappa} \text{ if } x \notin \text{dom}(\rho) \\
+  \transition{t,\match{x},\rho,\kappa}
+             {t,\return,\rho,\kappa} \text{ if } \rho(x) = t \\
+  \transition{t,\match{x},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \text{ if } \rho(x) \neq t \\
+  \transition{f(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
+             {t_1,\match{t_1'},\rho,\cont{match}{1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
+  \transition{t,\return,\rho,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {t_{i+1},\match{t_{i+1}'},\rho,\cont{match}{i+1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
+  \transition{t,\return,\rho,\cont{match}{n,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {f(\overline{t_n}),\return,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+  \transition{g(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\build{t'},\rho,\kappa}
+             {\rho(t'),\return,\rho,\kappa} \text{ if } \text{vars}(t') \subseteq \text{dom}(\rho) \\
+  \transition{t,\build{t'},\rho,\kappa}
+             {\fail,\return,\epsilon,\kappa} \text{ if } \text{vars}(t') \not\subseteq \text{dom}(\rho) \\
+  \notag \\
+  \transition{t,\where{s},\rho,\kappa}{t,s,\rho,\cont{where}{t,\kappa}} \\
+  \transition{t',\return,\rho,\cont{where}{t,\kappa}}{t,s,\rho,\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{where}{t,\kappa}}{\fail,\return,\epsilon,\kappa} \\
+  \notag \\
+  \transition{t,\scope{\vars{x}}{s},\rho,\kappa}
+             {t,s,\rho \backslash \vars{x},\cont{scope}{\rho,\vars{x},\kappa}} \\
+  \transition{t,\return,\rho,\cont{scope}{\rho',\vars{x},\kappa}}
+             {t,\return,(\rho \backslash \vars{x}) \cup (\rho' | \vars{x}),\kappa} \\
+  \transition{\fail,\return,\epsilon,\cont{scope}{\rho,\vars{x},\kappa}}
+             {\fail,\return,\epsilon,\kappa} \\
+\end{align*}
+
+
+\end{document}
