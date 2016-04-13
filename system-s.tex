@@ -126,101 +126,134 @@
 
 \newcommand{\tick}{\ensuremath \mathit{tick}}
 \newcommand{\alloc}{\ensuremath \mathit{alloc}}
+\newcommand{\update}[1]{\ensuremath \sqcup[\fresh \mapsto #1]}
+\newcommand{\clear}{\ensuremath \mathit{clear}}
+\newcommand{\old}{\ensuremath \alpha}
+\newcommand{\fresh}{\ensuremath \alpha'}
+\newcommand{\rest}{\ensuremath \alpha''}
 
 \begin{alignat*}{2}
   t, t' &\in \mathit{Term} && \\
-  \tau &\in \mathit{Time} && \\
   s &\in \mathit{Program} && \\
-  a &\in \mathit{Addr} && \\
-  i &\in \mathbb{N}^+ && \\
-  \varsigma &\in \Sigma &=& \mathit{Term} \times \mathit{Program} \times \mathit{Env} \times Store \times \mathit{Addr} \times \mathit{Time} \\
-  \rho &\in \mathit{Env} &=& \mathit{Var} \mapsto_{\mathit{fin}} \mathit{Addr} \\
-  \sigma &\in \mathit{Store} &=& \mathit{Addr} \mapsto_{\mathit{fin}} \mathcal{P}(\mathit{Storable}) \\
-  \nu &\in \mathit{Storeable} &=& \mathit{Term} + \mathit{Kont} \\
-  \kappa &\in \mathit{Kont} &::=&\, \cont{test}{t,\rho,a} \alt \cont{neg}{t,\rho,a} \alt \cont{seq}{s,a} \alt \cont{lchoice}{t,s,a} \\
-  &&|&\; \cont{path}{t,a} \alt \cont{cong}{i,t,t',a} \alt \cont{where}{t,a}
+  \alpha &\in \mathit{Addr} && \\
+  \tau &\in \mathit{Time} && \\
+  \varsigma &\in \Sigma &=&\ \mathit{Term} \times \mathit{Program} \times \mathit{Env} \times Store \times \mathit{Addr} \times \mathit{Time} \\
+  \rho &\in \mathit{Env} &=&\ \mathit{Var} \mapsto_{\mathit{fin}} \mathit{Addr} \\
+  \sigma &\in \mathit{Store} &=&\ \mathit{Addr} \mapsto_{\mathit{fin}} \mathcal{P}(\mathit{Storable}) \\
+  \nu &\in \mathit{Storeable} &=&\ \mathit{Term} + \mathit{Kont} \\
+  \kappa &\in \mathit{Kont} &::=&\ \cont{test}{t,\rho,\alpha}
+                              \alt \cont{neg}{t,\rho,\alpha}
+                              \alt \cont{seq}{s,\alpha}
+                              \alt \cont{lchoice}{t,s,\alpha} \\
+                            &&|&\; \cont{path}{t,\alpha}
+                              \alt \cont{cong}{i,t,t',\alpha}
+                              \alt \cont{where}{t,\alpha}
 \end{alignat*}
 %
 \begin{align*}
-  \tick &: \Sigma \times \mathit{Kont} \rightarrow Time \\
-  \alloc &: \Sigma \times \mathit{Kont} \rightarrow Addr
+  \tick  :&\ \Sigma \times \mathit{Kont} \rightarrow Time \\
+  \alloc :&\ \Sigma \times \mathit{Kont} \rightarrow Addr
+  %\\
+  %\clear :&\ \mathit{Env} \times \mathit{Store} \rightarrow \mathit{Store} \\
+  %\clear(\rho,\sigma) =&\ \sigma \sqcup [ \alpha \mapsto\,\fail\,|\ \alpha \in \mathit{cod}(\rho) ]
 \end{align*}
 %
 \begin{align*}
-  \varsigma & \longmapsto_{\mathit{AS2}} \varsigma', \text{where } \kappa \in \sigma(a),\ b = \alloc(\varsigma,\kappa),\ u = \tick(\varsigma,\kappa) \\
-  \hline & \\
-  \transition{t,\test{s},\rho,\kappa}{t,s,\rho, \cont{test}{t,\rho,\kappa}} \\
-  \transition{t,\return,\rho,\cont{test}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{test}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{t,\neg s,\rho,\kappa}{t,s,\rho,\cont{neg}{t,\rho,\kappa}} \\
-  \transition{\fail,\return,\epsilon,\cont{neg}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
-  \transition{t,\return,\rho,\cont{neg}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{t,s_1;s_2,\rho,\kappa}{t,s_1,\rho,\cont{seq}{s_2,\kappa}} \\
-  \transition{t,\return,\rho,\cont{seq}{s_2,\kappa}}{t,s_2,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{seq}{s_2,\kappa}}{\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{t,s_1 \leftalt s_2,\rho,\kappa}{t,s_1,\rho,\cont{lchoice}{t,s_2,\kappa}} \\
-  \transition{t,\return,\rho,\cont{lchoice}{t',s_2,\kappa}}{t,\return,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{lchoice}{t',s_2,\kappa}}{t',s_2,\rho,\kappa} \\
-  \notag \\
-  \transition{t,\fix{x}{s},\rho,\kappa}{t,s[x \coloneqq \fix{x}{s}],\rho,\kappa} \\
-  \notag \\
-  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
-             {t_i,s,\rho,\cont{path}{f(\overline{t_n}),\kappa}} \\
-  \transition{f(\overline{t_n}),\path{i}{s},\rho,\kappa}
-             {\fail,\return,\epsilon,\kappa}\ \text{if}\ i > n \\
-  \transition{t_i',\return,\rho,\cont{path}{f(\overline{t_n}),\kappa}}
-             {f(\overline{t_n}[i \mapsto t_i']),s,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{path}{f(\overline{t_n}),\kappa}}
-             {\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{f(\overline{t_n}),f(\overline{s_n}),\rho,\kappa}
-             {t_1,s_1,\rho,\cont{cong}{1,f(\overline{t_n}),f(\overline{s_n}),\kappa}} \\
-  \transition{t_i',\return,\rho,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
-             {t_{i+1},s_{i+1},\rho,\cont{cong}{i+1,f(\overline{t_n}[i \mapsto t_i']),f(\overline{s_n}),\kappa}} \\
-  \transition{t_n',\return,\rho,\cont{cong}{n,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
-             {f(\overline{t_n}[n \mapsto t_n']),\return,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\kappa}}
-             {\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{f(\overline{t_n}),\all{s},\rho,\kappa}
-             {f(\overline{t_n}),f(\overbrace{s,\ldots,s}^{n \text{ times}}),\rho,\kappa} \\
-  \notag \\
-  \transition{t,\match{x},\rho,\kappa}
-             {t,\return,\rho[x \mapsto t],\kappa} \text{ if } x \notin \text{dom}(\rho) \\
-  \transition{t,\match{x},\rho,\kappa}
-             {t,\return,\rho,\kappa} \text{ if } \rho(x) = t \\
-  \transition{t,\match{x},\rho,\kappa}
-             {\fail,\return,\epsilon,\kappa} \text{ if } \rho(x) \neq t \\
-  \transition{f(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
-             {t_1,\match{t_1'},\rho,\cont{match}{1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
-  \transition{t,\return,\rho,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
-             {t_{i+1},\match{t_{i+1}'},\rho,\cont{match}{i+1,f(\overline{t_n}),f(\overline{t_n'}),\kappa}} \\
-  \transition{t,\return,\rho,\cont{match}{n,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
-             {f(\overline{t_n}),\return,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\kappa}}
-             {\fail,\return,\epsilon,\kappa} \\
-  \transition{g(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\kappa}
-             {\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{t,\build{t'},\rho,\kappa}
-             {\rho(t'),\return,\rho,\kappa} \text{ if } \text{vars}(t') \subseteq \text{dom}(\rho) \\
-  \transition{t,\build{t'},\rho,\kappa}
-             {\fail,\return,\epsilon,\kappa} \text{ if } \text{vars}(t') \not\subseteq \text{dom}(\rho) \\
-  \notag \\
-  \transition{t,\where{s},\rho,\kappa}{t,s,\rho,\cont{where}{t,\kappa}} \\
-  \transition{t',\return,\rho,\cont{where}{t,\kappa}}{t,s,\rho,\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{where}{t,\kappa}}{\fail,\return,\epsilon,\kappa} \\
-  \notag \\
-  \transition{t,\scope{\vars{x}}{s},\rho,\kappa}
-             {t,s,\rho \backslash \vars{x},\cont{scope}{\rho,\vars{x},\kappa}} \\
-  \transition{t,\return,\rho,\cont{scope}{\rho',\vars{x},\kappa}}
-             {t,\return,(\rho \backslash \vars{x}) \cup (\rho' | \vars{x}),\kappa} \\
-  \transition{\fail,\return,\epsilon,\cont{scope}{\rho,\vars{x},\kappa}}
-             {\fail,\return,\epsilon,\kappa} \\
+  \state{t,s,\rho,\sigma,\alpha,\tau} \longmapsto_{\mathit{AS2}} \state{t',s',\rho',\sigma',\alpha',\tau'} \text{ iff }
+  \state{t,s,\rho,\sigma,\alpha,\alpha_\mathit{fresh},\kappa} \longmapsto_{\widehat{\mathit{AS2}}} \state{t',s',\rho',\sigma',\alpha'} \\
+  \text { where } \kappa \in \sigma(\alpha),\ \alpha_\mathit{fresh} = \alloc(\varsigma,\kappa),\ \tau' = \tick(\varsigma,\kappa)
 \end{align*}
-
+%
+\begin{align*}
+  \widehat{\varsigma} & \longmapsto_{\widehat{\mathit{AS2}}} \widehat{\varsigma}' \\
+  \hline & \\
+  \transition{t,\test{s},\rho,\sigma,\old,\fresh,\kappa}
+             {t,s,\rho,\sigma \update{\cont{test}{t,\rho,\old}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{test}{t',\rho',\rest}}
+             {t',\return,\rho',\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{test}{t',\rho',\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+  \notag \\
+  \transition{t,\neg s,\rho,\sigma,\old,\fresh,\kappa}
+             {t,s,\rho,\sigma\update{\cont{neg}{t,\rho,\old}},\fresh} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{neg}{t',\rho',\rest}}
+             {t',\return,\rho',\sigma,\rest} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{neg}{t',\rho',\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+             %{\fail,\return,\epsilon,\clear(\rho,\sigma),\rest} \\
+  \notag \\
+  \transition{t,s_1;s_2,\rho,\sigma,\old,\fresh,\kappa}
+             {t,s_1,\rho,\sigma\update{\cont{seq}{s_2,\old}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{seq}{s_2,\rest}}
+             {t,s_2,\rho,\rest} \\
+  \transition{\fail,\return,\epsilon,\old,\fresh,\cont{seq}{s_2,\rest}}
+             {\fail,\return,\epsilon,\rest} \\
+  \notag \\
+  \transition{t,s_1 \leftalt s_2,\rho,\sigma,\old,\fresh,\kappa}
+             {t,s_1,\rho,\sigma\update{\cont{lchoice}{t,s_2,\old}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{lchoice}{t',s_2,\rest}}
+             {t,\return,\rho,\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{lchoice}{t',s_2,\rest}}
+             {t',s_2,\rho,\sigma,\rest} \\
+  \notag \\
+  \transition{t,\fix{x}{s},\rho,\sigma,\old,\fresh,\kappa}{t,s[x \coloneqq \fix{x}{s}],\rho,\sigma,\old} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\sigma,\old,\fresh,\kappa}
+             {t_i,s,\rho,\sigma\update{\cont{path}{f(\overline{t_n}),\old}},\fresh} \\
+  \transition{f(\overline{t_n}),\path{i}{s},\rho,\sigma,\old,\fresh,\kappa}
+             {\fail,\return,\epsilon,\sigma,\old} \text{ if } i > n \\
+  \transition{t_i',\return,\rho,\sigma,\old,\fresh,\cont{path}{f(\overline{t_n}),\rest}}
+             {f(\overline{t_n}[i \mapsto t_i']),s,\rho,\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{path}{f(\overline{t_n}),\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+  \notag \\
+  \transition{f(\overline{t_n}),f(\overline{s_n}),\rho,\sigma,\old,\fresh,\kappa}
+             {t_1,s_1,\rho,\sigma,\sigma\update{\cont{cong}{1,f(\overline{t_n}),f(\overline{s_n}),\old}},\fresh} \\
+  \transition{t_i',\return,\rho,\sigma,\fresh,\old,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\rest}}
+             {t_{i+1},s_{i+1},\rho,\sigma\update{\cont{cong}{i+1,f(\overline{t_n}[i \mapsto t_i']),f(\overline{s_n}),\rest}},\fresh} \\
+  \transition{t_n',\return,\rho,\sigma,\fresh,\old,\cont{cong}{n,f(\overline{t_n}),f(\overline{s_n}),\rest}}
+             {f(\overline{t_n}[n \mapsto t_n']),\return,\rho,\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{cong}{i,f(\overline{t_n}),f(\overline{s_n}),\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+  \notag \\
+  \transition{f(\overline{t_n}),\all{s},\rho,\sigma,\old,\fresh,\kappa}
+             {f(\overline{t_n}),f(\overbrace{s,\ldots,s}^{n \text{ times}}),\rho,\sigma,\old} \\
+  \notag \\
+  \transition{t,\match{x},\rho,\sigma,\old,\fresh,\kappa}
+             {t,\return,\rho[x \mapsto t],\sigma,\old} \text{ if } x \notin \text{dom}(\rho) \\
+  \transition{t,\match{x},\rho,\sigma,\old,\fresh,\kappa}
+             {t,\return,\rho,\sigma,\old} \text{ if } \rho(x) = t \\
+  \transition{t,\match{x},\rho,\sigma,\old,\fresh,\kappa}
+             {\fail,\return,\epsilon,\sigma,\old} \text{ if } \rho(x) \neq t \\
+  \transition{f(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\sigma,\old,\fresh,\kappa}
+             {t_1,\match{t_1'},\rho,\sigma\update{\cont{match}{1,f(\overline{t_n}),f(\overline{t_n'}),\old}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\rest}}
+             {t_{i+1},\match{t_{i+1}'},\rho,\sigma\update{\cont{match}{i+1,f(\overline{t_n}),f(\overline{t_n'}),\rest}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{match}{n,f(\overline{t_n}),f(\overline{t_n'}),\rest}}
+             {f(\overline{t_n}),\return,\rho,\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{match}{i,f(\overline{t_n}),f(\overline{t_n'}),\rest}}
+             {\fail,\return,\epsilon,\sigma,\fresh} \\
+  \transition{g(\overline{t_n}),\match{f(\overline{t_n'})},\rho,\sigma,\old,\fresh,\kappa}
+             {\fail,\return,\epsilon,\sigma,\old} \\
+  \notag \\
+  \transition{t,\build{t'},\rho,\sigma,\old,\fresh,\kappa}
+             {\rho(t'),\return,\rho,\sigma,\old} \text{ if } \text{vars}(t') \subseteq \text{dom}(\rho) \\
+  \transition{t,\build{t'},\rho,\sigma,\old,\fresh,\kappa}
+             {\fail,\return,\epsilon,\sigma,\old} \text{ if } \text{vars}(t') \not\subseteq \text{dom}(\rho) \\
+  \notag \\
+  \transition{t,\where{s},\rho,\sigma,\old,\fresh,\kappa}
+             {t,s,\rho,\sigma\update{\cont{where}{t,\old}},\fresh} \\
+  \transition{t',\return,\rho,\sigma,\old,\fresh,\cont{where}{t,\rest}}
+             {t,s,\rho,\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{where}{t,\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+  \notag \\
+  \transition{t,\scope{\vars{x}}{s},\rho,\sigma,\old,\fresh,\kappa}
+             {t,s,\rho \backslash \vars{x},\sigma\update{\cont{scope}{\rho,\vars{x},\old}},\fresh} \\
+  \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{scope}{\rho',\vars{x},\rest}}
+             {t,\return,(\rho \backslash \vars{x}) \cup (\rho' | \vars{x}),\sigma,\rest} \\
+  \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{scope}{\rho,\vars{x},\rest}}
+             {\fail,\return,\epsilon,\sigma,\rest} \\
+\end{align*}
 
 \end{document}
