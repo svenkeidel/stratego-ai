@@ -6,7 +6,7 @@ pkgs.stdenv.mkDerivation {
   src = ./.;
   buildInputs = [
     (pkgs.texlive.combine {
-      inherit (pkgs.texlive) scheme-small pgf;
+      inherit (pkgs.texlive) scheme-small cm-super stmaryrd;
     })
   ];
 }

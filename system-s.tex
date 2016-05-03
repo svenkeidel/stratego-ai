@@ -1,15 +1,17 @@
 \documentclass{article}
 
-\usepackage{amsmath}
-\usepackage{amssymb}
-\usepackage{amsfonts}
-\usepackage{mathtools}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath,amssymb,amsfonts,mathtools,stmaryrd}
 %\setlength{\mathindent}{0pt}
 \allowdisplaybreaks
 
 \usepackage{listings}
 \lstset{mathescape=true}
 \newcommand{\lst}[1]{\lstinline!#1!}
+
+\usepackage{bcprules}
 
 \begin{document}
 
@@ -21,15 +23,15 @@
 \newcommand{\fail}{\ensuremath \uparrow}
 \newcommand{\cont}[2]{\ensuremath \mathbf{#1}(#2)}
 \newcommand{\return}{\ensuremath \hookleftarrow}
-\newcommand{\seq}{\ensuremath \mbox{\lst{$s_1$ ; $s_2$}}}
-\newcommand{\leftalt}{\ensuremath \mathrel{\vcenter{\hbox{+}}\mkern-17mu{\leftarrow}}}
+\newcommand{\seq}[2]{\ensuremath #1 ; #2}
+\newcommand{\leftchoice}[2]{\ensuremath #1 \mathrel{\vcenter{\hbox{+}}\mkern-18.5mu{\leftarrow}} #2}
 \newcommand{\fix}[2]{\ensuremath \mu #1 (#2)}
 \newcommand{\path}[2]{\ensuremath #1(#2)}
 \newcommand{\all}[1]{\ensuremath \square(#1)}
-\newcommand{\match}[1]{\ensuremath \mbox{\lst{match}($#1$)}}
-\newcommand{\build}[1]{\ensuremath \mbox{\lst{build}($#1$)}}
-\newcommand{\where}[1]{\ensuremath \mbox{\lst{where}($#1$)}}
-\newcommand{\test}[1]{\ensuremath \mbox{\lst{test}($#1$)}}
+\newcommand{\match}[1]{\ensuremath \text{match}(#1)}
+\newcommand{\build}[1]{\ensuremath \text{build}(#1)}
+\newcommand{\where}[1]{\ensuremath \text{where}(#1)}
+\newcommand{\test}[1]{\ensuremath \text{test}(#1)}
 \newcommand{\scope}[2]{\ensuremath \lbrace #1 : #2 \rbrace}
 \newcommand{\vars}[1]{\ensuremath \mathbf{#1}}
 \newcommand{\alt}{\ensuremath \; | \;}
@@ -55,11 +57,11 @@
   \transition{\fail,\return,\epsilon,\cont{neg}{t',\rho',\kappa}}{t',\return,\rho',\kappa} \\
   \transition{t,\return,\rho,\cont{neg}{t',\rho',\kappa}}{\fail,\return,\epsilon,\kappa} \\
   \notag \\
-  \transition{t,s_1;s_2,\rho,\kappa}{t,s_1,\rho,\cont{seq}{s_2,\kappa}} \\
+  \transition{t,\seq{s_1}{s_2},\rho,\kappa}{t,s_1,\rho,\cont{seq}{s_2,\kappa}} \\
   \transition{t,\return,\rho,\cont{seq}{s_2,\kappa}}{t,s_2,\rho,\kappa} \\
   \transition{\fail,\return,\epsilon,\cont{seq}{s_2,\kappa}}{\fail,\return,\epsilon,\kappa} \\
   \notag \\
-  \transition{t,s_1 \leftalt s_2,\rho,\kappa}{t,s_1,\rho,\cont{lchoice}{t,s_2,\kappa}} \\
+  \transition{t,\leftchoice{s_1}{s_2},\rho,\kappa}{t,s_1,\rho,\cont{lchoice}{t,s_2,\kappa}} \\
   \transition{t,\return,\rho,\cont{lchoice}{t',s_2,\kappa}}{t,\return,\rho,\kappa} \\
   \transition{\fail,\return,\epsilon,\cont{lchoice}{t',s_2,\kappa}}{t',s_2,\rho,\kappa} \\
   \notag \\
@@ -121,7 +123,6 @@
 \end{align*}
 
 \clearpage
-
 \section*{Abstract Machine for System S after AAM transformation}
 
 \newcommand{\tick}{\ensuremath \mathit{tick}}
@@ -182,14 +183,14 @@
              {\fail,\return,\epsilon,\sigma,\rest} \\
              %{\fail,\return,\epsilon,\clear(\rho,\sigma),\rest} \\
   \notag \\
-  \transition{t,s_1;s_2,\rho,\sigma,\old,\fresh,\kappa}
+  \transition{t,\seq{s_1}{s_2},\rho,\sigma,\old,\fresh,\kappa}
              {t,s_1,\rho,\sigma\update{\cont{seq}{s_2,\old}},\fresh} \\
   \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{seq}{s_2,\rest}}
              {t,s_2,\rho,\rest} \\
   \transition{\fail,\return,\epsilon,\old,\fresh,\cont{seq}{s_2,\rest}}
              {\fail,\return,\epsilon,\rest} \\
   \notag \\
-  \transition{t,s_1 \leftalt s_2,\rho,\sigma,\old,\fresh,\kappa}
+  \transition{t,\leftchoice{s_1}{s_2},\rho,\sigma,\old,\fresh,\kappa}
              {t,s_1,\rho,\sigma\update{\cont{lchoice}{t,s_2,\old}},\fresh} \\
   \transition{t,\return,\rho,\sigma,\old,\fresh,\cont{lchoice}{t',s_2,\rest}}
              {t,\return,\rho,\sigma,\rest} \\
@@ -255,5 +256,249 @@
   \transition{\fail,\return,\epsilon,\sigma,\old,\fresh,\cont{scope}{\rho,\vars{x},\rest}}
              {\fail,\return,\epsilon,\sigma,\rest} \\
 \end{align*}
+
+\section*{Concrete Semantics of System S}
+
+\newcommand{\Domain}{\ensuremath \mathcal{D}}
+\newcommand{\Terms}{\ensuremath \mathcal{T}}
+\newcommand{\Fail}{\ensuremath \mathcal{F}}
+\newcommand{\Env}{\ensuremath \mathcal{E}}
+\newcommand{\Pow}[1]{\ensuremath \mathcal{P}(#1)}
+\newcommand{\Fstrat}[1]{\ensuremath \text{Fstrat}\llbracket #1 \rrbracket}
+
+\begin{align*}
+  \Terms \times \Env \rightharpoonup (\Terms \times \Env) + \Fail
+\end{align*}
+
+\section*{Forward Collection Semantics of System S}
+
+\begin{align*}
+  \Fstrat{\mathbf{strat}} &: \Pow{\Terms \times \Env} \rightarrow \Pow{(\Terms \times \Env) + \Fail} \\
+  \Fstrat{s}(\mathit{TE}) &= \lbrace t' | \exists (t,\rho) \in \mathit{TE}.\ \termrule{t:\rho}{s}{t':\rho'} \rbrace
+\end{align*}
+
+The forward collection semantics $\Fstrat{s}(\mathit{TE})$ specifies the strongest postcondition that result terms satisfy after the strategy $s$ has been executed in an environment and with an input term that satisfy $\mathit{TE}$. 
+
+\noindent
+Fstrat is a complete join morphism, i.e.
+%
+\begin{align*}
+  \Fstrat{s}(\bigcup_k \mathit{TE}_k) = \bigcup_k(\Fstrat{s}(\mathit{TE}_k)),
+\end{align*}
+%
+which implies montony.
+
+\section*{Denotational Semantics of System S}
+
+\newcommand{\lift}[2]{\ensuremath \text{lift}_{#1}(#2)}
+\newcommand{\meet}{\ensuremath \sqcap}
+\newcommand{\join}{\ensuremath \sqcup}
+\newcommand{\eval}[3]{\ensuremath \mathbb{E} \llbracket #1 \rrbracket (#2,#3)}
+\newcommand{\var}{\ensuremath \mathcal{V}ar}
+\newcommand{\unfold}[3]{\ensuremath \text{unfold}(#1,#2,#3)}
+\newcommand{\Fix}[2]{\ensuremath \text{fix}(#1,#2)}
+
+%% \begin{align*}
+%%   \text{lift}_f &: \domain_{((\var \rightarrow \terms) \times \terms) + \Fail} \rightarrow \domain_{((\var \rightarrow \terms) \times \terms) + \Fail} \\
+%%   \lift{f}{d} &=
+%%     \begin{cases}
+%%       \fail,& \text{if } d =\ \fail \\
+%%       f(d),& \text{otherwise}
+%%     \end{cases} \\
+%%   \mu(f) &= \bigsqcup_{n\in \mathbb{N}} f^n(\bot)
+%% \end{align*}
+
+\begin{align*}
+  \mathbb{E} \llbracket \mathbf{strat} \rrbracket &: (\var \rightarrow \Domain_\Terms) \times \Domain_\Terms \rightarrow (((\var \rightarrow \Domain_\Terms) \times \Domain_\Terms) + \Domain_\Fail) \\
+  \\
+  \eval{\test{s}}{\rho}{t} &=
+    \begin{cases}
+      \fail,& \text{if } \eval{s}{\rho}{t} =\ \fail \\
+      (\rho,t),& \text{otherwise}
+    \end{cases} \\
+  \eval{\neg s}{\rho}{t} &=
+    \begin{cases}
+      \fail,& \text{if } \eval{s}{\rho}{t} \neq\ \fail \\
+      (\rho,t),& \text{otherwise}
+    \end{cases} \\
+  \eval{\seq{s_1}{s_2}}{\rho}{t} &=
+    \begin{cases}
+      (\rho'',t''), & \text{ if } \eval{s_1}{\rho}{t} = (\rho',t') \text{ and } \eval{s_2}{\rho'}{t'} = (\rho'',t'') \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\leftchoice{s_1}{s_2}}{\rho}{t} &=
+    \begin{cases}
+      (\rho',t'), & \text{if } \eval{s_1}{\rho}{t} = (\rho',t') \\
+      (\rho',t'), & \text{if } \eval{s_1}{\rho}{t} =\ \fail \text{ and } \eval{s_2}{\rho}{t} = (\rho'',t'') \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\fix{x}{s}}{\rho}{t} &= \eval{s'}{\rho}{t}, \text{where } s' = s[x \coloneqq \fix{x}{s}] \\
+  \eval{i(s)}{\rho}{f(t_1,\ldots,t_n)} &= 
+    \begin{cases}
+      (\rho',f(\ldots,t_{i-1}, t_i', t_{i+1}, \ldots)), & \text{if } \eval{s}{\rho}{t_{i}} = (\rho',t_{i}') \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{f(s_1,\ldots,s_2)}{\rho_1}{g(t_1,\ldots,t_n)} &= 
+    \begin{cases}
+      (\rho_{n+1},f(t_1',\ldots,t_n')), & \text{if } f = g \text{ and } \eval{s_i}{\rho_{i}}{t_{i}} = (\rho_{i+1},t_{i}') \text { for all } 1 \leq i \leq n \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\all{s}}{\rho_1}{f(t_1,\ldots,t_n)} &= 
+    \begin{cases}
+      (\rho_{n+1},f(t_1',\ldots,t_n')), & \text{if } \eval{s}{\rho_{i}}{t_{i}} = (\rho_{i+1},t_{i}') \text { for all } 1 \leq i \leq n \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\match{t}}{\rho_1}{t'} &= 
+    \begin{cases}
+      (\rho_{n+1},t'), & \text{if } t = f(t_1,\ldots,t_n) \text{ and } t' = f(t_1',\ldots,t_n') \\
+                      & \text{and } \eval{\match{t_i}}{\rho_{i}}{t_{i}'} = (\rho_{i+1},t_{i}') \text { for all } 1 \leq i \leq n \\
+      (\rho',t'), & \text{if } t = x \text{ and } x \notin \text{dom}(\rho_1) \text{ and } \rho' = \rho_1[x \mapsto t]  \\
+      (\rho_1,t'), & \text{if } t = x \text{ and } x \in \text{dom}(\rho_1) \text{ and } \rho_1(x) = t' \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\build{t}}{\rho}{t'} &= 
+    \begin{cases}
+      (\rho,\rho(t)), & \text{if } \text{vars}(t) \subseteq \text{dom}(\rho) \\
+      \fail, & \text{otherwise}
+    \end{cases} \\
+  \eval{\where{s}}{\rho}{t} &=
+    \begin{cases}
+      (\rho',t),& \text{if } \eval{s}{\rho}{t} = (\rho',t') \\
+      \fail,& \text{otherwise} \\
+    \end{cases} \\
+  \eval{\scope{\mathbf{x}}{s}}{\rho}{t} &=
+    \begin{cases}
+      ((\rho' \backslash \mathbf{x}) \cup (\rho | \mathbf{x}),t'),& \text{if } \eval{s}{\rho \backslash \mathbf{x}}{t} = (\rho',t') \\
+      \fail,& \text{otherwise} \\
+    \end{cases} \\
+\end{align*}
+
+%% \section*{Constraint-based System S}
+
+%% \renewcommand{\transition}[6]{#1 : #2 \xrightarrow{#3} #4 : #5\,|\,#6}
+%% \newcommand{\transfail}[4]{#1 : #2 \xrightarrow{#3}\, \fail |\,#4}
+%% \newcommand{\env}{\ensuremath \mathcal{E}}
+%% \newcommand{\con}{\ensuremath \mathcal{C}}
+%% \newcommand{\emptycon}{\ensuremath \lbrace \rbrace}
+%% \newcommand{\directsubterms}[1]{\ensuremath \text{desc}(#1)}
+
+%% \subsection*{Test}
+
+%% \infrule{\transition{t}{\env}{s[x \coloneqq \fix{x}{s}]}{t'}{\env'}{\con}}
+%%         {\transition{t}{\env}{\test{s}}{t'}{\env'}{\con}}
+
+%% \subsection*{Sequence}
+
+%% \infrule{\transition{t}{\env}{s_1}{t'}{\env'}{\con} \\
+%%          \transition{t'}{\env'}{s_1}{t''}{\env''}{\con'} \\
+%%          \con'' = \con \cup \con'}
+%%         {\transition{t}{\env}{\seq{s_1}{s_2}}{t''}{\env''}{\con''}}
+
+%% \infrule{\transfail{t}{\env}{s_1}{\con}}
+%%         {\transfail{t}{\env}{\seq{s_1}{s_2}}{\con}}
+
+%% \infrule{\transition{t}{\env}{s_1}{t'}{\env'}{\con} \\
+%%          \transfail{t'}{\env'}{s_1}{\con'} \\
+%%          \con'' = \con \cup \con'}
+%%         {\transfail{t}{\env}{\seq{s_1}{s_2}}{\con''}}
+
+%% \subsection*{Left Choice}
+
+%% \infrule{\transition{t}{\env}{s_1}{t'}{\env'}{\con}}
+%%         {\transition{t}{\env}{\leftchoice{s_1}{s_2}}{t'}{\env'}{\con}}
+%% \infrule{\transfail{t}{\env}{s_1}{\con} \\
+%%          \transition{t}{\env}{s_2}{t'}{\env'}{\con'} \\
+%%          \con'' = \con \cup \con'}
+%%         {\transition{t}{\env}{\leftchoice{s_1}{s_2}}{t'}{\env'}{\con''}}
+%% \infrule{\transfail{t}{\env}{s_1}{\con} \\
+%%          \transfail{t}{\env}{s_2}{\con'} \\
+%%          \con'' = \con \cup \con'}
+%%         {\transfail{t}{\env}{\leftchoice{s_1}{s_2}}{\con''}}
+
+%% \subsection*{Recursion}
+
+%% \infrule{\transition{t}{\env}{s[x \coloneqq \fix{x}{s}]}{t'}{\env'}{\con}}
+%%         {\transition{t}{\env}{\fix{x}{s}}{t'}{\env'}{\con}}
+
+%% \infrule{\transfail{t}{\env}{s[x \coloneqq \fix{x}{s}]}{\con}}
+%%         {\transfail{t}{\env}{\fix{x}{s}}{\con}}
+
+%% \subsection*{Path}
+
+%% \infrule{\transition{t_i'}{\env}{s}{t_i''}{\env'}{\con} \\
+%%          \con' = \con \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          f \in \Sigma^{(n)} \\
+%%          t_1',\ldots,t_n' \text{ fresh}}
+%%         {\transition{t}{\env}{\path{i}{s}}{f(\ldots,t_{i-1}',t_i'',t_{i+1}',\ldots)}{\env'}{\con'}}
+%% \infrule{\transfail{t_i'}{\env}{s}{\con} \\
+%%          \con' = \con \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          f \in \Sigma^{(n)} \\
+%%          t_1',\ldots,t_n' \text{ fresh}}
+%%         {\transfail{t}{\env}{\path{i}{s}}{\con'}}
+%% \infrule{\con' = \lbrace t = f(t_1',\ldots,t_n'), i > |\directsubterms{t}| \rbrace \\
+%%          f \in \Sigma^{(n)} \\
+%%          t_1',\ldots,t_n' \text{ fresh}}
+%%         {\transfail{t}{\env}{\path{i}{s}}{\con'}}
+
+%% \subsection*{Congruence}
+
+%% \infrule{\transition{t_i'}{\env_i}{s}{t_{i}''}{\env_{i+1}}{\con_i} \text{ for all } 1 \leq i \leq n \\
+%%          \con' = \con_1 \cup \ldots \cup \con_n \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          t_1',\ldots,t_n' \text{ fresh}
+%%        }
+%%        {\transition{t}{\env_1}{f(s_1,\ldots,s_n)}{f(t_1'',\ldots,t_n'')}{\env_{n+1}}{\con'}}
+%% \infrule{\transition{t_i'}{\env_i}{s_i}{t_{i}''}{\env_{i+1}}{\con_i} \text{ for all } 1 \leq i < k \\
+%%          \transfail{t_k'}{\env_k}{s_k}{\con__k} \\
+%%          \con' = \con_1 \cup \ldots \cup \con_n \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          t_1',\ldots,t_n' \text{ fresh}
+%%        }
+%%        {\transition{t}{\env_1}{f(s_1,\ldots,s_n)}{f(t_1'',\ldots,t_n'')}{\env_{n+1}}{\con'}}
+
+%% \subsection*{All}
+
+%% \infrule{\transition{t_i'}{\env_i}{s}{t_{i}''}{\env_{i+1}}{\con_i} \text{ for all } 1 \leq i \leq n \\
+%%          \con' = \con_1 \cup \ldots \cup \con_n \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          f \in \Sigma^{(n)} \\
+%%          t_1',\ldots,t_n' \text{ fresh}
+%%        }
+%%        {\transition{t}{\env_1}{\square(s)}{f(t_1'',\ldots,t_n'')}{\env_{n+1}}{\con'}}
+
+%% \infrule{\transition{t_i'}{\env_i}{s}{t_{i}''}{\env_{i+1}}{\con_i} \text{ for all } 1 \leq i < k \\
+%%          \transfail{t_k'}{\env_k}{s}{\con_k} \\
+%%          \con' = \con_1 \cup \ldots \cup \con_k \cup \lbrace t = f(t_1',\ldots,t_n') \rbrace \\
+%%          f \in \Sigma^{(n)} \\
+%%          t_1',\ldots,t_k' \text{ fresh}}
+%%          {\transfail{t}{\env_1}{\square(s)}{\con'}}
+
+%% \subsection*{Match}
+
+%% \infax{\transition{t}{\env}{\match{x}}{t}{\env \cup \lbrace x \mapsto t \rbrace}{\emptycon} \text{ if } x \not\in \text{dom}(\env)}
+%% \infax{\transition{t}{\env}{\match{x}}{t}{\env}{\lbrace \env(x) = t \rbrace}}
+%% \infax{\transfail{t}{\env}{\match{x}}{\lbrace \env(x) \neq t \rbrace}}
+%% \infrule{\transition{t_i''}{\env_i}{\match{t_i'}}{t_i''}{\env_{i+1}}{\con_i} \text{ for all } 1 \leq i \leq n \\
+%%          \con' = \con_1 \cup \ldots \cup \con_n \cup \lbrace t = f(t_1'',\ldots,t_n'') \rbrace \\
+%%          t_1'', \ldots, t_n'' \text{ fresh}}
+%%         {\transition{t}{\env_1}{\match{f(t_1',\ldots,t_n')}}{t}{\env_{n+1}}{\con'}}
+
+%% \subsection*{Build}
+
+%% \infax{\transition{t}{\env}{\build{t'}}{\env(t')}{\env}{\lbrace \rbrace} \text{ if } \text{vars}(t') \subseteq \text{dom}(\env)}
+%% \infax{\transfail{t}{\env}{\build{t'}}{\lbrace \rbrace} \text{ if } \text{vars}(t') \not\subseteq \text{dom}(\env)}
+
+%% \subsection*{Where}
+
+%% \infrule{\transition{t}{\env}{s}{t'}{\env'}{\con}}
+%%         {\transition{t}{\env}{\where{s}}{t}{\env'}{\con}}
+
+%% \infrule{\transfail{t}{\env}{s}{\con}}
+%%         {\transfail{t}{\env}{\where{s}}{\con}}
+
+%% \subsection*{Scope}
+
+%% \infrule{\transition{t}{\env \backslash \mathbf{x}}{s}{t'}{\env'}{\con}}
+%%         {\transition{t}{\env}{\scope{\mathbf{x}}{s}}{t'}{(\env' \backslash \mathbf{x}) \cup (\env | \mathbf{x})}{\con}}
+
+%% \infrule{\transfail{t}{\env \backslash \mathbf{x}}{s}{\con}}
+%%         {\transfail{t}{\env}{\scope{\mathbf{x}}{s}}{\con}}
 
 \end{document}
