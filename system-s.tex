@@ -3,9 +3,19 @@
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 
+\usepackage{enumerate}
+
 \usepackage{amsmath,amssymb,amsfonts,mathtools,stmaryrd,stackrel}
 %\setlength{\mathindent}{0pt}
 \allowdisplaybreaks
+
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\usepackage{breqn}
 
 \usepackage{listings}
 \lstset{mathescape=true}
@@ -32,11 +42,12 @@
 \newcommand{\seq}[2]{\ensuremath #1 ; #2}
 \newcommand{\choice}[2]{\ensuremath #1 + #2}
 \newcommand{\leftchoice}[2]{\ensuremath #1 \mathrel{\vcenter{\hbox{+}}\mkern-18.5mu{\leftarrow}} #2}
-\newcommand{\fix}[2]{\ensuremath \mu #1 (#2)}
-\newcommand{\path}[2]{\ensuremath #1(#2)}
-\newcommand{\one}[1]{\ensuremath \diamond(#1)}
-\newcommand{\all}[1]{\ensuremath \square(#1)}
-\newcommand{\some}[1]{\ensuremath \squarediamond(#1)}
+\newcommand{\fix}[2]{\ensuremath \text{rec}(#1,#2)}
+\newcommand{\path}[2]{\ensuremath \text{path}(#1,#2)}
+\newcommand{\one}[1]{\ensuremath \text{one}(#1)}
+\newcommand{\all}[1]{\ensuremath \text{all}(#1)}
+\newcommand{\some}[1]{\ensuremath \text{some}(#1)}
+\newcommand{\congr}[1]{\ensuremath \text{cong}(#1)}
 \newcommand{\match}[1]{\ensuremath \text{match}(#1)}
 \newcommand{\build}[1]{\ensuremath \text{build}(#1)}
 \newcommand{\where}[1]{\ensuremath \text{where}(#1)}
@@ -56,40 +67,62 @@
 \newcommand{\Var}{\ensuremath \mathbb{V}}
 \newcommand{\Env}{\ensuremath \Var \mapsto \Term}
 \newcommand{\Pow}[1]{\ensuremath \mathcal{P}(#1)}
-\newcommand{\Fstrat}[1]{\ensuremath \text{Fstrat}\llbracket #1 \rrbracket}
-\newcommand{\Fstratm}[1]{\ensuremath \text{Fstrat}_\minus \llbracket #1 \rrbracket}
-\newcommand{\Fstratp}[1]{\ensuremath \text{Fstrat}_\plus \llbracket #1 \rrbracket}
-\newcommand{\Fstrata}[1]{\ensuremath \text{Fstrat}^\triangleright \llbracket #1 \rrbracket}
-\newcommand{\Fstratam}[1]{\ensuremath \text{Fstrat}^\triangleright_\minus \llbracket #1 \rrbracket}
-\newcommand{\Fstratap}[1]{\ensuremath \text{Fstrat}^\triangleright_\plus \llbracket #1 \rrbracket}
-\newcommand{\Bstrat}[1]{\ensuremath \text{Bstrat}\llbracket #1 \rrbracket}
-\newcommand{\Bstratp}[1]{\ensuremath \text{Bstrat}_\plus \llbracket #1 \rrbracket}
-\newcommand{\Bstratm}[1]{\ensuremath \text{Bstrat}_\minus \llbracket #1 \rrbracket}
-\newcommand{\Bstrata}[1]{\ensuremath \text{Bstrat}^\triangleleft \llbracket #1 \rrbracket}
-\newcommand{\Bstratap}[1]{\ensuremath \text{Bstrat}_\plus^\triangleleft \llbracket #1 \rrbracket}
-\newcommand{\Bstratam}[1]{\ensuremath \text{Bstrat}_\minus^\triangleleft \llbracket #1 \rrbracket}
+\newcommand{\Fstrat}[1]{\ensuremath \normalfont\text{Fstrat}\llbracket #1 \rrbracket}
+\newcommand{\Fstratm}[1]{\ensuremath \text{\normalfont Fstrat}_\minus \llbracket #1 \rrbracket}
+\newcommand{\Fstratp}[1]{\ensuremath \text{\normalfont Fstrat}_\plus \llbracket #1 \rrbracket}
+\newcommand{\Fstrata}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright \llbracket #1 \rrbracket}
+\newcommand{\Fstratam}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright_\minus \llbracket #1 \rrbracket}
+\newcommand{\Fstratap}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright_\plus \llbracket #1 \rrbracket}
+\newcommand{\Bstrat}[1]{\ensuremath \text{\normalfont Bstrat}\llbracket #1 \rrbracket}
+\newcommand{\Bstratp}[1]{\ensuremath \text{\normalfont Bstrat}_\plus \llbracket #1 \rrbracket}
+\newcommand{\Bstratm}[1]{\ensuremath \text{\normalfont Bstrat}_\minus \llbracket #1 \rrbracket}
+\newcommand{\Bstrata}[1]{\ensuremath \text{\normalfont Bstrat}^\triangleleft \llbracket #1 \rrbracket}
+\newcommand{\Bstratap}[1]{\ensuremath \text{\normalfont Bstrat}_\plus^\triangleleft \llbracket #1 \rrbracket}
+\newcommand{\Bstratam}[1]{\ensuremath \text{\normalfont Bstrat}_\minus^\triangleleft \llbracket #1 \rrbracket}
 \newcommand{\State}{\ensuremath \text{State}}
 \newcommand{\Statef}{\ensuremath \text{State}_\fail}
 \newcommand{\Statea}{\ensuremath \widehat{\text{State}}}
 \newcommand{\Stateaf}{\ensuremath \widehat{\text{State}}_\fail}
 \newcommand{\Statefail}{\ensuremath L_F}
 
-\newcommand{\fpathp}{\ensuremath \text{path}^\triangleright_\plus}
-\newcommand{\fpathm}{\ensuremath \text{path}^\triangleright_\minus}
-\newcommand{\bpathp}{\ensuremath \text{path}^\triangleleft_\plus}
-\newcommand{\bpathm}{\ensuremath \text{path}^\triangleleft_\minus}
+\newcommand{\fpathp}{\ensuremath \text{path}^{\triangleright}_{\plus}}
+\newcommand{\fpathm}{\ensuremath \text{path}^{\triangleright}_{\minus}}
+\newcommand{\bpathp}{\ensuremath \text{path}^{\triangleleft}_{\plus}}
+\newcommand{\bpathm}{\ensuremath \text{path}^{\triangleleft}_{\minus}}
 
-\newcommand{\fallap}{\ensuremath \text{all}^\triangleright_\plus}
-\newcommand{\fallam}{\ensuremath \text{all}^\triangleright_\minus}
-\newcommand{\ballap}{\ensuremath \text{all}^\triangleleft_\plus}
-\newcommand{\ballam}{\ensuremath \text{all}^\triangleleft_\minus}
+\newcommand{\fallap}{\ensuremath \text{all}^{\triangleright}_{\plus}}
+\newcommand{\fallam}{\ensuremath \text{all}^{\triangleright}_{\minus}}
+\newcommand{\ballap}{\ensuremath \text{all}^{\triangleleft}_{\plus}}
+\newcommand{\ballam}{\ensuremath \text{all}^{\triangleleft}_{\minus}}
+
+\newcommand{\fsomep}{\ensuremath \text{some}^{\triangleright}_{\plus}}
+\newcommand{\fsomem}{\ensuremath \text{some}^{\triangleright}_{\minus}}
+\newcommand{\bsomep}{\ensuremath \text{some}^{\triangleleft}_{\plus}}
+\newcommand{\bsomem}{\ensuremath \text{some}^{\triangleleft}_{\minus}}
+
+\newcommand{\fmatchp}{\ensuremath \text{match}^{\triangleright}_{\plus}}
+\newcommand{\fmatchm}{\ensuremath \text{match}^{\triangleright}_{\minus}}
+\newcommand{\bmatchp}{\ensuremath \text{match}^{\triangleleft}_{\plus}}
+\newcommand{\bmatchm}{\ensuremath \text{match}^{\triangleleft}_{\minus}}
+
+\newcommand{\FP}{\ensuremath F^{\triangleright}_{\plus}}
+\newcommand{\FM}{\ensuremath F^{\triangleright}_{\minus}}
+\newcommand{\BP}{\ensuremath B^{\triangleleft}_{\plus}}
+\newcommand{\BM}{\ensuremath B^{\triangleleft}_{\minus}}
 
 \newcommand{\absstate}{\ensuremath \alpha_\sigma }
+\newcommand{\absstateprod}{\ensuremath \alpha_{\sigma\times\sigma} }
+\newcommand{\absstateprodfail}{\ensuremath \alpha_{\sigma\times\sigma_\fail} }
 \newcommand{\constate}{\ensuremath \gamma_\sigma }
 \newcommand{\absfail}{\ensuremath \alpha_\fail }
 \newcommand{\confail}{\ensuremath \gamma_\fail }
-\newcommand{\absstatefail}{\ensuremath \alpha_{\sigma\fail} }
-\newcommand{\constatefail}{\ensuremath \gamma_{\sigma\fail} }
+\newcommand{\absstatefail}{\ensuremath \alpha_{\sigma_\fail} }
+\newcommand{\constatefail}{\ensuremath \gamma_{\sigma_\fail} }
+
+\newcommand{\setbuild}[2]{\ensuremath \left\{\, #1 \mid #2 \,\right\}}
+
+\DeclareFlexCompoundSymbol{\mydotb}{Bin}{} 
+\def\mydot{.\mydotb}
 
 \begin{document}
 
@@ -169,15 +202,19 @@
 
 \infrule[Cong]
   {\transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i \leq n}
-  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{f(s_1,\ldots,s_n)}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
+  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\congr{f,s_1,\ldots,s_n}}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
 
 \infrule[Cong-Fail]
   {\transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i < k \andalso \transformfail{t_k}{\rho_k}{s_k} \andalso k \leq n}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho_1}{f(s_1,\ldots,s_n)}}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho_1}{\congr{f,s_1,\ldots,s_n}}}
 
 \infrule[Cong-Con-Fail]
   {f \neq g}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{g(t_1',\ldots,t_n')}}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\congr{g,t_1',\ldots,t_n'}}}
+
+\infrule[Cong-Arity-Fail]
+  {n \neq n'}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\congr{g,t_1',\ldots,t_{n'}'}}}
 
 \infrule[One]
   {\transform{t_i}{\rho}{s}{t_i'}{\rho'}}
@@ -197,7 +234,7 @@
 
 \infrule[Some]
   {\transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}} \text{ for all } i \in M \\
-   \transformfail{t_j}{\rho_j}{s} \land\ \rho_{j+1} = \rho_j \land t_j' = t_j \text{ for all } j \in \lbrace 1 \ldots n \rbrace \setminus M \\
+   \transformfail{t_j}{\rho_j}{s} \land\ \rho_{j+1} = \rho_j \land t_j' = t_j \text{ for all } j \in \overline{M} \\
    M \subseteq \lbrace 1 \ldots n \rbrace}
   {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\some{s}}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
 
@@ -255,179 +292,349 @@
   {\transformfail{t}{\rho \setminus \mathbf{x}}{s}}
   {\transformfail{t}{\rho}{\scope{\mathbf{x}}{s}}}
 
-\section*{Forward and Backward Collection Semantics of System S}
+\clearpage
+\section*{Abstract Interpretation}
 
-\begin{align*}
-  \Fstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env) + \Fail} \\
-  \Fstrat{s}R &= \Fstratp{s}(R) \cup \Fstratm{s}(R) \\
-  \Fstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
-  \Fstratp{s}R &= \lbrace (t',\rho')\ |\ \exists (t,\rho) \in R.\ \transform{t}{\rho}{s}{t'}{\rho'} \rbrace \\
-  \Fstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Fail} \\
-  \Fstratm{s}R &= \lbrace \fail\ |\ \exists (t,\rho) \in R.\ \transformfail{t}{\rho}{s} \rbrace \\
-  \Bstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env) + \Fail} \cjm \Pow{\Term \times (\Env)} \\
-  \Bstrat{s}(R,P) &= \Bstratp{s}(R,P \cap (\Term \times (\Env))) \cup \Bstratm{s}(R,P \cap \Fail) \\
-  \Bstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
-  \Bstratp{s}(R,P) &= \lbrace (t,\rho) \in R\ |\ \exists (t',\rho') \in P.\ \transform{t}{\rho}{s}{t'}{\rho'} \rbrace \\
-  \Bstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Fail} \cjm \Pow{\Term \times (\Env)} \\
-  \Bstratm{s}(R,F) &= \lbrace (t,\rho) \in R\ |\ \exists \fail\ \in F. \transformfail{t}{\rho}{s} \rbrace \\
-  \State &= \Pow{\Term \times (\Env)} \\
-  \Statef &= \Pow{\Term \times (\Env) + \Fail} \\
-  \Statea &= L_T \times (\Var \mapsto L_T) \\
-  \Stateaf &= L_T \times (\Var \mapsto L_T) + L_F
-\end{align*}
+We define a lattice algebra $(L,\sqsubseteq,\sqcap,\sqcup,\top,\bot,\circ,\times)$ as a set $L$ equipped with the usual lattice operations, composition $\circ$ and products $\times$. For the underlying set of a lattice algebra, we write $|L|$.
 
-\begin{center}
-\begin{tikzcd}
-  \Statea \arrow[d, "\constate",xshift=0.07cm] \arrow[r, "\text{Fstrat}^\triangleright"] & \Stateaf \arrow[d, "\constatefail",xshift=0.07cm] \\
-  \State \arrow[u, "\absstate",xshift=-0.07cm] \arrow[r, "\text{Fstrat}"] & \Statef \arrow[u, "\absstatefail",xshift=-0.07cm]
-\end{tikzcd}
-\end{center}
+\begin{definition}
+  Let $S = \Term \times (\Env) \cup \Fail$ be the representation of a programm states of an System S program. We define $\mathcal{S}$, as a lattice algebra of relations between System S program states $\Pow{S \times S}$.
+\end{definition}
 
-\begin{center}
-\begin{tikzcd}
-  \Statea \times \Stateaf \arrow[d, "\constate \times \constatefail",xshift=0.07cm] \arrow[r, "\text{Bstrat}^\triangleleft"] & \Statea \arrow[d, "\constate",xshift=0.07cm] \\
-  \State \times \Statef \arrow[u, "\absstate \times \absstatefail",xshift=-0.07cm] \arrow[r, "\text{Bstrat}"] & \State \arrow[u, "\absstate",xshift=-0.07cm]
-\end{tikzcd}
-\end{center}
 
-\paragraph{Soundness}
 
-\begin{align*}
-  \alpha^\star(\varphi) &= \ddot{\alpha} \circ \varphi \circ \dot{\gamma} \\
-  \gamma^\star(\psi) &= \ddot{\gamma} \circ \psi \circ \dot{\alpha} \\
-  \alpha^\star(\Fstrat{s})r &\sqsubseteq \Fstrata{s}r \\
-  \alpha^\star(\Bstrat{s})(r,p) &\sqsubseteq \Bstrata{s}(r,p)
-\end{align*}
+% \section*{Forward and Backward Collection Semantics of System S}
 
-We now proceed by induction on the structure of strategies: 
-\begin{itemize}
-\item Case $s = \test{s'}$:
-  %
-  \begin{align*}
-    \Fstratap{\test{s'}}(r) &= \Bstratap{s'}(r,\top) \\
-    \Fstratam{\test{s'}}(r) &= \Fstratam{s'}(r) \\
-    \Bstratap{\test{s'}}(r,p) &= \Bstratap{s'}(r,p) \\
-    \Bstratam{\test{s'}}(r,p) &= \Bstratam{s'}(r,p)
-  \end{align*}
+% \begin{align*}
+%   \Fstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env) + \Fail} \\
+%   \Fstrat{s}R &= \Fstratp{s}(R) \cup \Fstratm{s}(R) \\
+%   \Fstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
+%   \Fstratp{s}R &= \setbuild{(t',\rho')}{\exists (t,\rho) \in R.\ \transform{t}{\rho}{s}{t'}{\rho'}} \\
+%   \Fstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Fail} \\
+%   \Fstratm{s}R &= \setbuild{\fail}{\exists (t,\rho) \in R.\ \transformfail{t}{\rho}{s}} \\
+%   \Bstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env) + \Fail} \cjm \Pow{\Term \times (\Env)} \\
+%   \Bstrat{s}(R,P) &= \Bstratp{s}(R,P \cap (\Term \times (\Env))) \cup \Bstratm{s}(R,P \cap \Fail) \\
+%   \Bstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
+%   \Bstratp{s}(R,P) &= \setbuild{(t,\rho) \in R}{\exists (t',\rho') \in P.\ \transform{t}{\rho}{s}{t'}{\rho'}} \\
+%   \Bstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Fail} \cjm \Pow{\Term \times (\Env)} \\
+%   \Bstratm{s}(R,F) &= \setbuild{(t,\rho) \in R}{\exists \fail\ \in F. \transformfail{t}{\rho}{s}} \\
+%   \State &= \Pow{\Term \times (\Env)} \\
+%   \Statef &= \Pow{\Term \times (\Env) + \Fail} \\
+%   \Statea &= L_T \times (\Var \mapsto L_T) \\
+%   \Stateaf &= L_T \times (\Var \mapsto L_T) + L_F
+% \end{align*}
 
-\item Case $s = \neg{s'}$:
-  %
-  \begin{align*}
-    \Fstratap{\neg{s'}}(r) &= \Bstratam{s'}(r) \\
-    \Fstratam{\neg{s'}}(r) &= \Fstratap{s'}(r) \\
-    \Bstratap{\neg{s'}}(r,p) &= \Bstratam{s'}(r,\lfail) \\
-    \Bstratam{\neg{s'}}(r,p) &= \Bstratap{s'}(r,\top)
-  \end{align*}
+% \begin{center}
+% \begin{tikzcd}
+%   \Statea \arrow[d, "\constate",xshift=0.07cm] \arrow[r, "\text{Fstrat}^\triangleright"] & \Stateaf \arrow[d, "\constatefail",xshift=0.07cm] \\
+%   \State \arrow[u, "\absstate",xshift=-0.07cm] \arrow[r, "\text{Fstrat}"] & \Statef \arrow[u, "\absstatefail",xshift=-0.07cm]
+% \end{tikzcd}
+% \end{center}
 
-\item Case $s = \seq{s_1}{s_2}$:
-  %
-  \begin{align*}
-    \Fstratap{\seq{s_1}{s_2}}(r) &= \Fstratap{s_2}(\Fstratap{s_1}(r)) \\
-    \Fstratam{\seq{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcup \Fstratam{s_2}(\Fstratap{s_1}(r)) \\
-    \Bstratap{\seq{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,\Bstratap{s_2}(\Fstratap{s_1}(r,p)) \\
-    \Bstratam{\seq{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcup \Bstratap{s_1}(r,\Bstratam{s_2}(\Fstratap{s_1},p))
-  \end{align*}
+% \begin{center}
+% \begin{tikzcd}
+%   \Statea \times \Stateaf \arrow[d, "\constate \times \constatefail",xshift=0.07cm] \arrow[r, "\text{Bstrat}^\triangleleft"] & \Statea \arrow[d, "\constate",xshift=0.07cm] \\
+%   \State \times \Statef \arrow[u, "\absstate \times \absstatefail",xshift=-0.07cm] \arrow[r, "\text{Bstrat}"] & \State \arrow[u, "\absstate",xshift=-0.07cm]
+% \end{tikzcd}
+% \end{center}
 
-\item Case $s = \choice{s_1}{s_2}$:
-  %
-  \begin{align*}
-    \Fstratap{\choice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup \Fstratap{s_2}(r) \\
-    \Fstratam{\choice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
-    \Bstratap{\choice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup \Bstratap{s_2}(r,p) \\
-    \Bstratam{\choice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
-  \end{align*}
+% \begin{definition}
+%   A function $f : L_1 \rightarrow L_2$ is a complete join morphism iff
+%   for all sets of ordinals $\delta$ and $\forall i \in \delta.\ x_i \in L_1$,
+%   \begin{dmath*}
+%     f\left(\bigsqcup_{i \in \delta} x_i \right) = \bigsqcup_{i \in \delta} f\left(x_i\right)
+%   \end{dmath*}.
+% \end{definition}
 
-\item Case $s = \leftchoice{s_1}{s_2}$:
-  %
-  \begin{align*}
-    \Fstratap{\leftchoice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup \Fstratap{s_2}(\Bstratam{s_1}(r)) \\
-    \Fstratam{\leftchoice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
-    \Bstratap{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup \Bstratap{s_2}(\Bstratam{s_1}(r),p) \\
-    \Bstratam{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
-  \end{align*}
+% \begin{lemma}
+%   $\Fstratp{s}$ and $\Fstratm{s}$ are complete join morphisms
+% \end{lemma}
 
-\item Case $s = \fix{x}{s'}$:
-  %
-  \begin{align*}
-    \Fstratap{\fix{x}{s'}}(r) &= \Fstratap{s'[x \coloneqq \fix{x}{s'}]}(r) \\
-    \Fstratam{\fix{x}{s'}}(r) &= \Fstratam{s'[x \coloneqq \fix{x}{s'}]}(r) \\
-    \Bstratap{\fix{x}{s'}}(r,p) &= \Bstratap{s'[x \coloneqq \fix{x}{s'}]}(r,p) \\
-    \Bstratam{\fix{x}{s'}}(r,p) &= \Bstratam{s'[x \coloneqq \fix{x}{s'}]}(r,p)
-  \end{align*}
+% \begin{theorem}
+%   $\Fstrat{s}$ is a complete join morphism, that is
+%   \begin{dmath*}
+%     \Fstrat{s}\left(\bigcup_{i \in \delta} R_i\right) = \bigcup_{i \in \delta} \Fstrat{s}\left(R_i\right)
+%   \end{dmath*}
+%   \begin{proof}
+%   \begin{dmath*}
+%     \Fstrat{s}\left(\bigcup_{i \in \delta} R_i\right)
+%       = \Fstratp{s}\left(\bigcup_{i \in \delta} R_i\right)\ \cup\ \Fstratm{s}\left(\bigcup_{i \in \delta} R_i\right)
+%       = \bigcup_{i \in \delta} \Fstratp{s}(R_i)\ \cup\ \bigcup_{i \in \delta} \Fstratm{s}\left(R_i\right)
+%       = \bigcup_{i \in \delta} \left(\Fstratp{s}\left(R_i\right)\ \cup\ \Fstratm{s}\left(R_i\right)\right)
+%       = \bigcup_{i \in \delta} \Fstrat{s}\left(R_i\right)
+%   \end{dmath*}
+%   \end{proof}
+% \end{theorem}
 
-\item Case $s = \path{i}{s'}$:
-  %
-  \begin{align*}
-    \Fstratap{\path{i}{s'}}(r) &= \fpathp(i,r,\Fstratap{s'}) \\
-    \Fstratam{\path{i}{s'}}(r) &= \fpathm(i,r,\Fstratam{s'}) \\
-    \Bstratap{\path{i}{s'}}(r,p) &= \bpathp(i,r,p,\Fstratap{s'}) \\
-    \Bstratam{\path{i}{s'}}(r,p) &= \bpathm(i,r,p,\Fstratam{s'})
-  \end{align*}
-  %
-  where
-  \begin{align*}
-    \fpathp(i,r,F^\triangleright_\plus) \sqsupseteq\ &
-       \absstate(\lbrace\
-            (f(t_1,\ldots,t_i',\ldots,t_n),\rho')\ |\ 
-            \exists (f(t_1,\ldots,t_i,\ldots,t_n),\rho) \in \constate(r). \ 
-            1 \leq i \leq n\
-            \land\ (t_i',\rho') \in \constate(F^\triangleright_\plus)(\absstate(\lbrace (t_i,\rho) \rbrace))\ \rbrace) \\
-    \fpathm(i,r,F^\triangleright_\minus) \sqsupseteq\ & 
-        \absfail(\lbrace \fail\ |\ \exists f(t_1\ldots t_n) \in \constate(r). i > n \lor (1 \leq i \leq n\ \land\ \fail\ \in \confail(F^\triangleright_\minus(\absstate(\lbrace (t_i,\rho) \rbrace))))\ \rbrace) \\
-    \bpathp(i,r,p,F^\triangleright_\plus) \sqsupseteq\ &
-       \absstate(\lbrace\ 
-           (f(t_1,\ldots,t_i,\ldots,t_n),\rho) \in \constate(r)\ |\ 
-             \exists (f(t_1,\ldots,t_i',\ldots,t_n),\rho') \in \constate(p).\ 
-             (t_i',\rho') \in \constate(F^\triangleright_\plus)(\absstate(\lbrace (t_i,\rho) \rbrace))\ \rbrace) \\
-    \bpathm(i,r,p,F^\triangleright_\minus) \sqsupseteq\ &
-       \absstate(\lbrace\ 
-           (f(t_1,\ldots,t_i,\ldots,t_n),\rho) \in \constate(r)\ |\ 
-             \exists \fail\ \in \confail(p).\ 
-             i > n \lor (1 \leq i \leq n\ \land\ \fail \in \confail(F^\triangleright_\minus)(\absstate(\lbrace (t_i,\rho) \rbrace)))\ \rbrace)
-  \end{align*}
+% \par\bigskip
 
-\item Case $s = \all{s'}$:
-  \begin{align*}
-    \Fstratap{\all{s'}}(r) &= \fallap(r,\Fstratap{s'}) \\
-    \Fstratam{\all{s'}}(r) &= \fallam(r,\Fstratap{s'},\Fstratam{s'}) \\
-    \Bstratap{\all{s'}}(r,p) &= \ballap(\Bstratap{s'})(r,p) \\
-    \Bstratam{\all{s'}}(r,p) &= \ballam(\Fstratap{s'},\Fstratam{s'},
-                                         \Bstratap{s'},\Bstratam{s'})(r,p)
-  \end{align*}
-  %
-  where
-  %
-  \begin{align*}
-%     \foldap &: (\Statea \rightarrow \Statea) \times \Statea \rightarrow \Statea \\
-%     \foldam &: (\Statea \rightarrow \Statea) \times
-%                (\Statea \rightarrow \Statefail) \times \Statea \rightarrow \Statefail \\
-%     \bfoldap &: (\Statea \times \Statea \rightarrow \Statea) \rightarrow \Statea \\
-%     \bfoldam &: (\Statea \rightarrow \Statea) \rightarrow \Statea \\
-%     \bfoldam &: (\Statea \rightarrow \Statea \times
-%                  \Statea
-% ) \rightarrow \Statea \\
-  \end{align*}
+% \begin{lemma}
+%   $\Bstratp{s}$ and $\Bstratm{s}$ are complete join morphisms
+% \end{lemma}
+
+% \begin{theorem}
+%   $\Bstrat{s}$ is a complete join morphism, that is
+%   \begin{dmath*}
+%     \Bstrat{s}\left(\bigcup_{i \in \delta} R_i, \bigcup_{i \in \delta} P_i \right) = \bigcup_{i \in \delta} \Bstrat{s}(R_i,P`_i)
+%   \end{dmath*}
+%   \begin{proof}
+%     Follows directly from the monotonicity of $\Bstratp{s}$ and $\Bstratm{s}$ and that union and intersection preserves monotonicity.
+%   \end{proof}
+% \end{theorem}
+
+% \par\bigskip
+
+% \begin{lemma}
+%   The precondition is an overapproximation of $\Bstratp{s}$
+%   \begin{dmath*}
+%     \normalfont
+%     \Bstratp{s}(R,P) \subseteq R \condition{for all $R, P$}
+%   \end{dmath*}
+% \end{lemma}
+
+% \begin{lemma}
+%   The following are all equivalent:
+%   \begin{enumerate}[i)]
+%     \normalfont
+%     \item $\transform{t}{\rho}{s}{t'}{\rho'}$
+%     \item $(t',\rho') \in \Fstratp{s}(\lbrace (t,\rho) \rbrace)$
+%     \item $(t,\rho) \in \Bstratp{s}(\lbrace (t,\rho) \rbrace, \lbrace (t',\rho') \rbrace)$
+%   \end{enumerate}
+% \end{lemma}
+
+% \begin{lemma}
+%   The following are all equivalent:
+%   \begin{enumerate}[i)]
+%     \normalfont
+%     \item $\transformfail{t}{\rho}{s}$
+%     \item $\fail\ \in \Fstratm{s}(\lbrace (t,\rho) \rbrace)$
+%     \item $(t,\rho) \in \Bstratm{s}(\lbrace (t,\rho) \rbrace, \lbrace \fail \rbrace)$
+%   \end{enumerate}
+% \end{lemma}
+
+% \paragraph{Soundness}
+
+% \begin{align*}
+%   \alpha^\star(\varphi) &= \ddot{\alpha} \circ \varphi \circ \dot{\gamma} \\
+%   \gamma^\star(\psi) &= \ddot{\gamma} \circ \psi \circ \dot{\alpha} \\
+%   \alpha^\star(\Fstrat{s})r &\sqsubseteq \Fstrata{s}r \\
+%   \alpha^\star(\Bstrat{s})(r,p) &\sqsubseteq \Bstrata{s}(r,p)
+% \end{align*}
+
+% We now proceed by induction on the structure of strategies: 
+% \begin{itemize}
+% \item Case $s = \test{s'}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\test{s'}}(r) &= \Bstratap{s'}(r,\top) \\
+%     \Fstratam{\test{s'}}(r) &= \Fstratam{s'}(r) \\
+%     \Bstratap{\test{s'}}(r,p) &= \Bstratap{s'}(r,p) \\
+%     \Bstratam{\test{s'}}(r,p) &= \Bstratam{s'}(r,p)
+%   \end{align*}
+
+% \item Case $s = \neg{s'}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\neg{s'}}(r) &= \Bstratam{s'}(r) \\
+%     \Fstratam{\neg{s'}}(r) &= \Fstratap{s'}(r) \\
+%     \Bstratap{\neg{s'}}(r,p) &= \Bstratam{s'}(r,\lfail) \\
+%     \Bstratam{\neg{s'}}(r,p) &= \Bstratap{s'}(r,\top)
+%   \end{align*}
+
+% \item Case $s = \seq{s_1}{s_2}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\seq{s_1}{s_2}}(r) &= \Fstratap{s_2}(\Fstratap{s_1}(r)) \\
+%     \Fstratam{\seq{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcup \Fstratam{s_2}(\Fstratap{s_1}(r)) \\
+%     \Bstratap{\seq{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,\Bstratap{s_2}(\Fstratap{s_1}(r),p)) \\
+%     \Bstratam{\seq{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcup \Bstratap{s_1}(r,\Bstratam{s_2}(\Fstratap{s_1},p))
+%   \end{align*}
+
+% \item Case $s = \choice{s_1}{s_2}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\choice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup \Fstratap{s_2}(r) \\
+%     \Fstratam{\choice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
+%     \Bstratap{\choice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup \Bstratap{s_2}(r,p) \\
+%     \Bstratam{\choice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
+%   \end{align*}
+
+% \item Case $s = \leftchoice{s_1}{s_2}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\leftchoice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup (\Fstratam{s_1}(r) \sqcap \Fstratap{s_2}(r)) \\
+%     \Fstratam{\leftchoice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
+%     \Bstratap{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup (\Bstratam{s_1}(r,\lfail) \sqcap \Bstratap{s_2}(r,p)) \\
+%     \Bstratam{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
+%   \end{align*}
+
+% \item Case $s = \fix{x}{s'}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\fix{x}{s'}}(r) &= \Fstratap{s'[x \coloneqq \fix{x}{s'}]}(r) \\
+%     \Fstratam{\fix{x}{s'}}(r) &= \Fstratam{s'[x \coloneqq \fix{x}{s'}]}(r) \\
+%     \Bstratap{\fix{x}{s'}}(r,p) &= \Bstratap{s'[x \coloneqq \fix{x}{s'}]}(r,p) \\
+%     \Bstratam{\fix{x}{s'}}(r,p) &= \Bstratam{s'[x \coloneqq \fix{x}{s'}]}(r,p)
+%   \end{align*}
+
+% \item Case $s = \path{i}{s'}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\path{i}{s'}}(r) &= \fpathp(i,r,\Fstratap{s'}) \\
+%     \Fstratam{\path{i}{s'}}(r) &= \fpathm(i,r,\Fstratam{s'}) \\
+%     \Bstratap{\path{i}{s'}}(r,p) &= \bpathp(i,r,p,\Bstratap{s'}) \\
+%     \Bstratam{\path{i}{s'}}(r,p) &= \bpathm(i,r,p,\Bstratam{s'})
+%   \end{align*}
+%   %
+%   where
+%   \begin{dgroup*}
+%     \begin{dmath*}
+%       \fpathp(i,r,\FP) \sqsupseteq \absstate((\setbuild{(f(t_1 \ldots t_i' \ldots t_n),\rho')}{
+%         \exists {(f(t_1 \ldots t_i \ldots t_n),\rho) \in \constate(r)}\mydot
+%         {1 \leq i \leq n} \land
+%         {(t_i',\rho') \in (\constate \circ \FP \circ \absstate) (\lbrace (t_i,\rho) \rbrace)}})
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \fpathm(i,r,\FM) \sqsupseteq \absfail(\setbuild{\fail}{
+%         \exists {(f(t_1\ldots t_n),\rho) \in \constate(r)}\mydot
+%         {i > n} \lor
+%         \left[ {1 \leq i \leq n} \land {\fail\ \in (\confail \circ \FM \circ \absstate) (\lbrace (t_i,\rho) \rbrace)} \right]
+%         })
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \bpathp(i,r,p,\BP) \sqsupseteq \absstate(\setbuild{
+%         {(f(t_1 \ldots t_i \ldots t_n),\rho) \in \constate(r)}
+%         }{
+%         \exists {(f(t_1 \ldots t_i' \ldots t_n),\rho') \in \constate(p)}\mydot
+%         {(t_i,\rho) \in (\constate \circ \BP \circ \absstateprod) (\lbrace (t_i,\rho) \rbrace,\lbrace (t_i',\rho') \rbrace)} })
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \bpathm(i,r,p,\BM) \sqsupseteq
+%          \absstate(\setbuild{ {(f(t_1,\ldots,t_i,\ldots,t_n),\rho) \in \constate(r)} }{
+%                \exists {\fail\, \in \confail(p)}\mydot
+%                {i > n} \lor
+%                ({1 \leq i \leq n} \land {(t_i,\rho) \in (\confail \circ \BM) (\absstate (\lbrace (t_i,\rho) \rbrace), p)} })
+%     \end{dmath*}
+%   \end{dgroup*}
+
+% \item Case $s = \all{s'}$:
+%   \begin{align*}
+%     \Fstratap{\all{s'}}(r) &= \fallap(r,\Fstratap{s'}) \\
+%     \Fstratam{\all{s'}}(r) &= \fallam(r,\Fstratap{s'},\Fstratam{s'}) \\
+%     \Bstratap{\all{s'}}(r,p) &= \ballap(r,p,\Bstratap{s'}) \\
+%     \Bstratam{\all{s'}}(r,p) &= \ballam(r,p,\Bstratap{s'},\Bstratam{s'})
+%   \end{align*}
+%   %
+%   where
+%   %
+%   \begin{dgroup*}
+%     \begin{dmath*} 
+%       \fallap(r,\FP) \sqsupseteq
+%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
+%            \exists {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot
+%            \bigwedge\limits_{1 \leq i \leq n}
+%              {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) (\lbrace (t_i,\rho_i) \rbrace)} } \right)
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \fallam(r,\FP,\FM) \sqsupseteq
+%          \absstate \left( \setbuild{\fail\,}{ \exists {\left( f(t_1,\ldots,t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {k \in \left[ 1,n \right]}\mydot
+%              \left[ \bigwedge\limits_{1 \leq i < k} {\left( t_i',\rho_{i+1} \right) \in \constate \circ  \FP \circ \absstate (\lbrace (t_i,\rho_i) \rbrace)} \right] \land
+%              {\fail\ \in (\confail \circ \FM \circ \absstate) \left(\lbrace (t_k,\rho_k) \rbrace\right)} } \right)
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \ballap(r,p,\BP) \sqsupseteq
+%          \absstate \left( \setbuild{ {\left(f(t_1,\ldots,t_n),\rho_1 \right) \in \constate(r)} }{
+%            \exists {\left( f(t_1',\ldots,t_n'),\rho_{n+1} \right) \in \constate(p)}\mydot
+%            \bigwedge\limits_{1 \leq i \leq n} {\left( t_i,\rho_i \right) \in (\constate \circ \BP \circ \absstateprod)
+%              \left(\lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1}) \rbrace\right)} } \right)
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \ballam(r,p,\BP,\BM) \sqsupseteq
+%          \absstate \left( \setbuild{ {(f(t_1,\ldots,t_n),\rho_1) \in \constate(r)} }{
+%             \exists {\fail\, \in \constate(p)}\mydot \exists {k \in [ 1,n ]}\mydot
+%              \left[ \bigwedge\limits_{1 \leq i < k} {(t_i,\rho) \in (\constate \circ \BP \circ \absstateprod) (\lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1} \rbrace)} \right] \land
+%               (\confail \circ \BM) (\absstate(\lbrace (t_k,\rho_k) \rbrace), p) } \right)
+%     \end{dmath*}
+%   \end{dgroup*}
   
+% \item Case $s = \some{s'}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\some{s'}}(r) &= \fsomep(r,\Fstratap{s'},\Fstratam{s'}) \\
+%     \Fstratam{\some{s'}}(r) &= \fsomem(r,\Fstratam{s'}) \\
+%     \Bstratap{\some{s'}}(r,p) &= \bsomep(r,p,\Bstratap{s'},\Bstratam{s'}) \\
+%     \Bstratam{\some{s'}}(r,p) &= \bsomem(r,p,\Bstratam{s'})
+%   \end{align*}
+%   %
+%   where
+%   %
+%   \begin{dgroup*}
+%     \begin{dmath*} 
+%       \fsomep(r,\FP,\FM) \sqsupseteq
+%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
+%            \exists { \left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
+%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \right)
+%            \land \left( \bigwedge_{i \in \overline{M}} {\fail\, \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \fsomem(r,\FM) \sqsupseteq
+%          \absstate \left( \setbuild{ \fail }{
+%            \exists {\left( f(t_1 \ldots t_n),\rho \right) \in \constate(r)}\mydot
+%             \bigwedge_{1 \leq i \leq n} {\fail \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho) \rbrace \right)} } \right)
+%     \end{dmath*}
+%     \begin{dmath*} 
+%       \bsomep(r,p,\BP,\BM) \sqsupseteq
+%          \absstate \left( \setbuild{ {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)} }{
+%            \exists {\left( f(t_1' \ldots t_n'),\rho_{n+1} \right) \in \constate(p)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
+%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \BP \circ \absstateprod) \left( \lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1}) \rbrace \right)} \right)
+%            \land \left( \bigwedge_{i \in \overline{M}} {(t_i,\rho_i) \in (\confail \circ \BM) \left(\absstate(\lbrace (t_i,\rho_i) \rbrace), p \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
+%    \end{dmath*}
+%    \begin{dmath*}
+%      \bsomem(r,p,\BM) \sqsupseteq
+%         \absstate \left( \setbuild{ {\left(f(t_1\ldots t_n),\rho\right) \in \constate(r)} }{
+%           \exists {\fail \in \confail(p)}\mydot
+%            \bigwedge_{1 \leq i \leq n} {(t_i,\rho) \in (\confail \circ \BM) \left( \absstate(\lbrace (t_i,\rho) \rbrace), p \right)}
+%          } \right)
+%     \end{dmath*}
+%   \end{dgroup*}
 
-\end{itemize}
+% \item Case $s = \match{t}$:
+%   %
+%   \begin{align*}
+%     \Fstratap{\match{t}}(r) &= \fmatchp(r,\Fstratap{s'},\Fstratam{s'}) \\
+%     \Fstratam{\match{t}}(r) &= \fmatchm(r,\Fstratam{s'}) \\
+%     \Bstratap{\match{t}}(r,p) &= \bmatchp(r,p,\Fstratap{s'}) \\
+%     \Bstratam{\match{t}}(r,p) &= \bmatchm(r,p,\Fstratam{s'})
+%   \end{align*}
+%   \begin{dgroup*}
+%     \begin{dmath*} 
+%       \fmatchp(t,r,\FP) \sqsupseteq
+%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
+%            \exists {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
+%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \right)
+%            \land \left( \bigwedge_{i \in \overline{M}} {\fail \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
+%     \end{dmath*}
+%   \end{dgroup*}
 
-Since
-\begin{align*}
-  \alpha^\star(\Fstratp{s})R &\sqsubseteq \Fstratap{s}R \\
-  \alpha^\star(\Fstratm{s})R &\sqsubseteq \Fstratam{s}R,
-\end{align*}
-it holds that
-\begin{align*}
-   &\ \alpha^\star(\Fstrata{s})R \\
-  =&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r)) \cup \Fstratm{s}(\dot{\gamma}(r))) \\
-  \sqsubseteq&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r))) \sqcup \ddot{\alpha}(\Fstratm{s}(\dot{\gamma}(r))) \\
-  \sqsubseteq&\ \Fstratap{s}R \sqcup \Fstratam{s}R \\
-  =&\ \Fstrata{s}R
-\end{align*}
-if $\ddot{\alpha}$ satisfies
-\begin{align*}
-  \ddot{\alpha}(M \cup N) \sqsubseteq \ddot{\alpha}(M) \sqcup \ddot{\alpha}(N)
-\end{align*}
+% \end{itemize}
+
+% Since
+% \begin{align*}
+%   \alpha^\star(\Fstratp{s})R &\sqsubseteq \Fstratap{s}R \\
+%   \alpha^\star(\Fstratm{s})R &\sqsubseteq \Fstratam{s}R,
+% \end{align*}
+% it holds that
+% \begin{align*}
+%    &\ \alpha^\star(\Fstrata{s})R \\
+%   =&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r)) \cup \Fstratm{s}(\dot{\gamma}(r))) \\
+%   \sqsubseteq&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r))) \sqcup \ddot{\alpha}(\Fstratm{s}(\dot{\gamma}(r))) \\
+%   \sqsubseteq&\ \Fstratap{s}R \sqcup \Fstratam{s}R \\
+%   =&\ \Fstrata{s}R
+% \end{align*}
+% if $\ddot{\alpha}$ satisfies
+% \begin{align*}
+%   \ddot{\alpha}(M \cup N) \sqsubseteq \ddot{\alpha}(M) \sqcup \ddot{\alpha}(N)
+% \end{align*}
 
 \end{document}
 
