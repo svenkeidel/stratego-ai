@@ -5,7 +5,7 @@ let
   inherit (nixpkgs) pkgs;
 
   texEnv = pkgs.texlive.combine {
-    inherit (pkgs.texlive) scheme-small pgf tikz-cd cm-super stmaryrd;
+    inherit (pkgs.texlive) scheme-small pgf tikz-cd cm-super stmaryrd mnsymbol;
   };
 
   f = { mkDerivation, base, mtl, stdenv, text, transformers, Cabal, cabal-install }:

@@ -34,9 +34,8 @@
 \newcommand{\state}[1]{\ensuremath \langle #1 \rangle}
 \newcommand{\transition}[2]{\ensuremath \state{#1} & \longrightarrow \state{#2}}
 \newcommand{\termrule}[3]{\ensuremath #1 \xrightarrow{#2} #3}
-\newcommand{\fail}{\ensuremath \uparrow}
-\newcommand{\lfail}{\ensuremath \uparrow_{L_F}}
-\newcommand{\success}{\ensuremath \downarrow}
+\newcommand{\fail}{\ensuremath \text{$\uparrow$}}
+\newcommand{\success}{\ensuremath \text{$\downarrow$}}
 \newcommand{\cont}[2]{\ensuremath \mathbf{#1}(#2)}
 \newcommand{\return}{\ensuremath \hookleftarrow}
 \newcommand{\seq}[2]{\ensuremath #1 ; #2}
@@ -51,13 +50,14 @@
 \newcommand{\match}[1]{\ensuremath \text{match}(#1)}
 \newcommand{\build}[1]{\ensuremath \text{build}(#1)}
 \newcommand{\where}[1]{\ensuremath \text{where}(#1)}
-\newcommand{\test}[1]{\ensuremath \text{test}(#1)}
+\newcommand{\test}[1]{\ensuremath \operatorname{test}(#1)}
 \newcommand{\scope}[2]{\ensuremath \lbrace #1 : #2 \rbrace}
 \newcommand{\vars}[1]{\ensuremath \text{vars}(#1)}
 \newcommand{\alt}{\ensuremath \; | \;}
 
 \newcommand{\transform}[5]{#1, #2 \xrightarrow{#3} #4, #5}
-\newcommand{\transformfail}[3]{#1, #2 \xrightarrow{#3}\ \fail}
+\newcommand{\transformx}[4]{#1, #2 \xrightarrow{#3} #4}
+\newcommand{\transformfail}[3]{#1, #2 \xrightarrow{#3} \fail}
 \newcommand{\dom}[1]{\ensuremath \text{dom}(#1)}
 \newcommand{\cjm}{\ensuremath \xmapsto{\text{\tiny cjm}}}
 \newcommand{\mon}{\ensuremath \xmapsto{\text{\tiny mon}}}
@@ -67,48 +67,10 @@
 \newcommand{\Var}{\ensuremath \mathbb{V}}
 \newcommand{\Env}{\ensuremath \Var \mapsto \Term}
 \newcommand{\Pow}[1]{\ensuremath \mathcal{P}(#1)}
-\newcommand{\Fstrat}[1]{\ensuremath \normalfont\text{Fstrat}\llbracket #1 \rrbracket}
-\newcommand{\Fstratm}[1]{\ensuremath \text{\normalfont Fstrat}_\minus \llbracket #1 \rrbracket}
-\newcommand{\Fstratp}[1]{\ensuremath \text{\normalfont Fstrat}_\plus \llbracket #1 \rrbracket}
-\newcommand{\Fstrata}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright \llbracket #1 \rrbracket}
-\newcommand{\Fstratam}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright_\minus \llbracket #1 \rrbracket}
-\newcommand{\Fstratap}[1]{\ensuremath \text{\normalfont Fstrat}^\triangleright_\plus \llbracket #1 \rrbracket}
-\newcommand{\Bstrat}[1]{\ensuremath \text{\normalfont Bstrat}\llbracket #1 \rrbracket}
-\newcommand{\Bstratp}[1]{\ensuremath \text{\normalfont Bstrat}_\plus \llbracket #1 \rrbracket}
-\newcommand{\Bstratm}[1]{\ensuremath \text{\normalfont Bstrat}_\minus \llbracket #1 \rrbracket}
-\newcommand{\Bstrata}[1]{\ensuremath \text{\normalfont Bstrat}^\triangleleft \llbracket #1 \rrbracket}
-\newcommand{\Bstratap}[1]{\ensuremath \text{\normalfont Bstrat}_\plus^\triangleleft \llbracket #1 \rrbracket}
-\newcommand{\Bstratam}[1]{\ensuremath \text{\normalfont Bstrat}_\minus^\triangleleft \llbracket #1 \rrbracket}
+\newcommand{\sem}[1]{\ensuremath \llbracket #1 \rrbracket}
+
 \newcommand{\State}{\ensuremath \text{State}}
-\newcommand{\Statef}{\ensuremath \text{State}_\fail}
-\newcommand{\Statea}{\ensuremath \widehat{\text{State}}}
-\newcommand{\Stateaf}{\ensuremath \widehat{\text{State}}_\fail}
-\newcommand{\Statefail}{\ensuremath L_F}
-
-\newcommand{\fpathp}{\ensuremath \text{path}^{\triangleright}_{\plus}}
-\newcommand{\fpathm}{\ensuremath \text{path}^{\triangleright}_{\minus}}
-\newcommand{\bpathp}{\ensuremath \text{path}^{\triangleleft}_{\plus}}
-\newcommand{\bpathm}{\ensuremath \text{path}^{\triangleleft}_{\minus}}
-
-\newcommand{\fallap}{\ensuremath \text{all}^{\triangleright}_{\plus}}
-\newcommand{\fallam}{\ensuremath \text{all}^{\triangleright}_{\minus}}
-\newcommand{\ballap}{\ensuremath \text{all}^{\triangleleft}_{\plus}}
-\newcommand{\ballam}{\ensuremath \text{all}^{\triangleleft}_{\minus}}
-
-\newcommand{\fsomep}{\ensuremath \text{some}^{\triangleright}_{\plus}}
-\newcommand{\fsomem}{\ensuremath \text{some}^{\triangleright}_{\minus}}
-\newcommand{\bsomep}{\ensuremath \text{some}^{\triangleleft}_{\plus}}
-\newcommand{\bsomem}{\ensuremath \text{some}^{\triangleleft}_{\minus}}
-
-\newcommand{\fmatchp}{\ensuremath \text{match}^{\triangleright}_{\plus}}
-\newcommand{\fmatchm}{\ensuremath \text{match}^{\triangleright}_{\minus}}
-\newcommand{\bmatchp}{\ensuremath \text{match}^{\triangleleft}_{\plus}}
-\newcommand{\bmatchm}{\ensuremath \text{match}^{\triangleleft}_{\minus}}
-
-\newcommand{\FP}{\ensuremath F^{\triangleright}_{\plus}}
-\newcommand{\FM}{\ensuremath F^{\triangleright}_{\minus}}
-\newcommand{\BP}{\ensuremath B^{\triangleleft}_{\plus}}
-\newcommand{\BM}{\ensuremath B^{\triangleleft}_{\minus}}
+\newcommand{\Statea}{\ensuremath \widehat{\State}}
 
 \newcommand{\absstate}{\ensuremath \alpha_\sigma }
 \newcommand{\absstateprod}{\ensuremath \alpha_{\sigma\times\sigma} }
@@ -121,8 +83,13 @@
 
 \newcommand{\setbuild}[2]{\ensuremath \left\{\, #1 \mid #2 \,\right\}}
 
-\DeclareFlexCompoundSymbol{\mydotb}{Bin}{} 
-\def\mydot{.\mydotb}
+\newcommand{\id}{\ensuremath \operatorname{id}}
+\newcommand{\lfail}{\ensuremath \fail^{\star}}
+\newcommand{\lsucc}{\ensuremath \success^{\star}}
+\newcommand{\Rel}{\ensuremath \mathbf{Rel}}
+\newcommand{\Naive}{\ensuremath \mathbf{Naive}}
+\newcommand{\adjoint}{\ensuremath \dashv}
+\newcommand{\lub}{\ensuremath \bigsqcup}
 
 \begin{document}
 
@@ -295,346 +262,180 @@
 \clearpage
 \section*{Abstract Interpretation}
 
-We define a lattice algebra $(L,\sqsubseteq,\sqcap,\sqcup,\top,\bot,\circ,\times)$ as a set $L$ equipped with the usual lattice operations, composition $\circ$ and products $\times$. For the underlying set of a lattice algebra, we write $|L|$.
+% \begin{definition} \normalfont
+%   A product of objects $A$ and $B$ in a category is an object $P$ together with two arrows $\pi_1 : P \rightarrow A$ and $\pi_2 : P \rightarrow B$, s.t. for all objects $X$ and arrows $f: X \rightarrow A$, $g: X \rightarrow B$ there exists a unique arrow $h: X \rightarrow P$ and the following diagram commutes:
+%   \[
+%   \begin{tikzcd}
+%       & X \arrow[ld,"f" above]    \arrow[d,dotted,"h"] \arrow[rd,"g"] &   \\
+%     A & P \arrow[l,"\pi_1" above]                      \arrow[r,"\pi_2"] & B
+%   \end{tikzcd}
+%   \]
 
-\begin{definition}
-  Let $S = \Term \times (\Env) \cup \Fail$ be the representation of a programm states of an System S program. We define $\mathcal{S}$, as a lattice algebra of relations between System S program states $\Pow{S \times S}$.
-\end{definition}
-
-
-
-% \section*{Forward and Backward Collection Semantics of System S}
-
-% \begin{align*}
-%   \Fstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env) + \Fail} \\
-%   \Fstrat{s}R &= \Fstratp{s}(R) \cup \Fstratm{s}(R) \\
-%   \Fstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
-%   \Fstratp{s}R &= \setbuild{(t',\rho')}{\exists (t,\rho) \in R.\ \transform{t}{\rho}{s}{t'}{\rho'}} \\
-%   \Fstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \cjm \Pow{\Fail} \\
-%   \Fstratm{s}R &= \setbuild{\fail}{\exists (t,\rho) \in R.\ \transformfail{t}{\rho}{s}} \\
-%   \Bstrat{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env) + \Fail} \cjm \Pow{\Term \times (\Env)} \\
-%   \Bstrat{s}(R,P) &= \Bstratp{s}(R,P \cap (\Term \times (\Env))) \cup \Bstratm{s}(R,P \cap \Fail) \\
-%   \Bstratp{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Term \times (\Env)} \cjm \Pow{\Term \times (\Env)} \\
-%   \Bstratp{s}(R,P) &= \setbuild{(t,\rho) \in R}{\exists (t',\rho') \in P.\ \transform{t}{\rho}{s}{t'}{\rho'}} \\
-%   \Bstratm{\mathbf{strat}} &: \Pow{\Term \times (\Env)} \times \Pow{\Fail} \cjm \Pow{\Term \times (\Env)} \\
-%   \Bstratm{s}(R,F) &= \setbuild{(t,\rho) \in R}{\exists \fail\ \in F. \transformfail{t}{\rho}{s}} \\
-%   \State &= \Pow{\Term \times (\Env)} \\
-%   \Statef &= \Pow{\Term \times (\Env) + \Fail} \\
-%   \Statea &= L_T \times (\Var \mapsto L_T) \\
-%   \Stateaf &= L_T \times (\Var \mapsto L_T) + L_F
-% \end{align*}
-
-% \begin{center}
-% \begin{tikzcd}
-%   \Statea \arrow[d, "\constate",xshift=0.07cm] \arrow[r, "\text{Fstrat}^\triangleright"] & \Stateaf \arrow[d, "\constatefail",xshift=0.07cm] \\
-%   \State \arrow[u, "\absstate",xshift=-0.07cm] \arrow[r, "\text{Fstrat}"] & \Statef \arrow[u, "\absstatefail",xshift=-0.07cm]
-% \end{tikzcd}
-% \end{center}
-
-% \begin{center}
-% \begin{tikzcd}
-%   \Statea \times \Stateaf \arrow[d, "\constate \times \constatefail",xshift=0.07cm] \arrow[r, "\text{Bstrat}^\triangleleft"] & \Statea \arrow[d, "\constate",xshift=0.07cm] \\
-%   \State \times \Statef \arrow[u, "\absstate \times \absstatefail",xshift=-0.07cm] \arrow[r, "\text{Bstrat}"] & \State \arrow[u, "\absstate",xshift=-0.07cm]
-% \end{tikzcd}
-% \end{center}
-
-% \begin{definition}
-%   A function $f : L_1 \rightarrow L_2$ is a complete join morphism iff
-%   for all sets of ordinals $\delta$ and $\forall i \in \delta.\ x_i \in L_1$,
-%   \begin{dmath*}
-%     f\left(\bigsqcup_{i \in \delta} x_i \right) = \bigsqcup_{i \in \delta} f\left(x_i\right)
-%   \end{dmath*}.
+% We denote the unique arrow $h$ with $f \times g$.
 % \end{definition}
 
-% \begin{lemma}
-%   $\Fstratp{s}$ and $\Fstratm{s}$ are complete join morphisms
-% \end{lemma}
+% \begin{definition} \normalfont
+%   Dually, a coproduct of objects $A$ and $B$ in a category is an object $P$ together with two arrows $i_1 : A \rightarrow P$ and $i_2 : B \rightarrow P$, s.t. for all objects $X$ and arrows $f: A \rightarrow X$, $g: B \rightarrow X$ there exists a unique arrow $h: P \rightarrow X$ and the following diagram commutes:
+%   \[
+%   \begin{tikzcd}
+%     A \arrow[r,"i_1" above] \arrow[rd,"f" above] &
+%     P \arrow[d,dotted,"h" right] &
+%     B \arrow[l,"i_2" above] \arrow[ld,"g" above] \\
+%     & X  &
+%   \end{tikzcd}
+% \]
 
-% \begin{theorem}
-%   $\Fstrat{s}$ is a complete join morphism, that is
-%   \begin{dmath*}
-%     \Fstrat{s}\left(\bigcup_{i \in \delta} R_i\right) = \bigcup_{i \in \delta} \Fstrat{s}\left(R_i\right)
-%   \end{dmath*}
-%   \begin{proof}
-%   \begin{dmath*}
-%     \Fstrat{s}\left(\bigcup_{i \in \delta} R_i\right)
-%       = \Fstratp{s}\left(\bigcup_{i \in \delta} R_i\right)\ \cup\ \Fstratm{s}\left(\bigcup_{i \in \delta} R_i\right)
-%       = \bigcup_{i \in \delta} \Fstratp{s}(R_i)\ \cup\ \bigcup_{i \in \delta} \Fstratm{s}\left(R_i\right)
-%       = \bigcup_{i \in \delta} \left(\Fstratp{s}\left(R_i\right)\ \cup\ \Fstratm{s}\left(R_i\right)\right)
-%       = \bigcup_{i \in \delta} \Fstrat{s}\left(R_i\right)
-%   \end{dmath*}
-%   \end{proof}
-% \end{theorem}
+% We denote the unique arrow $h$ with $f + g$.
+% \end{definition}
 
-% \par\bigskip
+% \begin{definition}[Meet (Join) preserving functors] \normalfont
+% We say that a functor $F$ between two lattices $(L_1,\leq_{L_1},\cup,\cap)$ and $(L_2,\leq_{L_2},\sqcup,\sqcap)$ preserves binary meets (joins) iff for all $x,y \in L_1$,
+% \[ F(x \cup y) = F(x) \sqcup F(y) \] respectively 
+% \[ F(x \cap y) = F(f) \sqcap F(y). \]
+% \end{definition}
 
-% \begin{lemma}
-%   $\Bstratp{s}$ and $\Bstratm{s}$ are complete join morphisms
-% \end{lemma}
+% \begin{definition}[Product preserving functors] \normalfont
+%   We say that a functor $F : \mathcal{C} \rightarrow \mathcal{D}$ preserves products iff for all products $P$ of $A$ and $B$, arrows $f: X \rightarrow A$ and $g: X \rightarrow B$, $F(P)$ is a product of $F(A)$ and $F(B)$ in $\mathcal{D}$ and \[ F(f \times_{\mathcal{C}} g) = F(f) \times_{\mathcal{D}} F(g).\]
+%   \[
+%   \begin{tikzcd}
+%       & X \arrow[ld,"f" above]    \arrow[d,dotted,"h"] \arrow[rd,"g"] &      & \mathcal{C} \arrow[ddd,"F"]  \\
+%     A & P \arrow[l,"\pi_1" above]                      \arrow[r,"\pi_2"] & B & \\
+%       & F(X) \arrow[ld,"F(f)" above]    \arrow[d,dotted,"F(h)"] \arrow[rd,"F(g)"] &      & \\
+%     F(A) & F(P) \arrow[l,"F(\pi_1)" above]                      \arrow[r,"F(\pi_2)"] & F(B) & \mathcal{D}\\
+%   \end{tikzcd}
+%   \]
+% \end{definition}
 
-% \begin{theorem}
-%   $\Bstrat{s}$ is a complete join morphism, that is
-%   \begin{dmath*}
-%     \Bstrat{s}\left(\bigcup_{i \in \delta} R_i, \bigcup_{i \in \delta} P_i \right) = \bigcup_{i \in \delta} \Bstrat{s}(R_i,P`_i)
-%   \end{dmath*}
-%   \begin{proof}
-%     Follows directly from the monotonicity of $\Bstratp{s}$ and $\Bstratm{s}$ and that union and intersection preserves monotonicity.
-%   \end{proof}
-% \end{theorem}
+\begin{definition}[$\Rel$ Category] \normalfont
+  We define the category of relations $\Rel$, with sets $A,B,C, \ldots$ as objects, binary relation $R,S,T, \ldots$ as arrows where $R: A \rightarrow B$ if $R \subseteq A \times B$. The identity arrow \[id_A \coloneqq \setbuild{ (x,x) }{ x \in A }.\] The composition of relations \[R \circ S \coloneqq \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\] Additionally we define an unary operation that reverses a relation \[ R^{-1} = \setbuild{(y,x)}{ \forall (x,y) \in R } \]   
+\end{definition}
 
-% \par\bigskip
+\begin{definition}[$\Rel(A)$ Category] \normalfont
+  We define the category $\Rel(A)$ as a proper subcategory of $\Rel$, where the all the objects are subsets of $A$.
+\end{definition}
 
-% \begin{lemma}
-%   The precondition is an overapproximation of $\Bstratp{s}$
-%   \begin{dmath*}
-%     \normalfont
-%     \Bstratp{s}(R,P) \subseteq R \condition{for all $R, P$}
-%   \end{dmath*}
-% \end{lemma}
+\begin{definition}[System S Programm State] \normalfont
+  We define the state space of System S programs as \[\State \coloneqq \Term \times \Env \cup \Fail,\] the set of all terms together with a term environment or failure.
+\end{definition}
 
-% \begin{lemma}
-%   The following are all equivalent:
-%   \begin{enumerate}[i)]
-%     \normalfont
-%     \item $\transform{t}{\rho}{s}{t'}{\rho'}$
-%     \item $(t',\rho') \in \Fstratp{s}(\lbrace (t,\rho) \rbrace)$
-%     \item $(t,\rho) \in \Bstratp{s}(\lbrace (t,\rho) \rbrace, \lbrace (t',\rho') \rbrace)$
-%   \end{enumerate}
-% \end{lemma}
+We can think of the category $\Rel(\State)$ as a category that has properties of program states as objects and properties of program transitions as arrows.
 
-% \begin{lemma}
-%   The following are all equivalent:
-%   \begin{enumerate}[i)]
-%     \normalfont
-%     \item $\transformfail{t}{\rho}{s}$
-%     \item $\fail\ \in \Fstratm{s}(\lbrace (t,\rho) \rbrace)$
-%     \item $(t,\rho) \in \Bstratm{s}(\lbrace (t,\rho) \rbrace, \lbrace \fail \rbrace)$
-%   \end{enumerate}
-% \end{lemma}
+\begin{definition}[Concrete Denotational Semantics of System S] \normalfont
+  We define the denotational semantics of System S programs as a relation over $\State \times \State$ with \[\sem{s} \coloneqq \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}.\]
+\end{definition}
 
-% \paragraph{Soundness}
+\begin{theorem} \normalfont The concrete semantics of System S can be expressed with an algebra of the signature $(\cup, \cap, \circ, (-)^{-1})$.
+\begin{proof}
+\begin{dgroup*}
+\begin{dmath*}
+  \sem{\test{s}}
+     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\test{s}}{x}}}
+     = {\setbuild{((t,\rho),(t,\rho))}{\transform{t}{\rho}{s}{t'}{\rho'}}} \cup
+       {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}}
+     = ({\setbuild{((t,\rho),(t,\rho))}{\forall t,\rho}} \circ
+        {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}})^{-1}
+       \circ
+       ({\setbuild{((t,\rho),(t,\rho))}{\forall t,\rho}} \circ
+        {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}) \cup
+       {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
+       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}
+     = (\success \circ \sem{s})^{-1} \circ (\success \circ \sem{s}) \cup
+       \fail \circ \sem{s}
+\end{dmath*}
+     
+\begin{dmath*}
+  \sem{\neg{s}}
+    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\neg{s}}{x}}}
+    = {\setbuild{((t,\rho),(t,\rho))}{\transformfail{t}{\rho}{s}}} \cup
+      {\setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s}{t'}{\rho'}}}
+    = ({\setbuild{((t,\rho),\fail)}{\forall t,\rho}} \circ
+       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}})^{-1}
+      \circ
+      ({\setbuild{((t,\rho),\fail)}{\forall t,\rho}} \circ
+       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}})
+      \cup
+      {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
+      {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
+      {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}
+    = (\fail \circ \sem{s})^{-1} \circ (\fail \circ \sem{s}) \cup
+       \fail \circ \success \circ \sem{s}
+\end{dmath*}
 
-% \begin{align*}
-%   \alpha^\star(\varphi) &= \ddot{\alpha} \circ \varphi \circ \dot{\gamma} \\
-%   \gamma^\star(\psi) &= \ddot{\gamma} \circ \psi \circ \dot{\alpha} \\
-%   \alpha^\star(\Fstrat{s})r &\sqsubseteq \Fstrata{s}r \\
-%   \alpha^\star(\Bstrat{s})(r,p) &\sqsubseteq \Bstrata{s}(r,p)
-% \end{align*}
+\begin{dmath*}
+  \sem{\seq{s_1}{s_2}}
+    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\seq{s_1}{s_2}}{x}}}
+    = {\setbuild{((t,\rho),(t'',\rho''))}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transform{t'}{\rho'}{s_2}{t''}{\rho''}}} \cup
+                  {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}} \cup
+                  {\setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformfail{t'}{\rho'}{s_2}}}
+    = {\setbuild{((t,\rho),x)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformx{t'}{\rho'}{s_2}{x}}} \cup
+                  {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}}
+    = {\setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}}} \circ
+      {\setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}}} \cup
+      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}}
+    = \sem{s_2} \circ \sem{s_1} \cup \fail \circ \sem{s_1}
+\end{dmath*}
 
-% We now proceed by induction on the structure of strategies: 
-% \begin{itemize}
-% \item Case $s = \test{s'}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\test{s'}}(r) &= \Bstratap{s'}(r,\top) \\
-%     \Fstratam{\test{s'}}(r) &= \Fstratam{s'}(r) \\
-%     \Bstratap{\test{s'}}(r,p) &= \Bstratap{s'}(r,p) \\
-%     \Bstratam{\test{s'}}(r,p) &= \Bstratam{s'}(r,p)
-%   \end{align*}
+\begin{dmath*}
+  \sem{\choice{s_1}{s_2}}
+     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\choice{s_1}{s_2}}{x}}}
+     = {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \cup
+       {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_2}{t'}{\rho'}}} \cup
+       {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}}
+     = {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
+       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \cup
+       {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
+       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \cup
+       ({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
+        {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \cap
+        {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
+        {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}})
+     = \success \circ \sem{s_1} \cup \success \circ \sem{s_2} \cup (\fail \circ \sem{s_1} \cap \fail \circ \sem{s_2})
+\end{dmath*}
+\end{dgroup*}
+\end{proof}
+\end{theorem}
 
-% \item Case $s = \neg{s'}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\neg{s'}}(r) &= \Bstratam{s'}(r) \\
-%     \Fstratam{\neg{s'}}(r) &= \Fstratap{s'}(r) \\
-%     \Bstratap{\neg{s'}}(r,p) &= \Bstratam{s'}(r,\lfail) \\
-%     \Bstratam{\neg{s'}}(r,p) &= \Bstratap{s'}(r,\top)
-%   \end{align*}
+\begin{definition}[Galois Connection] \normalfont
+  A Galois Connection is an adjunction between two posets $A$ and $B$ with a left adjoint functor $\alpha : A \rightarrow B$ called \emph{abstraction} and a right adjoint functor $\gamma : B \rightarrow A$ called \emph{concretisation}
+ and for all $x \in A$ and $y \in B$, the following two-way rule holds \[ \frac{\alpha(x) \leq_B y}{x \leq_A \gamma(y)}. \]
+\end{definition}
 
-% \item Case $s = \seq{s_1}{s_2}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\seq{s_1}{s_2}}(r) &= \Fstratap{s_2}(\Fstratap{s_1}(r)) \\
-%     \Fstratam{\seq{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcup \Fstratam{s_2}(\Fstratap{s_1}(r)) \\
-%     \Bstratap{\seq{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,\Bstratap{s_2}(\Fstratap{s_1}(r),p)) \\
-%     \Bstratam{\seq{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcup \Bstratap{s_1}(r,\Bstratam{s_2}(\Fstratap{s_1},p))
-%   \end{align*}
+\begin{definition}[$(L,\alpha,\gamma)$-Semantics of System S] \normalfont
+  We define the abstract semantics of System S programs as values in a lattice $L$ over a given galois connection $\alpha \adjoint \gamma$ as \[\sem{s}_{(L,\alpha,\gamma)} \coloneqq \alpha(\sem{s}). \]
+\end{definition}
 
-% \item Case $s = \choice{s_1}{s_2}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\choice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup \Fstratap{s_2}(r) \\
-%     \Fstratam{\choice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
-%     \Bstratap{\choice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup \Bstratap{s_2}(r,p) \\
-%     \Bstratam{\choice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
-%   \end{align*}
+We begin exploring the space of $(L,\alpha,\gamma)$-Semantics of System S by defining a very naive abstraction, namely where an abstract state consists only of a single term and on conflict we jump immmediatley to top:
+ 
+\begin{definition}[$\Naive$ semantics of System S] \normalfont
+  Let $N$ be the set of abstract program states with $N = \State \cup \lbrace \top, \bot \rbrace$. We define a complete partial order $\leq_N$ on $N$
+  \[
+    \begin{tikzpicture}
+     \matrix (m) [matrix of math nodes, row sep=3em, column sep=3em]
+    {          & \top &       \\
+      (t,\rho) &      & \fail \\
+               & \bot &       \\
+    };
 
-% \item Case $s = \leftchoice{s_1}{s_2}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\leftchoice{s_1}{s_2}}(r) &= \Fstratap{s_1}(r) \sqcup (\Fstratam{s_1}(r) \sqcap \Fstratap{s_2}(r)) \\
-%     \Fstratam{\leftchoice{s_1}{s_2}}(r) &= \Fstratam{s_1}(r) \sqcap \Fstratam{s_2}(r) \\
-%     \Bstratap{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratap{s_1}(r,p) \sqcup (\Bstratam{s_1}(r,\lfail) \sqcap \Bstratap{s_2}(r,p)) \\
-%     \Bstratam{\leftchoice{s_1}{s_2}}(r,p) &= \Bstratam{s_1}(r,p) \sqcap \Bstratam{s_2}(r,p)
-%   \end{align*}
+    \draw [thick] (m-2-1) -- (m-1-2);
+    \draw [thick] (m-2-3) -- (m-1-2);
+    \draw [thick] (m-3-2) -- (m-2-1);
+    \draw [thick] (m-3-2) -- (m-2-3);
+    \end{tikzpicture}
+  \]
 
-% \item Case $s = \fix{x}{s'}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\fix{x}{s'}}(r) &= \Fstratap{s'[x \coloneqq \fix{x}{s'}]}(r) \\
-%     \Fstratam{\fix{x}{s'}}(r) &= \Fstratam{s'[x \coloneqq \fix{x}{s'}]}(r) \\
-%     \Bstratap{\fix{x}{s'}}(r,p) &= \Bstratap{s'[x \coloneqq \fix{x}{s'}]}(r,p) \\
-%     \Bstratam{\fix{x}{s'}}(r,p) &= \Bstratam{s'[x \coloneqq \fix{x}{s'}]}(r,p)
-%   \end{align*}
+  We next define the category $\Naive$ where objects are elements of $N$, arrows are tuples $(x,y) : x \rightarrow y$ for $(x,y) \in N \times N$, the identity $\id_x = (x,x)$, and  composition $(y,z) \circ (x,y) = (x,z).$
 
-% \item Case $s = \path{i}{s'}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\path{i}{s'}}(r) &= \fpathp(i,r,\Fstratap{s'}) \\
-%     \Fstratam{\path{i}{s'}}(r) &= \fpathm(i,r,\Fstratam{s'}) \\
-%     \Bstratap{\path{i}{s'}}(r,p) &= \bpathp(i,r,p,\Bstratap{s'}) \\
-%     \Bstratam{\path{i}{s'}}(r,p) &= \bpathm(i,r,p,\Bstratam{s'})
-%   \end{align*}
-%   %
-%   where
-%   \begin{dgroup*}
-%     \begin{dmath*}
-%       \fpathp(i,r,\FP) \sqsupseteq \absstate((\setbuild{(f(t_1 \ldots t_i' \ldots t_n),\rho')}{
-%         \exists {(f(t_1 \ldots t_i \ldots t_n),\rho) \in \constate(r)}\mydot
-%         {1 \leq i \leq n} \land
-%         {(t_i',\rho') \in (\constate \circ \FP \circ \absstate) (\lbrace (t_i,\rho) \rbrace)}})
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \fpathm(i,r,\FM) \sqsupseteq \absfail(\setbuild{\fail}{
-%         \exists {(f(t_1\ldots t_n),\rho) \in \constate(r)}\mydot
-%         {i > n} \lor
-%         \left[ {1 \leq i \leq n} \land {\fail\ \in (\confail \circ \FM \circ \absstate) (\lbrace (t_i,\rho) \rbrace)} \right]
-%         })
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \bpathp(i,r,p,\BP) \sqsupseteq \absstate(\setbuild{
-%         {(f(t_1 \ldots t_i \ldots t_n),\rho) \in \constate(r)}
-%         }{
-%         \exists {(f(t_1 \ldots t_i' \ldots t_n),\rho') \in \constate(p)}\mydot
-%         {(t_i,\rho) \in (\constate \circ \BP \circ \absstateprod) (\lbrace (t_i,\rho) \rbrace,\lbrace (t_i',\rho') \rbrace)} })
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \bpathm(i,r,p,\BM) \sqsupseteq
-%          \absstate(\setbuild{ {(f(t_1,\ldots,t_i,\ldots,t_n),\rho) \in \constate(r)} }{
-%                \exists {\fail\, \in \confail(p)}\mydot
-%                {i > n} \lor
-%                ({1 \leq i \leq n} \land {(t_i,\rho) \in (\confail \circ \BM) (\absstate (\lbrace (t_i,\rho) \rbrace), p)} })
-%     \end{dmath*}
-%   \end{dgroup*}
+  We continue by defining the abstraction functor $\alpha : \Rel(\State) \rightarrow \Naive$, for objects $S \subseteq \State$ by
+  \[
+     \alpha(S) \coloneqq \lub S
+  \]
+  and arrows $R : A \rightarrow B \subseteq \State \times \State$ by
+  \[
+     \alpha(R) \coloneqq (\lub A, \lub B).
+  \]
 
-% \item Case $s = \all{s'}$:
-%   \begin{align*}
-%     \Fstratap{\all{s'}}(r) &= \fallap(r,\Fstratap{s'}) \\
-%     \Fstratam{\all{s'}}(r) &= \fallam(r,\Fstratap{s'},\Fstratam{s'}) \\
-%     \Bstratap{\all{s'}}(r,p) &= \ballap(r,p,\Bstratap{s'}) \\
-%     \Bstratam{\all{s'}}(r,p) &= \ballam(r,p,\Bstratap{s'},\Bstratam{s'})
-%   \end{align*}
-%   %
-%   where
-%   %
-%   \begin{dgroup*}
-%     \begin{dmath*} 
-%       \fallap(r,\FP) \sqsupseteq
-%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
-%            \exists {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot
-%            \bigwedge\limits_{1 \leq i \leq n}
-%              {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) (\lbrace (t_i,\rho_i) \rbrace)} } \right)
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \fallam(r,\FP,\FM) \sqsupseteq
-%          \absstate \left( \setbuild{\fail\,}{ \exists {\left( f(t_1,\ldots,t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {k \in \left[ 1,n \right]}\mydot
-%              \left[ \bigwedge\limits_{1 \leq i < k} {\left( t_i',\rho_{i+1} \right) \in \constate \circ  \FP \circ \absstate (\lbrace (t_i,\rho_i) \rbrace)} \right] \land
-%              {\fail\ \in (\confail \circ \FM \circ \absstate) \left(\lbrace (t_k,\rho_k) \rbrace\right)} } \right)
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \ballap(r,p,\BP) \sqsupseteq
-%          \absstate \left( \setbuild{ {\left(f(t_1,\ldots,t_n),\rho_1 \right) \in \constate(r)} }{
-%            \exists {\left( f(t_1',\ldots,t_n'),\rho_{n+1} \right) \in \constate(p)}\mydot
-%            \bigwedge\limits_{1 \leq i \leq n} {\left( t_i,\rho_i \right) \in (\constate \circ \BP \circ \absstateprod)
-%              \left(\lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1}) \rbrace\right)} } \right)
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \ballam(r,p,\BP,\BM) \sqsupseteq
-%          \absstate \left( \setbuild{ {(f(t_1,\ldots,t_n),\rho_1) \in \constate(r)} }{
-%             \exists {\fail\, \in \constate(p)}\mydot \exists {k \in [ 1,n ]}\mydot
-%              \left[ \bigwedge\limits_{1 \leq i < k} {(t_i,\rho) \in (\constate \circ \BP \circ \absstateprod) (\lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1} \rbrace)} \right] \land
-%               (\confail \circ \BM) (\absstate(\lbrace (t_k,\rho_k) \rbrace), p) } \right)
-%     \end{dmath*}
-%   \end{dgroup*}
-  
-% \item Case $s = \some{s'}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\some{s'}}(r) &= \fsomep(r,\Fstratap{s'},\Fstratam{s'}) \\
-%     \Fstratam{\some{s'}}(r) &= \fsomem(r,\Fstratam{s'}) \\
-%     \Bstratap{\some{s'}}(r,p) &= \bsomep(r,p,\Bstratap{s'},\Bstratam{s'}) \\
-%     \Bstratam{\some{s'}}(r,p) &= \bsomem(r,p,\Bstratam{s'})
-%   \end{align*}
-%   %
-%   where
-%   %
-%   \begin{dgroup*}
-%     \begin{dmath*} 
-%       \fsomep(r,\FP,\FM) \sqsupseteq
-%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
-%            \exists { \left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
-%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \right)
-%            \land \left( \bigwedge_{i \in \overline{M}} {\fail\, \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \fsomem(r,\FM) \sqsupseteq
-%          \absstate \left( \setbuild{ \fail }{
-%            \exists {\left( f(t_1 \ldots t_n),\rho \right) \in \constate(r)}\mydot
-%             \bigwedge_{1 \leq i \leq n} {\fail \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho) \rbrace \right)} } \right)
-%     \end{dmath*}
-%     \begin{dmath*} 
-%       \bsomep(r,p,\BP,\BM) \sqsupseteq
-%          \absstate \left( \setbuild{ {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)} }{
-%            \exists {\left( f(t_1' \ldots t_n'),\rho_{n+1} \right) \in \constate(p)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
-%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \BP \circ \absstateprod) \left( \lbrace (t_i,\rho_i) \rbrace, \lbrace (t_i',\rho_{i+1}) \rbrace \right)} \right)
-%            \land \left( \bigwedge_{i \in \overline{M}} {(t_i,\rho_i) \in (\confail \circ \BM) \left(\absstate(\lbrace (t_i,\rho_i) \rbrace), p \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
-%    \end{dmath*}
-%    \begin{dmath*}
-%      \bsomem(r,p,\BM) \sqsupseteq
-%         \absstate \left( \setbuild{ {\left(f(t_1\ldots t_n),\rho\right) \in \constate(r)} }{
-%           \exists {\fail \in \confail(p)}\mydot
-%            \bigwedge_{1 \leq i \leq n} {(t_i,\rho) \in (\confail \circ \BM) \left( \absstate(\lbrace (t_i,\rho) \rbrace), p \right)}
-%          } \right)
-%     \end{dmath*}
-%   \end{dgroup*}
-
-% \item Case $s = \match{t}$:
-%   %
-%   \begin{align*}
-%     \Fstratap{\match{t}}(r) &= \fmatchp(r,\Fstratap{s'},\Fstratam{s'}) \\
-%     \Fstratam{\match{t}}(r) &= \fmatchm(r,\Fstratam{s'}) \\
-%     \Bstratap{\match{t}}(r,p) &= \bmatchp(r,p,\Fstratap{s'}) \\
-%     \Bstratam{\match{t}}(r,p) &= \bmatchm(r,p,\Fstratam{s'})
-%   \end{align*}
-%   \begin{dgroup*}
-%     \begin{dmath*} 
-%       \fmatchp(t,r,\FP) \sqsupseteq
-%          \absstate \left( \setbuild{ \left( f(t_1' \ldots t_n'),\rho_{n+1} \right) }{
-%            \exists {\left( f(t_1 \ldots t_n),\rho_1 \right) \in \constate(r)}\mydot \exists {M \subseteq \lbrace 1 \ldots n \rbrace}\mydot
-%            \left( \bigwedge_{i \in M} {\left( t_i',\rho_{i+1} \right) \in (\constate \circ \FP \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \right)
-%            \land \left( \bigwedge_{i \in \overline{M}} {\fail \in (\confail \circ \FM \circ \absstate) \left( \lbrace (t_i,\rho_i) \rbrace \right)} \land {t_i' = t_i} \land {\rho_{i+1} = \rho_i} \right) } \right)
-%     \end{dmath*}
-%   \end{dgroup*}
-
-% \end{itemize}
-
-% Since
-% \begin{align*}
-%   \alpha^\star(\Fstratp{s})R &\sqsubseteq \Fstratap{s}R \\
-%   \alpha^\star(\Fstratm{s})R &\sqsubseteq \Fstratam{s}R,
-% \end{align*}
-% it holds that
-% \begin{align*}
-%    &\ \alpha^\star(\Fstrata{s})R \\
-%   =&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r)) \cup \Fstratm{s}(\dot{\gamma}(r))) \\
-%   \sqsubseteq&\ \ddot{\alpha}(\Fstratp{s}(\dot{\gamma}(r))) \sqcup \ddot{\alpha}(\Fstratm{s}(\dot{\gamma}(r))) \\
-%   \sqsubseteq&\ \Fstratap{s}R \sqcup \Fstratam{s}R \\
-%   =&\ \Fstrata{s}R
-% \end{align*}
-% if $\ddot{\alpha}$ satisfies
-% \begin{align*}
-%   \ddot{\alpha}(M \cup N) \sqsubseteq \ddot{\alpha}(M) \sqcup \ddot{\alpha}(N)
-% \end{align*}
+   
+\end{definition}
 
 \end{document}
 
