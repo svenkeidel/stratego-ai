@@ -1,12 +1,12 @@
 \documentclass{article}
 
-%\usepackage[T1]{fontenc}
-%\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
 
 \usepackage{enumerate}
 
-\usepackage{stix}
-\usepackage{amsmath,amsfonts,mathtools,stackrel}
+\usepackage[]{stix}
+\usepackage{amsmath,amsfonts}
 %\setlength{\mathindent}{0pt}
 \allowdisplaybreaks
 
@@ -15,8 +15,6 @@
 \newtheorem{definition}[theorem]{Definition}
 \newtheorem{lemma}[theorem]{Lemma}
 \newtheorem{corollary}[theorem]{Corollary}
-
-\usepackage{breqn}
 
 \usepackage{listings}
 \lstset{mathescape=true}
@@ -48,7 +46,7 @@
 \newcommand{\return}{\ensuremath \hookleftarrow}
 \newcommand{\seq}[2]{\ensuremath #1 ; #2}
 \newcommand{\choice}[2]{\ensuremath #1 + #2}
-\newcommand{\leftchoice}[2]{\ensuremath #1 \mathrel{\vcenter{\hbox{+}}\mkern-18.5mu{\leftarrow}} #2}
+\newcommand{\leftchoice}[2]{\ensuremath #1 \nvleftarrow #2}
 \newcommand{\fix}[2]{\ensuremath \operatorname{rec}(#1,#2)}
 \newcommand{\path}[2]{\ensuremath \operatorname{path}(#1,#2)}
 \newcommand{\one}[1]{\ensuremath \operatorname{one}(#1)}
@@ -77,7 +75,7 @@
 \newcommand{\Constructors}{\ensuremath \mathcal{Con}}
 \newcommand{\Env}{\ensuremath \Var \mapsto \Term}
 \newcommand{\Pow}[1]{\ensuremath \mathcal{P}(#1)}
-\newcommand{\sem}[1]{\ensuremath \lBrack* #1 \rBrack*}
+\newcommand{\sem}[1]{\ensuremath \lBrack #1 \rBrack}
 
 \newcommand{\State}{\ensuremath \text{State}}
 \newcommand{\Statea}{\ensuremath \widehat{\State}}
@@ -95,6 +93,7 @@
 \newcommand{\Salgebra}{\ensuremath \mathcal{S}\text{-algebra}}
 \newcommand{\Salgebras}{\ensuremath \mathcal{S}\text{-algebras}}
 \newcommand{\Salg}{\ensuremath \mathcal{S}}
+\newcommand{\domain}{\ensuremath \operatorname{dom}}
 \newcommand{\lfail}{\ensuremath \operatorname{fail}}
 \newcommand{\lsucc}{\ensuremath \operatorname{succ}}
 \newcommand{\set}{\ensuremath \operatorname{set}}
@@ -276,7 +275,7 @@
 \par\medskip
 
 \begin{definition}[$\Rel$ Category] \normalfont
-  We define the category of relations $\Rel$, with sets $A,B,C, \ldots$ as objects, binary relation $R,S,T, \ldots$ as arrows where $R: A \rightarrow B$ if $R \subseteq A \times B,$ identity arrows \[\id_A \coloneqq \setbuild{ (x,x) }{ x \in A },\] composition of relations \[R \circ S \coloneqq \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\] Additionally, for all relations $R \subseteq A \times B$ there is a symmetric relation $R^{-1} \subseteq B \times A$ defined as \[ R^{-1} \coloneqq \setbuild{(y,x)}{ \forall (x,y) \in R }, \] Notice however that $R^{-1} \circ R$ is not necessarily equal to $\id$.
+  We define the category of relations $\Rel$, with sets $A,B,C, \ldots$ as objects, binary relation $R,S,T, \ldots$ as arrows where $R: A \rightarrow B$ if $R \subseteq A \times B,$ identity arrows \[\id_A \coloneq \setbuild{ (x,x) }{ x \in A },\] composition of relations \[R \circ S \coloneq \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\]
 \end{definition}
 
 \begin{definition}[$\Rel(A)$ Category] \normalfont
@@ -284,7 +283,7 @@
 \end{definition}
 
 \begin{definition}[System S Programm State] \normalfont
-  We define the state space of System S programs as \[\State \coloneqq \Term \times \Env \cup \Fail,\] the set of all terms together with a term environment or failure.
+  We define the state space of System S programs as \[\State \coloneq \Term \times \Env \cup \Fail,\] the set of all terms together with a term environment or failure.
 \end{definition}
 
 We can think of the category $\Rel(\State)$ as a category with properties of program states as objects and relations between two program states as arrows.
@@ -293,8 +292,9 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
   An $\Salgebra$, is an abstract algebra to represent operations for term rewriting. The algebra consists of
   \begin{itemize}
     \item a partially ordered set $A$ equipped with for all $a, a_1, a_2 \in A$,
-    \item binary \emph{meet} $a_1 \sqcap a_2$ and \emph{join} $a_1 \sqcup a_2$ operations,
-    \item an unary \emph{reverse} operation $a^{-1}$,
+    \item binary composition $\circ$, \emph{meet} $a_1 \sqcap a_2$ and \emph{join} $a_1 \sqcup a_2$ operations,
+    \item an unary operation $\domain$ that represents the domain of a relation,
+    \item an unary operation $(-)^{-1}$ that represents the symmetric relation,
     \item constant symbols to represent success ($\lsucc_a$) and failure ($\lfail_a$) of a strategy,
     \item an unary operation to retrieve the $i$th immediate subterm ($\get_a(i)$),
     \item two unary operations that assert if the top most constructor is equal $(\constructor = f)_a$ or not equal $(\constructor \neq f)_a$ to another constructor symbol $f$,
@@ -318,152 +318,115 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
     \alpha(\get_a(i))       &\leq \get_{\alpha(a)}(i) \\
   \end{align*}
   We say, that the morphism is strict, when $\alpha$ preserves the algebraic operations up to equality.
-  
-  \begin{itemize}
-    \item binary \emph{meet} $\sqcap$ and \emph{join} $\sqcup$ operations,
-    \item an unary \emph{reverse} operation $(-)^{-1}$,
-    \item constant symbols to represent success ($\lsucc$) and failure ($\lfail$) of a strategy,
-    \item an unary operation to retrieve the $i$th immediate subterm ($\get(i)$),
-    \item two unary operations to assert if the top most constructor is equal $(\constructor = -)$ or not equal $(\constructor \neq -)$ to another constructor symbol,
-    \item two unary operations to assert if the arity of the top level constructor is lower $(\arity < -)$ or greater $(- < \arity)$ than a certain number.
-  \end{itemize}
 \end{definition}
 
 \begin{definition}[$\Salgebra$ for $\Rel(\State)$] \normalfont
   We define an $\Salgebra$ for binary relations over System S states, with 
   \begin{itemize}
     \item $L = \State \times \State$,
-    \item for two relations $R : A_1 \rightarrow A_2$ and $S : B_1 \rightarrow B_2$ the meet operation $R \sqcap S : A_1 \cap B_1 \rightarrow A_2 \cap B_2$ as the intersection of relations defined by \[R \sqcap S \coloneqq R \cap S, \] and join $R \sqcup S : A_1 \cup B_1 \rightarrow A_2 \cup B_2$ as the union of relations defined by \[ R \sqcup S \coloneqq R \cup S, \]
-    \item the reverse operation $(-)^{-1}$ as defined in $\Rel(\State)$,
-    \item for all objects $A$, the \emph{success} operation as an morphism defined by \[\lsucc \coloneqq \setbuild{((t,\rho),(t,\rho))}{ \forall (t,\rho) \in A }, \]
-    \item for all objects $A$, the \emph{failure} operation as an morphism defined by \[ \lfail \coloneqq \setbuild{((t,\rho),\fail)}{ \forall (t,\rho) \in A }, \]
-    \item for all objects $A$, the retrieval operation of the $i$th immediate subterm as an morphism defined by \[ \get(i) \coloneqq \setbuild{ ((f(\ldots t_i \ldots),\rho), (t_i,\rho)) }{ \forall (f(\ldots),\rho) \in A }, \]
-    \item for all objects $A$, the assertion of top most constructors as an morphism defined by \[ (\constructor = f) \coloneqq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f = g } \] and \[ (\constructor \neq f) \coloneqq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f \neq g }, \]
-    \item for all objects $A$, the assertion operations of the arity of the top most constructor as morphisms defined by \[ (\arity < i) \coloneqq \setbuild{ ((f(\ldots t_k),\rho),(f(\ldots t_k),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ k < i }, \] and \[ (i < \arity) \coloneqq \setbuild{ ((f(\ldots t_j),\rho),(f(\ldots t_j),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ i < j }, \]
+    \item the composition defined as in $\Rel(\State)$,
+    \item for two relations $R : A_1 \rightarrow A_2$ and $S : B_1 \rightarrow B_2$ the meet operation $R \sqcap S : A_1 \cap B_1 \rightarrow A_2 \cap B_2$ as the intersection of relations defined by \[R \sqcap S \coloneq R \cap S, \] and join $R \sqcup S : A_1 \cup B_1 \rightarrow A_2 \cup B_2$ as the union of relations defined by \[ R \sqcup S \coloneq R \cup S, \]
+    \item for all relations $R : A \rightarrow B$, the domain operation as an morphism $\domain(R) : A \rightarrow A $ defined by \[ \domain(R) \coloneq \setbuild{ (x,x) }{ \forall (x,y) \in R }, \]
+    \item for all relations $R : A \rightarrow B$, the unary operation $(-)^{-1}$ as an morphism $R^{-1} : B \rightarrow A $ defined by \[ R^{-1} \coloneq \setbuild{ (y,x) }{ \forall (x,y) \in R }, \]
+    \item the \emph{success} operation as an morphism defined by \[\lsucc_A \coloneq \setbuild{((t,\rho),(t,\rho))}{ \forall (t,\rho) \in A }, \]
+    \item the \emph{failure} operation as an morphism defined by \[ \lfail_A \coloneq \setbuild{((t,\rho),\fail)}{ \forall (t,\rho) \in A }, \]
+    \item the retrieval operation of the $i$th immediate subterm as an morphism defined by \[ \get_A(i) \coloneq \setbuild{ ((f(\ldots t_i \ldots),\rho), (t_i,\rho)) }{ \forall (f(\ldots),\rho) \in A }, \]
+    \item the assertion of top most constructors as an morphism defined by \[ (\constructor = f)_A \coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f = g } \] and \[ (\constructor \neq f)_A \coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f \neq g }, \]
+    \item the assertion operations of the arity of the top most constructor as morphisms defined by \[ (\arity < i)_A \coloneq \setbuild{ ((f(\ldots t_k),\rho),(f(\ldots t_k),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ k < i }, \] and \[ (i < \arity)_A \coloneq \setbuild{ ((f(\ldots t_j),\rho),(f(\ldots t_j),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ i < j }, \]
   \end{itemize}
 
   For convenience, we define notation for replacing the $i$th immediate subterm  
-  \[ \set(i) \coloneqq \get(i)^{-1}, \] and asserting if the arity of the top most constructor is not equal to a certain number \[ (\arity \neq i) \coloneqq (\arity < i) \cup (i < \arity). \]
+  \[ \set(i) \coloneq \get(i)^{-1}, \] and asserting if the arity of the top most constructor is not equal to a certain number \[ (\arity \neq i) \coloneq (\arity < i) \cup (i < \arity). \]
 \end{definition}
 
 \begin{definition}[Concrete Denotational Semantics of System S] \normalfont
-  We define the denotational semantics of System S programs as a relation over $\State \times \State$ with \[\sem{s} \coloneqq \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}.\]
+  We define the denotational semantics of System S programs as a relation over $\State \times \State$ with \[\sem{s} \coloneq \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}.\]
 \end{definition}
 
 \begin{theorem} \normalfont
   Next, we demonstrate that the concrete semantics of System S can be expressed with a $\Salgebra$. We continue by structural induction on System S programs.
 \begin{proof}
-\begin{dgroup*}
-\begin{dmath*}
+
+\begin{align*}
   \sem{\test{s}}
-     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\test{s}}{x}}}
-     = {\setbuild{((t,\rho),(t,\rho))}{\transform{t}{\rho}{s}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}}
-     = \left({\setbuild{((t,\rho),(t,\rho))}{\forall t,\rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}\right)^{-1} \circ
-       \left({\setbuild{((t,\rho),(t,\rho))}{\forall t,\rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}\right) \cup
-       {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}
-     = (\lsucc \circ \sem{s})^{-1} \circ (\lsucc \circ \sem{s}) \sqcup \lfail \circ \sem{s}
-\end{dmath*}
-     
-\begin{dmath*}
+     &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\test{s}}{x}} \\
+     &= \setbuild{((t,\rho),(t,\rho))}{\transform{t}{\rho}{s}{t'}{\rho'}} \cup
+        \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}} \\
+     &= \domain\left(\setbuildc{((t,\rho),(t,\rho))} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+     &\quad \cup \setbuildc{((t,\rho),\fail)} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}} \\
+     &= \domain(\lsucc \circ \sem{s}) \sqcup \lfail \circ \sem{s}
+\end{align*}
+
+\begin{align*}
   \sem{\neg{s}}
-    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\neg{s}}{x}}}
-    = {\setbuild{((t,\rho),(t,\rho))}{\transformfail{t}{\rho}{s}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s}{t'}{\rho'}}}
-    = \left({\setbuild{((t,\rho),\fail)}{\forall t,\rho}} \circ
-            {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}\right)^{-1} \circ
-      \left({\setbuild{((t,\rho),\fail)}{\forall t,\rho}} \circ
-            {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}\right) \cup
-      {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-      {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
-      {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}}
-    = (\lfail \circ \sem{s})^{-1} \circ (\lfail \circ \sem{s}) \sqcup
-       \lfail \circ \lsucc \circ \sem{s}
-\end{dmath*}
+    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\neg{s}}{x}} \\
+    &= \setbuild{((t,\rho),(t,\rho))}{\transformfail{t}{\rho}{s}} \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s}{t'}{\rho'}} \\
+    &= \domain\left(\setbuildc{((t,\rho),\fail)} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+    &\quad \cup \setbuildc{((t,\rho),\fail)} \circ \domain\left(\setbuildc{((t,\rho),(t,\rho))} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+    &= \domain(\lfail \circ \sem{s}) \sqcup \lfail \circ \domain(\lsucc \circ \sem{s})
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\seq{s_1}{s_2}}
-    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\seq{s_1}{s_2}}{x}}}
-    = {\setbuild{((t,\rho),(t'',\rho''))}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transform{t'}{\rho'}{s_2}{t''}{\rho''}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformfail{t'}{\rho'}{s_2}}}
-    = {\setbuild{((t,\rho),x)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformx{t'}{\rho'}{s_2}{x}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}}
-    = {\setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}}} \circ
-      {\setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}}}
-    = \sem{s_2} \circ \sem{s_1} \sqcup \lfail \circ \sem{s_1}
-\end{dmath*}
+    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\seq{s_1}{s_2}}{x}} \\
+    &= \setbuild{((t,\rho),(t'',\rho''))}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transform{t'}{\rho'}{s_2}{t''}{\rho''}}\\
+    &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformfail{t'}{\rho'}{s_2}} \\
+    &= \setbuild{((t,\rho),x)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformx{t'}{\rho'}{s_2}{x}} \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \\
+    &= \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}} \circ \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}} \\
+    &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \\
+    &= \sem{s_2} \circ \sem{s_1} \sqcup \lfail \circ \sem{s_1}
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\choice{s_1}{s_2}}
-     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\choice{s_1}{s_2}}{x}}}
-     = {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_2}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}}
-     = {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
-       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \cup
-       {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
-       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \cup
-       \left({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \cap
-             {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \right)
-     = \lsucc \circ \sem{s_1} \sqcup \lsucc \circ \sem{s_2} \sqcup (\lfail \circ \sem{s_1} \sqcap \lfail \circ \sem{s_2})
-\end{dmath*}
+     &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\choice{s_1}{s_2}}{x}}} \\
+     &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
+     &\quad \cup {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_2}{t'}{\rho'}}} \\
+     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}} \\
+     &= {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
+     &\quad \cup {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \\
+     &\quad \cup \left({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\cap {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \right) \\
+     &= \lsucc \circ \sem{s_1} \sqcup \lsucc \circ \sem{s_2} \sqcup (\lfail \circ \sem{s_1} \sqcap \lfail \circ \sem{s_2})
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\leftchoice{s_1}{s_2}}
-     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\leftchoice{s_1}{s_2}}{x}}}
-     = {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),(t',\rho'))}{\transformfail{t}{\rho}{s_1} \land \transform{t}{\rho}{s_2}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}}
-     = {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \cup
-       {\setbuild{((t,\rho),x)}{\transformfail{t}{\rho}{s_1} \land \transformx{t}{\rho}{s_2}{x}}}
-     = {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ
-       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \cup
-       {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \circ
-       \left({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\right)^{-1} \circ
-       \left({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ
-             {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\right)
-     = \lsucc \circ \sem{s_1} \sqcup \sem{s_2} \circ (\lfail \circ \sem{s_1})^{-1} \circ (\lfail \circ \sem{s_1})
-\end{dmath*}
+     &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\leftchoice{s_1}{s_2}}{x}}} \\
+     &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
+     &\quad \cup {\setbuild{((t,\rho),(t',\rho'))}{\transformfail{t}{\rho}{s_1} \land \transform{t}{\rho}{s_2}{t'}{\rho'}}} \\
+     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}} \\
+     &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
+     &\quad \cup {\setbuild{((t,\rho),x)}{\transformfail{t}{\rho}{s_1} \land \transformx{t}{\rho}{s_2}{x}}} \\
+     &= {\setbuildc{((t,\rho),(t,\rho))}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
+     & \quad \cup {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \circ \domain \left({\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\right) \\
+     &= \lsucc \circ \sem{s_1} \sqcup \sem{s_2} \circ \domain (\lfail \circ \sem{s_1})
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\fix{x}{s}}
-    = {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\fix{x}{s}}{y}}}
-    = {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{t'}{\rho'}}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}}}
-    = {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{y}}}
-    = \sem{\subst{s}{x}{\fix{x}{s}}}
-\end{dmath*}
+    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\fix{x}{s}}{y}}} \\
+    &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{t'}{\rho'}}} \\
+    &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}}} \\
+    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{y}}} \\
+    &= \sem{\subst{s}{x}{\fix{x}{s}}}
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\path{i}{s}}
-    = {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\path{i}{s}}{y}}}
-    = {\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}}} \cup
-      {\setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{\transformfail{t_i}{\rho}{s}}} \cup
-      {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }}
-    = {\setbuild{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}{\forall f(\ldots t_i \ldots)}} \circ
-      {\setbuild{((t,\rho),(t',\rho')}{\transform{t}{\rho}{s}{t'}{\rho'}}} \circ 
-      {\setbuild{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}{\forall f(\ldots t_i \ldots)}} \cup
-      {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}} \circ
-      {\setbuild{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}{\forall f(\ldots t_i \ldots)}} \cup
-      {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }}
-    = {\setbuild{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}{\forall f(\ldots t_i \ldots)}} \circ
-      {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ 
-      {\setbuild{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}{\forall f(\ldots t_i \ldots)}} \cup
-      {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ
-      {\setbuild{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}{\forall f(\ldots t_i \ldots)}} \cup
-      {\setbuild{((t,\rho),\fail)}{ \forall t, \rho }} \circ {\setbuild{((f(\ldots t_n),\rho),(f(\ldots t_n),\rho))}{ n < i }}
-    = \set(i) \circ \sem{s} \circ \get(i) \sqcup \lfail \circ \sem{s} \circ \get(i) \sqcup \lfail \circ {(\arity < i)}  
-\end{dmath*}
+    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\path{i}{s}}{y}}} \\
+    &= {\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}}} \\
+    &\quad \cup {\setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{\transformfail{t_i}{\rho}{s}}} \\
+    &\quad \cup {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }} \\
+    &= {\setbuildc{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}} \circ {\setbuild{((t,\rho),(t',\rho')}{\transform{t}{\rho}{s}{t'}{\rho'}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &\quad \cup {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }} \\
+    &= {\setbuildc{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}} \circ {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((f(\ldots t_n),\rho),(f(\ldots t_n),\rho))}{ n < i }} \\
+    &= \set(i) \circ \sem{s} \circ \get(i) \sqcup \lfail \circ \sem{s} \circ \get(i) \sqcup \lfail \circ {(\arity < i)}  
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\congr{f,s_1,\ldots,s_n}}
     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\congr{f,s_1,\ldots,s_n}}{x}}}
     = {\setbuild{((f(t_1\ldots t_n),\rho_1),(f(t_1'\ldots t_n'),\rho_{n+1}))}{ \forall (1 \leq i \leq n).\, \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}}} \cup
@@ -476,17 +439,16 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
       {\setbuild{((g(\ldots),\rho),\fail)}{ g \neq f }} \cup
       {\setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{ n' \neq n }}
     = \mathop{\bigcirc}_{1\leq i \leq n} \left(\set(i) \circ \sem{s_i} \circ \get(i) \sqcup \lfail \circ \sem{s_i} \circ \get(i) \right) \circ {(\constructor = f)} \sqcup \fail \circ {(\constructor \neq f)} \sqcup \lfail \circ {(\arity \neq n)} %
-\end{dmath*}
+\end{align*}
 
-\begin{dmath*}
+\begin{align*}
   \sem{\one{s}}
     = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\one{s}}{x}}}
     = {\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}}} \cup
       {\setbuild{((f(t_1 \ldots t_n),\rho),\fail)}{\forall 1 \leq i \leq n.\, \transformfail{t_i}{\rho}{s}}}
     = \text{difficult}
-\end{dmath*}
+\end{align*}
   
-\end{dgroup*}
 \end{proof}
 \end{theorem}
 
@@ -495,7 +457,7 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
 \end{definition}
 
 \begin{definition}[$(L,\alpha,\gamma)$-Semantics of System S] \normalfont
-  We define the abstract semantics of System S programs as values in a lattice $L$ over a given galois connection $\alpha \adjoint \gamma$ as \[\sem{s}_{(L,\alpha,\gamma)} \coloneqq \alpha(\sem{s}). \]
+  We define the abstract semantics of System S programs as values in a lattice $L$ over a given galois connection $\alpha \adjoint \gamma$ as \[\sem{s}_{(L,\alpha,\gamma)} \coloneq \alpha(\sem{s}). \]
 \end{definition}
 
 We begin exploring the space of $(L,\alpha,\gamma)$-Semantics of System S by defining a very naive abstraction, namely where an abstract state consists only of a single term and on conflict we jump immmediatley to top:
@@ -519,33 +481,33 @@ We begin exploring the space of $(L,\alpha,\gamma)$-Semantics of System S by def
     \end{tikzpicture}
   \]
 
-  We next define the category $\Naive$ where objects are elements of $N$, arrows are tuples $(x,y) : x \rightarrow y$ for $(x,y) \in N \times N$, the identity $\id_x = (x,x)$, and  composition $(y,z) \circ (x,y) = (x,z).$ Additionally we define the unary operation \emph{reverse} and binary operations \emph{meet} and \emph{join} on arrows with \[(x,y)^{-1} \coloneqq (y,x),\] \[ (x_1,x_2) \sqcup (y_1,y_2) \coloneqq (x_1 \sqcup x_2, y_1 \sqcup y_2) \] and \[ (x_1,x_2) \sqcap (y_1,y_2) \coloneqq (x_1 \sqcap x_2, y_1 \sqcap y_2), \] respectively.
+  We next define the category $\Naive$ where objects are elements of $N$, arrows are tuples $(x,y) : x \rightarrow y$ for $(x,y) \in N \times N$, the identity $\id_x = (x,x)$, and  composition $(y,z) \circ (x,y) = (x,z).$ Additionally we define the unary operation \emph{reverse} and binary operations \emph{meet} and \emph{join} on arrows with \[(x,y)^{-1} \coloneq (y,x),\] \[ (x_1,x_2) \sqcup (y_1,y_2) \coloneq (x_1 \sqcup x_2, y_1 \sqcup y_2) \] and \[ (x_1,x_2) \sqcap (y_1,y_2) \coloneq (x_1 \sqcap x_2, y_1 \sqcap y_2), \] respectively.
 \end{definition}
 
 \begin{definition}\normalfont
   We continue by defining the abstraction functor $\alpha : \Rel(\State) \rightarrow \Naive$, for objects $S \subseteq \State$ by
   \[
-     \alpha(S) \coloneqq \lub S
+     \alpha(S) \coloneq \lub S
   \]
   and arrows $R : A \rightarrow B \subseteq \State \times \State$ by
   \[
-     \alpha(R) \coloneqq (\lub A, \lub B).
+     \alpha(R) \coloneq (\lub A, \lub B).
   \]
 
-  We now show, that $\alpha$ preserves identities and composition. For all $S \subseteq \State$, \begin{dmath*}\alpha(\id_S) = (\lub S, \lub S) = \id_{\lub S} = \id_{\alpha(S)}\end{dmath*} and for all $R : A \rightarrow B, S : B \rightarrow C \subseteq \State \times \State$, \begin{dmath*} \alpha(S \circ R) = (\lub A, \lub C) = (\lub B, \lub C) \circ (\lub B, \lub C) = \alpha(S) \circ \alpha(R). \end{dmath*}
+  We now show, that $\alpha$ preserves identities and composition. For all $S \subseteq \State$, \begin{align*}\alpha(\id_S) = (\lub S, \lub S) = \id_{\lub S} = \id_{\alpha(S)}\end{align*} and for all $R : A \rightarrow B, S : B \rightarrow C \subseteq \State \times \State$, \begin{align*} \alpha(S \circ R) = (\lub A, \lub C) = (\lub B, \lub C) \circ (\lub B, \lub C) = \alpha(S) \circ \alpha(R). \end{align*}
 
   Furthermore, we show that $\alpha$ preserves reverse and all binary meet and joins. Given any arrows $R: X_1 \rightarrow X_2$ and $S:Y_1 \rightarrow Y_2$, since $R^{-1} : X_2 \rightarrow X_1,$
-  \begin{dmath*}
+  \begin{align*}
     \alpha(R^{-1}) = (\lub X_2, \lub X_1)
                    = (\lub X_1, \lub X_2)^{-1}
                    = \alpha(R)^{-1}.
-  \end{dmath*}
+  \end{align*}
   Observe that $R \cup S : X_1 \cup Y_1 \rightarrow X_2 \cup Y_2$ and since $N$ is a complete partial order, it holds that $\forall A,B. \lub(A \cup B) = (\lub A) \sqcup (\lub B),$ then
- \begin{dmath*} \alpha(R \cup S) = (\lub(X_1 \cup Y_1),\lub(X_2\cup Y_2))
+ \begin{align*} \alpha(R \cup S) = (\lub(X_1 \cup Y_1),\lub(X_2\cup Y_2))
                                  = ((\lub X_1) \sqcup (\lub Y_1), (\lub X_2) \sqcup (\lub Y_2))
                                  = (\lub X_1,\lub X_2) \sqcup (\lub Y_1, \lub Y_2)
                                  = \alpha(R) \sqcup \alpha(S).
- \end{dmath*}
+ \end{align*}
  Analoguosly for meets.
 \end{definition}
 
