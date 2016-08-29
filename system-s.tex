@@ -65,41 +65,53 @@
 \newcommand{\transform}[5]{#1, #2 \xrightarrow{#3} #4, #5}
 \newcommand{\transformx}[4]{#1, #2 \xrightarrow{#3} #4}
 \newcommand{\transformfail}[3]{#1, #2 \xrightarrow{#3} \fail}
-\newcommand{\dom}[1]{\ensuremath \text{dom}(#1)}
+\newcommand{\dom}{\ensuremath \operatorname{dom}}
+\newcommand{\cod}{\ensuremath \operatorname{cod}}
 \newcommand{\cjm}{\ensuremath \xmapsto{\text{\tiny cjm}}}
 \newcommand{\mon}{\ensuremath \xmapsto{\text{\tiny mon}}}
 
-\newcommand{\Term}{\ensuremath \mathbb{T}}
-\newcommand{\Fail}{\ensuremath \mathbb{F}}
-\newcommand{\Var}{\ensuremath \mathbb{V}}
-\newcommand{\Constructors}{\ensuremath \mathcal{Con}}
+\newcommand{\Term}{\ensuremath \mathit{Term}}
+\newcommand{\Fail}{\ensuremath \mathit{Fail}}
+\newcommand{\Var}{\ensuremath \mathit{Var}}
+\newcommand{\Constructor}{\ensuremath \Cat{Con}}
 \newcommand{\Env}{\ensuremath \Var \mapsto \Term}
-\newcommand{\Pow}[1]{\ensuremath \mathcal{P}(#1)}
+\newcommand{\Pow}{\ensuremath \mathscr{P}}
 \newcommand{\sem}[1]{\ensuremath \lBrack #1 \rBrack}
+\newcommand{\Disc}[1]{\ensuremath \left\vert #1 \right\vert}
+\newcommand{\Cat}[1]{\ensuremath \mathbf{#1}}
+\newcommand{\Nat}{\ensuremath \mathbb{N}}
+\newcommand{\Hom}[1]{\ensuremath #1}
+\newcommand{\twoHom}[1]{\ensuremath #1}
 
-\newcommand{\State}{\ensuremath \text{State}}
+\newcommand{\State}{\ensuremath \mathit{\Sigma} }
 \newcommand{\Statea}{\ensuremath \widehat{\State}}
 
 \newcommand{\setbuild}[2]{\ensuremath \left\{\, #1 \mid #2 \,\right\}}
 \newcommand{\setbuildc}[1]{\ensuremath \left\{\, #1 \,\right\}}
 
 \newcommand{\id}{\ensuremath \operatorname{id}}
-\newcommand{\Rel}{\ensuremath \mathbf{Rel}}
-\newcommand{\Naive}{\ensuremath \mathbf{Naive}}
+\newcommand{\Rel}{\ensuremath \Cat{Rel}}
+\newcommand{\Naive}{\ensuremath \Cat{Naive}}
 \newcommand{\adjoint}{\ensuremath \dashv}
 \newcommand{\lub}{\ensuremath \bigsqcup}
 \newcommand{\glb}{\ensuremath \bigsqcap}
 
-\newcommand{\Salgebra}{\ensuremath \mathcal{S}\text{-algebra}}
-\newcommand{\Salgebras}{\ensuremath \mathcal{S}\text{-algebras}}
-\newcommand{\Salg}{\ensuremath \mathcal{S}}
-\newcommand{\domain}{\ensuremath \operatorname{dom}}
+\newcommand{\SAlgebra}{\ensuremath \mathcal{S}\text{-algebra}}
+\newcommand{\SAlgebras}{\ensuremath \mathcal{S}\text{-algebras}}
+\newcommand{\SAlg}{\ensuremath \Cat{SAlg}}
+\newcommand{\domain}{\ensuremath \operatorname{domain}}
 \newcommand{\lfail}{\ensuremath \operatorname{fail}}
 \newcommand{\lsucc}{\ensuremath \operatorname{succ}}
-\newcommand{\set}{\ensuremath \operatorname{set}}
 \newcommand{\get}{\ensuremath \operatorname{get}}
+\newcommand{\map}{\ensuremath \operatorname{map}}
 \newcommand{\arity}{\ensuremath \operatorname{arity}}
-\newcommand{\constructor}{\ensuremath \operatorname{con}}
+\newcommand{\coneq}{\ensuremath \operatorname{coneq}}
+\newcommand{\conneq}{\ensuremath \operatorname{conneq}}
+\newcommand{\ttop}{\ensuremath \top_{\Term}}
+\newcommand{\tbot}{\ensuremath \bot_{\Term}}
+\newcommand{\comp}{\ensuremath \mathrel{\circ}}
+\newcommand{\witharity}{\ensuremath \Join}
+\newcommand{\iso}{\ensuremath \cong}
 
 \begin{document}
 
@@ -201,7 +213,7 @@
   {\transform{f(\ldots,t_i,\ldots)}{\rho}{\one{s}}{f(\ldots,t_i',\ldots)}{\rho'}}
 
 \infrule[One-Fail]
-  {\transformfail{t_1}{\rho}{s} \andalso \cdots \andalso \transformfail{t_n}{\rho}{s}}
+  {\transformfail{t_i}{\rho}{s} \text{ for all } 1 \leq i \leq n}
   {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\one{s}}}
 
 \infrule[All]
@@ -274,77 +286,213 @@
 
 \par\medskip
 
+\begin{definition}[2-Cateogry] \normalfont
+  A 2-category $\Cat{C}$ consists of
+  \begin{itemize}
+  \item a collection of objects,
+  \item a collection $\Hom{\Cat{C}}(A,B)$ of 1-morphisms between objects $A,B$,
+  \item a collection $\Hom{\Cat{C}}(f,g)$ of 2-morphisms between 1-morphisms $f,g$,
+  \item for all objects $A$, a 1-morphism \emph{identity} \[\id_A:A \rightarrow B,\]
+  \item for all 1-morphisms $f$, a 2-morphism \emph{identity} \[\id_f:f \Rightarrow f,\]
+  \item for all 1-morphisms $f:A \rightarrow B,g:B \rightarrow C$, a 1-morphism \emph{composition} \[g \comp f: A \rightarrow C, \]
+  \item for all 2-morphisms \begin{tikzcd} f \ar[r,Rightarrow,"\eta"] & g \ar[r,Rightarrow,"\theta"] & h \end{tikzcd} a 2-morphism \emph{composition} \[\theta \comp \eta: h \Rightarrow f, \]
+  \end{itemize}
+  satisfying the following laws,
+  \begin{itemize}
+  \item for all 1-morphisms $f: A \rightarrow B$, $f \comp \id_A = f = \id_B \comp f$ as indicated in the commuting diagram
+  \[
+    \begin{tikzcd}
+      A \ar[r,"\id_A"] \ar[dr,"f \comp \id_A"below] & A \ar[d,"f"left] \ar[dr,"\id_B \comp f"right] &   \\
+                                                    & B \ar[r,"\id_B"below] & B,
+    \end{tikzcd}
+  \]
+  \item for all 1-morphisms $f,g: A \rightarrow B$, and 2-morphism $\eta: f \rightarrow g$, $\eta \comp \id_f = \eta = \id_g \comp \eta$ as indicated in the commuting diagram
+  \[
+    \begin{tikzcd}
+      f \ar[r,Rightarrow,"\id_f"] \ar[dr,Rightarrow,"\eta \comp \id_f"below] & f \ar[d,Rightarrow,"\eta"left] \ar[dr,Rightarrow,"\id_g \comp \eta"right] &   \\
+                                                       & g \ar[r,Rightarrow,"\id_g"below] & g,
+    \end{tikzcd}
+  \]
+  \item for all 1-morphisms \begin{tikzcd} A \ar[r,"f"] & B \ar[r,"g"] & C \ar[r,"h"] & D, \end{tikzcd} $(h \comp g) \comp f = h \comp (g \comp f)$ as indicated in the commuting diagram
+  \[
+    \begin{tikzcd}
+      A \ar[r,"f"] \ar[rr,bend left,"g \comp f"] \ar[rrr,bend left=50,"h \comp (g \comp f)"] \ar[rrr,bend right=50,"(h \comp g) \comp f"below] & B \ar[r,"g"] \ar[rr,bend right,"h \comp g" below] & C \ar[r,"h"] & D
+    \end{tikzcd}
+  \]
+  \item for all 1-morphisms $f,g,h,i : A \rightarrow B$, and all 2-morphisms \begin{tikzcd} f \ar[r,Rightarrow,"\eta"] & g \ar[r,Rightarrow,"\theta"] & h \ar[r,Rightarrow,"\iota"] & i, \end{tikzcd} $(\iota \comp \theta) \comp \eta = \iota \comp (\theta \comp \eta)$ as indicated in the commuting diagram
+  \[
+    \begin{tikzcd}
+      f \ar[r,Rightarrow,"\eta"] \ar[rr,Rightarrow,bend left,"\theta \comp \eta"] \ar[rrr,Rightarrow,bend left=50,"\iota \comp (\theta \comp \eta)"] \ar[rrr,Rightarrow,bend right=50,"(\iota \comp \theta) \comp \eta"below] & g \ar[r,Rightarrow,"\theta"] \ar[rr,Rightarrow,bend right,"\iota \comp \theta" below] & h \ar[r,Rightarrow,"\iota"] & i
+    \end{tikzcd}
+  \]
+  \end{itemize}
+\end{definition}
+
+\begin{definition}[Lax Functor] \normalfont
+  An Lax functor $F$ between two 2-categories $\Cat{C}, \Cat{D}$ preserves identities and composition only up to 2-morphism, that is, it consists of 
+  \begin{itemize}
+  \item for all objects $A$ in $\Cat{C}$, an object $F(A)$ in $\Cat{D}$,
+  \item for all objects $A,B$ in $\Cat{C}$, a functor \[ F(A,B) : \Hom{\Cat{C}}(A,B) \rightarrow \Hom{\Cat{D}}(F(A),F(B)), \]
+  \item for all objects $A$ in $\Cat{C}$, a 2-morphism in $\Cat{D}$ \[ F(\id_A) : \id_{F(A)} \Rightarrow F(A,A)(\id_A)  \]
+  \item for all arrows $f:A \rightarrow B, g:B \rightarrow C$ in $\Cat{C}$, a 2-morphism in $\Cat{D}$ \[F(g \comp f) : F(B,C)(g) \comp F(A,B)(f) \Rightarrow F(A,C)(g \comp f) \]
+  \end{itemize}
+\end{definition}
+
+\begin{definition}[Oplax Functor] \normalfont
+  An oplax functor $F$ between two 2-categories $\Cat{C}, \Cat{D}$ preserves identities and composition only up to 2-morphism, that is, it consists of 
+  \begin{itemize}
+  \item for all objects $A$ in $\Cat{C}$, an object $F(A)$ in $\Cat{D}$,
+  \item for all objects $A,B$ in $\Cat{C}$, a functor \[ F(A,B) : \Hom{\Cat{C}}(A,B) \rightarrow \Hom{\Cat{D}}(F(A),F(B)), \]
+  \item for all objects $A$ in $\Cat{C}$, a 2-morphism in $\Cat{D}$ \[ F(\id_A) : F(A,A)(\id_A) \Rightarrow \id_{F(A)} \]
+  \item for all arrows $f:A \rightarrow B, g:B \rightarrow C$ in $\Cat{C}$, a 2-morphism in $\Cat{D}$ \[F(g \comp f) : F(A,C)(g \comp f) \Rightarrow F(B,C)(g) \comp F(A,B)(f) \]
+  \end{itemize}
+\end{definition}
+
+\begin{definition}[Adjunction] \normalfont
+  An adjunction is a pair of functors, \[\begin{tikzcd} \Cat{C}\ar[r,bend left,"\alpha",""{name=A,below}] & \mathcal{D}\ar[l,bend left,"\gamma",""{name=B,above}]\ar[from=A, to=B, symbol=\dashv], \end{tikzcd}\] s.t. for all objects $A$ in $\Cat{C}$, and $B$ in $\Cat{D}$, \[ \Hom{\Cat{D}}(\alpha(A),B) \iso \Hom{\Cat{C}}(A,\gamma(B)) \]
+\end{definition}
+
+\begin{definition}[2-Adjunction] \normalfont
+  An 2-adjunction is a pair of 2-functors, \[\begin{tikzcd} \Cat{C}\ar[r,Rightarrow,bend left,"\alpha",""{name=A,below}] & \mathcal{D}\ar[l,Rightarrow,bend left,"\gamma",""{name=B,above}]\ar[from=A, to=B, symbol=\dashv], \end{tikzcd}\] s.t. for all 1-morphisms $f$ in $\Cat{C}$, and $g$ in $\Cat{D}$, \[ \twoHom{\Cat{D}}(\alpha(f),g) \iso \twoHom{\Cat{C}}(f,\gamma(g)) \]
+\end{definition}
+
+\begin{definition}[$\SAlgebra$] \normalfont
+  An $\SAlgebra$, is an algebra of operations that abstractly describe term rewriting relations. The algebra consists of
+  \begin{itemize}
+    \item a 2-category $\Cat{C}$ where 2-morphism form a complete partial order $\sqsubseteq$, with least upper bounds \[ \sqcup : \Hom{\Cat{C}} \times \Hom{\Cat{C}} \rightarrow \Hom{\Cat{C}} \] and greatest lower bounds \[ \sqcap : \Hom{\Cat{C}} \times \Hom{\Cat{C}} \rightarrow \Hom{\Cat{C}}, \]
+    \item an operation to represent the indentity relation on the domain \[\domain : \Hom{\Cat{C}}(A,B) \rightarrow \Hom{\Cat{C}}(A,A) \] of a given relation,
+    \item an operation to represent success \[\lsucc : \Disc{\Cat{C}} \rightarrow \Cat{C} \] and failure \[\lfail : \Disc{\Cat{C}} \rightarrow \Cat{C} \] of a strategy,
+    \item an operation to retrieve the $i$th immediate subterm \[\get : \Disc{\Cat{C}} \times \Nat \rightarrow \Cat{C} \]
+    \item an operation to apply a strategy to the $i$th immediate subterm \[\map : \Disc{\Cat{C}} \times \Nat \times \Cat{C} \rightarrow \Cat{C} \]
+    \item an operation to assert if the top most constructor is equal \[\coneq : \Disc{\Cat{C}} \times \Constructor \rightarrow \Cat{C} \] or not equal \[ \conneq : \Disc{\Cat{C}} \times \Constructor \rightarrow \Cat{C} \] to the given constructor,
+    \item an operation to assert if the arity of the top level constructor is equal \[\arity : \Nat \times \Disc{\Cat{C}} \rightarrow \Cat{C} \] to a certain number,
+    \item an operation to apply a different strategies for different arities of the top most constructors
+      \begin{align*}
+        \witharity : \Disc{\Cat{C}} \times (\Nat \rightarrow \Cat{C}) \rightarrow \Cat{C}
+      \end{align*}
+  \end{itemize}
+
+  We write $\SAlg(\Cat{C})$ for an $\SAlgebra$ with the underlying category $\Cat{C}$. A morphism between two $\SAlgebras$
+  \[\begin{tikzcd}
+      \SAlg(\Cat{C})\arrow{r}{ (\alpha ,\gamma) } & \SAlg(\Cat{D})
+    \end{tikzcd}\]
+  is a pair of 2-functors $\alpha,\gamma$, that form a 2-adjunction
+  \[\begin{tikzcd}
+      \Cat{C}\ar[r,bend left,"\alpha",""{name=A,below}] & \mathcal{D}\ar[l,bend left,"\gamma",""{name=B,above}]\ar[from=A, to=B, symbol=\dashv],
+    \end{tikzcd}\]
+  and $\alpha$ is oplax, i.e. preserves the algebraic operations of the $\SAlgebras$ up to sound overapproximation, that is, for all objects $A$ and arrows $f$ in $\mathcal{C}$, $i \in \mathbb{N}$ and $c \in \Constructor$,
+  \begin{align*}
+    \alpha(\id_A) &\Rightarrow \id_{\alpha(A)} \\
+    \alpha(f \comp g) &\Rightarrow \alpha(f) \comp \alpha(g) \\
+    \alpha(f \sqcup g) &\Rightarrow \alpha(f) \sqcup \alpha(g) \\
+    \alpha(f \sqcap g) &\Rightarrow \alpha(f) \sqcap \alpha(g) \\
+    \alpha(\domain(f)) &\Rightarrow \domain(\alpha(f)) \\
+    \alpha(\lsucc(A)) &\Rightarrow \lsucc(\alpha(A)) \\
+    \alpha(\lfail(A)) &\Rightarrow \lfail({\alpha(A)}) \\
+    \alpha(\get(A,i)) &\Rightarrow \get(\alpha(A),i) \\
+    \alpha(\map(A,i)) &\Rightarrow \map(\alpha(A),i) \\
+    \alpha(\coneq(A,c)) &\Rightarrow \coneq(\alpha(A),c) \\
+    \alpha(\conneq(A,c)) &\Rightarrow \conneq(\alpha(A),c) \\
+    \alpha(\arity(A,i)) &\Rightarrow \arity(\alpha(A),i) \\
+    \alpha(\witharity_{A,n} f_n) &\Rightarrow \witharity_{\alpha(A),n} \alpha(f_n)
+  \end{align*}
+\end{definition}
+
 \begin{definition}[$\Rel$ Category] \normalfont
-  We define the category of relations $\Rel$, with sets $A,B,C, \ldots$ as objects, binary relation $R,S,T, \ldots$ as arrows where $R: A \rightarrow B$ if $R \subseteq A \times B,$ identity arrows \[\id_A \coloneq \setbuild{ (x,x) }{ x \in A },\] composition of relations \[R \circ S \coloneq \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\]
+  We define the category of relations $\Rel$, with sets $A,B,C, \ldots$ as objects, binary relation $R,S,T, \ldots$ as arrows where $R: A \rightarrow B$ if $R \subseteq A \times B,$ identity arrows \[\id_A \coloneq \setbuild{ (x,x) }{ x \in A },\] composition of relations \[R \circ S \coloneq \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\] There is an evident complete partial order on relations, namely inclusion, which makes $\Rel$ a 2-category. 2-Products between two relations $R,S:A \rightarrow B$ in $\Rel$ are greatest lower bounds as indicated in 
+ \[
+    \begin{tikzcd}
+        & X \ar[dl,Rightarrow] \ar[d,Rightarrow,dotted] \ar[dr,Rightarrow] &   \\
+      R & R \cap S \ar[l,Rightarrow] \ar[r,Rightarrow] & S,
+    \end{tikzcd}
+ \]
+ and 2-coproducts are least upper bounds
+ \[
+    \begin{tikzcd}
+      R\ar[dr,Rightarrow] \ar[r,Rightarrow]  & R \cup S \ar[d,Rightarrow,dotted] & S \ar[dl,Rightarrow] \ar[l,Rightarrow] \\
+      & X, &
+    \end{tikzcd}
+ \]
 \end{definition}
 
 \begin{definition}[$\Rel(A)$ Category] \normalfont
   We define the category $\Rel(A)$ as a proper subcategory of $\Rel$, where the all the objects are subsets of $A$.
 \end{definition}
 
-\begin{definition}[System S Programm State] \normalfont
-  We define the state space of System S programs as \[\State \coloneq \Term \times \Env \cup \Fail,\] the set of all terms together with a term environment or failure.
+\begin{definition}[System S Program State] \normalfont
+  The state of System S programs is either a term together with a term environment or a symbol that represents the failure of a strategy \[\State \coloneq \Term \times (\Env) \cup \Fail.\]
 \end{definition}
 
 We can think of the category $\Rel(\State)$ as a category with properties of program states as objects and relations between two program states as arrows.
 
-\begin{definition}[$\Salgebra$] \normalfont
-  An $\Salgebra$, is an abstract algebra to represent operations for term rewriting. The algebra consists of
-  \begin{itemize}
-    \item a partially ordered set $A$ equipped with for all $a, a_1, a_2 \in A$,
-    \item binary composition $\circ$, \emph{meet} $a_1 \sqcap a_2$ and \emph{join} $a_1 \sqcup a_2$ operations,
-    \item an unary operation $\domain$ that represents the domain of a relation,
-    \item an unary operation $(-)^{-1}$ that represents the symmetric relation,
-    \item constant symbols to represent success ($\lsucc_a$) and failure ($\lfail_a$) of a strategy,
-    \item an unary operation to retrieve the $i$th immediate subterm ($\get_a(i)$),
-    \item two unary operations that assert if the top most constructor is equal $(\constructor = f)_a$ or not equal $(\constructor \neq f)_a$ to another constructor symbol $f$,
-    \item two unary operations that assert if the arity of the top level constructor is lower $(\arity < i)_a$ or greater $(i < \arity)_a$ than a number $i$.
-  \end{itemize}
-  When it is clear from the context, we omit the subscripts of the operations. We refer with $\Salg(A)$ to an $\Salgebra$ with the underlying set $A$.
-
-  \par\medskip
-   
-  A morphism between two $\Salgebras$ $\Salg(A)$ and $\Salg(B)$ is a galois connection 
-  \[
-    \begin{tikzcd}
-      A\ar[r,bend left,"\alpha",""{name=A, below}] & B\ar[l,bend left,"\gamma",""{name=B,above}] \ar[from=A, to=B, symbol=\dashv]
-    \end{tikzcd},
-  \] where $\alpha$ preserves the algebraic operations of the $\Salgebras$ up to sound over approximation, that is, for all $a,a_1, a_2 \in A, i \in \mathbb{N}, f \in \Constructors$,
+\begin{definition}[$\SAlgebra$ for $\Rel(\State)$] \normalfont
+  We define the $\SAlgebra$ $\SAlg(\Rel(\State))$ for binary relations over System S states, where the partial order on $\Pow(\State)$ is inclusion $\subseteq$, and for all objects $A$ and arrows $R : A_1 \rightarrow A_2, S : B_1 \rightarrow B_2$ in $\Rel(\State)$,
   \begin{align*}
-    \alpha(a_1 \sqcap a_2) &\leq \alpha(a_1) \sqcap \alpha(a_1) \\
-    \alpha(a_1 \sqcup a_2) &\leq \alpha(a_1) \sqcup \alpha(a_1) \\
-    \alpha(\lsucc_a)       &\leq \lsucc_{\alpha(a)} \\
-    \alpha(\lfail_a)       &\leq \lfail_{\alpha(a)} \\
-    \alpha(\get_a(i))       &\leq \get_{\alpha(a)}(i) \\
+    \dom(R) &\coloneq \setbuild{(x,x)}{ \forall (x,y) \in R } \\
+    \lsucc(A) &\coloneq \setbuild{((t,\rho),(t,\rho))}{ \forall (t,\rho) \in A } \\
+    \lfail(A) &\coloneq \setbuild{(a,\fail)}{\forall a \in A} \\
+    \get(A,i) &\coloneq \setbuild{ ((f(\ldots t_i \ldots),\rho), (t_i,\rho)) }{ \forall (f(\ldots),\rho) \in A } \\
+    \map(A,i,R) &\coloneq \setbuild{ ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho)) }{ \forall\, (f(\ldots t_i \ldots),\rho) \in A,\ ((t_i,\rho),(t_i',\rho')) \in R } \\
+    \coneq(A,f) &\coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f = g } \\
+    \conneq(A,f) &\coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f \neq g } \\
+    \arity(A,i) &\coloneq \setbuild{ ((f(\ldots t_j),\rho),(f(\ldots t_j),\rho)) }{ \forall (f(\ldots t_j),\rho) \in A.\ j = i } \\
+    \witharity_{A,n} R_n &\coloneq \setbuild{ ((f(\ldots t_n),\rho),x) }{ \forall (f(\ldots t_n),\rho) \in A \land ((f(\ldots t_n),\rho),x) \in R_n }
   \end{align*}
-  We say, that the morphism is strict, when $\alpha$ preserves the algebraic operations up to equality.
+  For convenience, we define notation for asserting if the arity of the top most constructor is lower \[ (\arity < i)_A \coloneq \bigcup_{0 \leq j < i} (\arity = j)_A \] or greater \[ (i < \arity)_A \coloneq \bigcup_{i < j} (\arity = j)_A \] a certain number.
 \end{definition}
 
-\begin{definition}[$\Salgebra$ for $\Rel(\State)$] \normalfont
-  We define an $\Salgebra$ for binary relations over System S states, with 
-  \begin{itemize}
-    \item $L = \State \times \State$,
-    \item the composition defined as in $\Rel(\State)$,
-    \item for two relations $R : A_1 \rightarrow A_2$ and $S : B_1 \rightarrow B_2$ the meet operation $R \sqcap S : A_1 \cap B_1 \rightarrow A_2 \cap B_2$ as the intersection of relations defined by \[R \sqcap S \coloneq R \cap S, \] and join $R \sqcup S : A_1 \cup B_1 \rightarrow A_2 \cup B_2$ as the union of relations defined by \[ R \sqcup S \coloneq R \cup S, \]
-    \item for all relations $R : A \rightarrow B$, the domain operation as an morphism $\domain(R) : A \rightarrow A $ defined by \[ \domain(R) \coloneq \setbuild{ (x,x) }{ \forall (x,y) \in R }, \]
-    \item for all relations $R : A \rightarrow B$, the unary operation $(-)^{-1}$ as an morphism $R^{-1} : B \rightarrow A $ defined by \[ R^{-1} \coloneq \setbuild{ (y,x) }{ \forall (x,y) \in R }, \]
-    \item the \emph{success} operation as an morphism defined by \[\lsucc_A \coloneq \setbuild{((t,\rho),(t,\rho))}{ \forall (t,\rho) \in A }, \]
-    \item the \emph{failure} operation as an morphism defined by \[ \lfail_A \coloneq \setbuild{((t,\rho),\fail)}{ \forall (t,\rho) \in A }, \]
-    \item the retrieval operation of the $i$th immediate subterm as an morphism defined by \[ \get_A(i) \coloneq \setbuild{ ((f(\ldots t_i \ldots),\rho), (t_i,\rho)) }{ \forall (f(\ldots),\rho) \in A }, \]
-    \item the assertion of top most constructors as an morphism defined by \[ (\constructor = f)_A \coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f = g } \] and \[ (\constructor \neq f)_A \coloneq \setbuild{ ((g(\ldots),\rho),(g(\ldots),\rho)) }{ \forall (g(\ldots),\rho) \in A.\ f \neq g }, \]
-    \item the assertion operations of the arity of the top most constructor as morphisms defined by \[ (\arity < i)_A \coloneq \setbuild{ ((f(\ldots t_k),\rho),(f(\ldots t_k),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ k < i }, \] and \[ (i < \arity)_A \coloneq \setbuild{ ((f(\ldots t_j),\rho),(f(\ldots t_j),\rho)) }{ \forall (f(\ldots t_k),\rho) \in A.\ i < j }, \]
-  \end{itemize}
-
-  For convenience, we define notation for replacing the $i$th immediate subterm  
-  \[ \set(i) \coloneq \get(i)^{-1}, \] and asserting if the arity of the top most constructor is not equal to a certain number \[ (\arity \neq i) \coloneq (\arity < i) \cup (i < \arity). \]
-\end{definition}
+% \begin{lemma}[Distributivity of composition, meet and joins in $\Rel$] \normalfont
+%   For all
+%   \[
+%   \begin{tikzcd}
+%     A \arrow{r}{P} & B\arrow{r}{Q \cup R} & C\arrow{r}{S} & D,
+%   \end{tikzcd}
+%   \]
+%   \begin{align*}
+%     S \comp (Q \cup R)
+%       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in (Q \cup R) \land (y,z) \in S } \\
+%       &= \setbuild{ (x,z) }{ \exists y. ((x,y) \in Q \lor (x,y) \in R) \land (y,z) \in S } \\
+%       &= \setbuild{ (x,z) }{ \exists y. ((x,y) \in Q \land (y,z) \in S) \lor ((x,y) \in R \land (y,z) \in S) } \\
+%       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in Q \land (y,z) \in S } \\
+%       &\quad \cup \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land (y,z) \in S } \\
+%       &= S \comp Q \cup S \comp R,
+%   \end{align*}
+%   and analogously, \[ P \comp (Q \cup R) = P \comp Q \cup P \comp R. \]
+%   \[
+%   \begin{tikzcd}
+%     A \arrow[r,"P"] \arrow[rr,bend right=50,"Q \comp P \cup R \comp P" below] & B \arrow[r,"Q \cup R"] \arrow[rr,bend left=50,"S \comp Q \cup S \comp R"] & C\arrow[r,"S"] & D,
+%   \end{tikzcd}
+%   \]
+  
+%   Similarly, for all
+%   \[
+%   \begin{tikzcd}
+%     A \arrow{r}{P} & B\arrow{r}{Q \cap R} & C\arrow{r}{S} & D,
+%   \end{tikzcd}
+%   \]
+%   \begin{align*}
+%     S \comp (Q \cap R)
+%       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in (Q \cap R) \land (y,z) \in S } \\
+%       &= \setbuild{ (x,z) }{ \exists y. ((x,y) \in Q \land (x,y) \in R) \land (y,z) \in S } \\
+%       &= \setbuild{ (x,z) }{ \exists y. ((x,y) \in Q \land (y,z) \in S) \land ((x,y) \in R \land (y,z) \in S) } \\
+%       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in Q \land (y,z) \in S } \\
+%       &\quad \cap \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land (y,z) \in S } \\
+%       &= S \comp Q \cap S \comp R,
+%   \end{align*}
+%   and analogously \[ P \comp (Q \cap R) = P \comp Q \cap P \comp R, \]
+%   \[
+%   \begin{tikzcd}
+%     A \arrow[r,"P"] \arrow[rr,bend right=50,"Q \comp P \cap R \comp P" below] & B \arrow[r,"Q \cup R"] \arrow[rr,bend left=50,"S \comp Q \cap S \comp R"] & C\arrow[r,"S"] & D,
+%   \end{tikzcd}
+%   \]
+% \end{lemma}
 
 \begin{definition}[Concrete Denotational Semantics of System S] \normalfont
   We define the denotational semantics of System S programs as a relation over $\State \times \State$ with \[\sem{s} \coloneq \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}.\]
 \end{definition}
 
 \begin{theorem} \normalfont
-  Next, we demonstrate that the concrete semantics of System S can be expressed with a $\Salgebra$. We continue by structural induction on System S programs.
+  Next, we demonstrate that the concrete semantics of System S can be expressed with operations of an $\SAlgebra$. We proceed by fixed-point induction and case distinction on the System S program.
 \begin{proof}
 
 \begin{align*}
@@ -352,18 +500,18 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
      &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\test{s}}{x}} \\
      &= \setbuild{((t,\rho),(t,\rho))}{\transform{t}{\rho}{s}{t'}{\rho'}} \cup
         \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}} \\
-     &= \domain\left(\setbuildc{((t,\rho),(t,\rho))} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
-     &\quad \cup \setbuildc{((t,\rho),\fail)} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}} \\
-     &= \domain(\lsucc \circ \sem{s}) \sqcup \lfail \circ \sem{s}
+     &= \domain\left(\setbuildc{((t,\rho),(t,\rho))} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+     &\quad \cup \setbuildc{ (\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}} \\
+     &= \domain(\lsucc \comp \sem{s}) \sqcup \lfail_{\{\fail\}} \comp \sem{s}
 \end{align*}
 
 \begin{align*}
   \sem{\neg{s}}
     &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\neg{s}}{x}} \\
     &= \setbuild{((t,\rho),(t,\rho))}{\transformfail{t}{\rho}{s}} \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s}{t'}{\rho'}} \\
-    &= \domain\left(\setbuildc{((t,\rho),\fail)} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
-    &\quad \cup \setbuildc{((t,\rho),\fail)} \circ \domain\left(\setbuildc{((t,\rho),(t,\rho))} \circ \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
-    &= \domain(\lfail \circ \sem{s}) \sqcup \lfail \circ \domain(\lsucc \circ \sem{s})
+    &= \domain\left(\setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+    &\quad \cup \setbuildc{(x,\fail)} \comp \domain\left(\setbuildc{((t,\rho),(t,\rho))} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}\right) \\
+    &= \domain(\lfail_{\{\fail\}} \comp \sem{s}) \sqcup \lfail \comp \domain(\lsucc \comp \sem{s})
 \end{align*}
 
 \begin{align*}
@@ -372,9 +520,10 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
     &= \setbuild{((t,\rho),(t'',\rho''))}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transform{t'}{\rho'}{s_2}{t''}{\rho''}}\\
     &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformfail{t'}{\rho'}{s_2}} \\
     &= \setbuild{((t,\rho),x)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformx{t'}{\rho'}{s_2}{x}} \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \\
-    &= \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}} \circ \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}} \\
-    &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \\
-    &= \sem{s_2} \circ \sem{s_1} \sqcup \lfail \circ \sem{s_1}
+    &= \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}} \comp \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}} \\
+    &\quad \cup \setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}} \\
+    &= \sem{s_2} \comp \sem{s_1} \sqcup \lfail_{\{\fail\}} \comp \sem{s_1} \\
+    &= (\sem{s_2} \sqcup \lfail_{\{\fail\}}) \comp \sem{s_1}
 \end{align*}
 
 \begin{align*}
@@ -382,11 +531,13 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
      &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\choice{s_1}{s_2}}{x}}} \\
      &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
      &\quad \cup {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_2}{t'}{\rho'}}} \\
-     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}} \\
-     &= {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
-     &\quad \cup {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \\
-     &\quad \cup \left({\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\cap {\setbuild{((t,\rho),\fail)}{\forall t, \rho}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \right) \\
-     &= \lsucc \circ \sem{s_1} \sqcup \lsucc \circ \sem{s_2} \sqcup (\lfail \circ \sem{s_1} \sqcap \lfail \circ \sem{s_2})
+     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t}{\rho}{s_2}}} \\
+     &= {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
+     &\quad \cup {\setbuild{((t,\rho),(t,\rho))}{\forall t, \rho}} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \\
+     &\quad \cup \left(\setbuildc{(\fail,\fail)} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\cap \setbuildc{(\fail,\fail)} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \right) \\
+     &= \lsucc \comp \sem{s_1} \sqcup \lsucc \comp \sem{s_2} \sqcup (\lfail_{\{\fail\}} \comp \sem{s_1} \sqcap \lfail_{\{\fail\}} \comp \sem{s_2}) \\
+     &= \lsucc \comp (\sem{s_1} \sqcup \sem{s_2}) \sqcup \lfail_{\{\fail\}} \comp (\sem{s_1} \sqcap \sem{s_2}) \\
+     &= (\lsucc \sqcup \lfail_{\{\fail\}}) \comp (\sem{s_1} \sqcup \sem{s_2})
 \end{align*}
 
 \begin{align*}
@@ -397,9 +548,9 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
      &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}} \\
      &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
      &\quad \cup {\setbuild{((t,\rho),x)}{\transformfail{t}{\rho}{s_1} \land \transformx{t}{\rho}{s_2}{x}}} \\
-     &= {\setbuildc{((t,\rho),(t,\rho))}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
-     & \quad \cup {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \circ \domain \left({\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\right) \\
-     &= \lsucc \circ \sem{s_1} \sqcup \sem{s_2} \circ \domain (\lfail \circ \sem{s_1})
+     &= {\setbuildc{((t,\rho),(t,\rho))}} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
+     & \quad \cup {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \comp \domain \left({\setbuildc{((t,\rho),\fail)}} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}}\right) \\
+     &= \lsucc \comp \sem{s_1} \sqcup \sem{s_2} \comp \domain (\lfail \comp \sem{s_1})
 \end{align*}
 
 \begin{align*}
@@ -413,103 +564,183 @@ We can think of the category $\Rel(\State)$ as a category with properties of pro
 
 \begin{align*}
   \sem{\path{i}{s}}
-    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\path{i}{s}}{y}}} \\
-    &= {\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}}} \\
+    &= \setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\path{i}{s}}{y}} \\
+    &= \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}} \\
     &\quad \cup {\setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{\transformfail{t_i}{\rho}{s}}} \\
     &\quad \cup {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }} \\
-    &= {\setbuildc{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}} \circ {\setbuild{((t,\rho),(t',\rho')}{\transform{t}{\rho}{s}{t'}{\rho'}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
-    &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &= \setbuild{ ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \\
+    &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}}} \comp {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
     &\quad \cup {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }} \\
-    &= {\setbuildc{((t_i',\rho),(f(\ldots t_i' \ldots),\rho))}} \circ {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
-    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \circ {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
-    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \circ {\setbuild{((f(\ldots t_n),\rho),(f(\ldots t_n),\rho))}{ n < i }} \\
-    &= \set(i) \circ \sem{s} \circ \get(i) \sqcup \lfail \circ \sem{s} \circ \get(i) \sqcup \lfail \circ {(\arity < i)}  
+    &= \setbuild{ ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \\
+    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \comp {\setbuild{((t,\rho),x}{\transformx{t}{\rho}{s}{x}}} \comp {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
+    &\quad \cup {\setbuildc{((t,\rho),\fail)}} \comp {\setbuild{((f(\ldots t_n),\rho),(f(\ldots t_n),\rho))}{ n < i }} \\
+    &= \map(i,\sem{s}) \sqcup \lfail \comp \sem{s} \comp \get(i) \sqcup \lfail \comp {(\arity < i)} \\
+    &= \map(i,\sem{s}) \sqcup \lfail \comp (\sem{s} \comp \get(i) \sqcup (\arity < i))
 \end{align*}
 
 \begin{align*}
   \sem{\congr{f,s_1,\ldots,s_n}}
-    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\congr{f,s_1,\ldots,s_n}}{x}}}
-    = {\setbuild{((f(t_1\ldots t_n),\rho_1),(f(t_1'\ldots t_n'),\rho_{n+1}))}{ \forall (1 \leq i \leq n).\, \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}}} \cup
-      {\setbuild{((f(t_1\ldots t_n),\rho_1),\fail)}{ \exists k \leq n.\, (\forall (1 \leq i \leq k).\, \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}) \land (\transformfail{t_k}{\rho_k}{s_k})}} \cup
-      {\setbuild{((g(\ldots),\rho),\fail)}{ g \neq f }} \cup
-      {\setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{ n' \neq n }}
-    = \mathop{\bigcirc}_{1\leq i \leq n} 
-      \left({\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ \transform{t_i}{\rho}{s_i}{t_i'}{\rho'}}} \cup
-            {\setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{ \transformfail{t_i}{\rho}{s_i}}} \right) \cup
-      {\setbuild{((g(\ldots),\rho),\fail)}{ g \neq f }} \cup
-      {\setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{ n' \neq n }}
-    = \mathop{\bigcirc}_{1\leq i \leq n} \left(\set(i) \circ \sem{s_i} \circ \get(i) \sqcup \lfail \circ \sem{s_i} \circ \get(i) \right) \circ {(\constructor = f)} \sqcup \fail \circ {(\constructor \neq f)} \sqcup \lfail \circ {(\arity \neq n)} %
+    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\congr{f,s_1,\ldots,s_n}}{x}} \\
+    &= \setbuild{((f(t_1\ldots t_n),\rho_1),(f(t_1'\ldots t_n'),\rho_{n+1}))}{ \forall (1 \leq i \leq n).\, \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}} \\
+    &\quad \cup \setbuild{((f(t_1\ldots t_n),\rho_1),\fail)}{ \exists k \leq n.\, (\forall (1 \leq i \leq k).\, \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}) \land (\transformfail{t_k}{\rho_k}{s_k})} \\
+    &\quad \cup \setbuild{((g(\ldots),\rho),\fail)}{ g \neq f } \cup \setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{ n' \neq n } \\
+    &= \mathop{\bigcirc}_{1\leq i \leq n} \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ \transform{t_i}{\rho}{s_i}{t_i'}{\rho'} } \\
+    &\quad \cup \bigcup_{k \leq n} \left( \setbuild{ ((f(\ldots t_k \ldots),\rho),\fail) }{ \transformfail{t_k}{\rho}{s_k} } \comp \mathop{\bigcirc}_{1\leq i < k} \setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{ \transform{t_i}{\rho}{s_i}{t_i'}{\rho'}} \right) \\
+    &\quad \cup {\setbuild{((g(\ldots),\rho),\fail)}{ g \neq f }} \cup {\setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{n' \neq n }} \\
+    &= \left( \mathop{\bigcirc}_{1\leq i \leq n} \map(i,\sem{s_i}) \right) \comp \arity(n) \comp \coneq(f) \\
+    &\quad \sqcup \left( \bigsqcup_{k \leq n} \lfail \comp \sem{s_i} \comp \get(i) \comp \mathop{\bigcirc}_{1 \leq i < k} \map(i,\sem{s_i}) \right) \comp \arity(n) \comp \coneq(f) \\
+    &\quad \sqcup \lfail \comp (\conneq(f) \sqcup \lfail \comp (\arity \neq n) \\
+    &= \left( \mathop{\bigcirc}_{1\leq i \leq n} \map(i,\sem{s_i}) \sqcup \bigsqcup_{k \leq n} \lfail \comp \sem{s_i} \comp \get(i) \comp \mathop{\bigcirc}_{1 \leq i < k} \map(i,\sem{s_i}) \right) \comp \arity(n) \comp \coneq(f) \\
+    &\quad \sqcup \lfail \comp \left(\conneq(f) \sqcup (\arity \neq n) \right) \\
+    &= \left( \mathop{\bigcirc}_{1\leq i \leq n} \left( \map(i,\sem{s_i}) \sqcup \lfail \comp \sem{s_i} \comp \get(i) \right) \right) \comp \arity(n) \comp \coneq(f) \\
+    &\quad \sqcup \lfail \comp \left(\conneq(f) \sqcup (\arity \neq n) \right)
 \end{align*}
 
 \begin{align*}
   \sem{\one{s}}
-    = {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\one{s}}{x}}}
-    = {\setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}}} \cup
-      {\setbuild{((f(t_1 \ldots t_n),\rho),\fail)}{\forall 1 \leq i \leq n.\, \transformfail{t_i}{\rho}{s}}}
-    = \text{difficult}
+    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\one{s}}{x}} \\
+    &= \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}} \\
+    &\quad \cup \setbuild{((f(t_1 \ldots t_n),\rho),\fail)}{\forall 1 \leq i \leq n.\, \transformfail{t_i}{\rho}{s}} \\
+    &= \witharity_{n} \left( \bigcup_{1 \leq i \leq n} \setbuild{ ((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \right) \\
+    &\quad \cup \witharity_{n} \left( \bigcap_{1 \leq i \leq n}  \setbuildc{ ((t,\rho),\fail) } \comp \setbuild{ ((t,\rho),x)}{ \transformx{t}{\rho}{s}{x} } \comp \setbuildc{ ((f(\ldots t_i \ldots t_n),\rho),(t_i,\rho)) } \right) \\
+    &= \witharity_{n} \left( \bigcup_{1 \leq i \leq n} \setbuild{ ((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \right. \\
+    &\qquad\quad \left. \cup \bigcap_{1 \leq i \leq n}  \setbuildc{ ((t,\rho),\fail) } \comp \setbuild{ ((t,\rho),x)}{ \transformx{t}{\rho}{s}{x} } \comp \setbuildc{ ((f(\ldots t_i \ldots t_n),\rho),(t_i,\rho)) } \right) \\
+    &= \witharity_{n} \left( \bigsqcup_{1 \leq i \leq n} \map(i, \sem{s}) \sqcup \bigsqcap_{1 \leq i \leq n} \lfail \comp \sem{s} \comp \get(i) \right)
+\end{align*}
+
+\begin{align*}
+  \sem{\all{s}}
+    &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\all{s}}{x}}} \\
+    &= {\setbuild{((f(t_i\ldots t_n),\rho_1),(f(t_i'\ldots t_n'),\rho_{n+1}))}{ \forall 1 \leq i \leq n.\ \transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}}}} \\
+    &\quad \cup \setbuild { ((f(t_1 \ldots t_n),\rho_1),\fail) }{ \exists k \leq n.\ \left(\forall 1 \leq i < k.\ \transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}}\right) \land \transformfail{t_k}{\rho}{s} } \\
+    &= \bigcup_{n \in \mathbb{N}} \mathop{\bigcirc}_{1\leq i \leq n} \setbuild{((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((u,\sigma),x) }{ \transformx{u}{\sigma}{s}{x} } } \\
+    &\quad \cup \bigcup_{n \in \mathbb{N}} \mathop{\bigcirc}_{1 \leq i \leq n} \setbuild{((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((u,\sigma),x) }{ \transformx{u}{\sigma}{s}{x} } } \\
+    &\qquad\qquad\qquad  \\
+    &= ?
 \end{align*}
   
 \end{proof}
 \end{theorem}
 
-\begin{definition}[Galois Connection] \normalfont
-  A Galois Connection is an adjunction between two posets $A$ and $B$ with a left adjoint functor $\alpha : A \rightarrow B$ called \emph{abstraction} and a right adjoint functor $\gamma : B \rightarrow A$ called \emph{concretisation} and for all $x \in A$ and $y \in B$, the following two-way rule holds \[ \frac{\alpha(x) \leq_B y}{x \leq_A \gamma(y)}. \]
+\begin{definition}[$\alpha$-Semantics of System S] \normalfont
+  Given a $\SAlgebra$ $\SAlg(L)$ and a morphism between the $\SAlgebras$
+  \[
+    \begin{tikzcd}
+      \SAlg(\Rel(\State)) \arrow{r}{(\alpha ,\gamma)} & \SAlg(L)
+    \end{tikzcd},
+  \]
+  We define the abstract semantics of System S programs as \[\sem{s}_\alpha \coloneq \alpha(\sem{s}). \]
 \end{definition}
 
-\begin{definition}[$(L,\alpha,\gamma)$-Semantics of System S] \normalfont
-  We define the abstract semantics of System S programs as values in a lattice $L$ over a given galois connection $\alpha \adjoint \gamma$ as \[\sem{s}_{(L,\alpha,\gamma)} \coloneq \alpha(\sem{s}). \]
-\end{definition}
-
-We begin exploring the space of $(L,\alpha,\gamma)$-Semantics of System S by defining a very naive abstraction, namely where an abstract state consists only of a single term and on conflict we jump immmediatley to top:
+We begin exploring the space of $\alpha$-Semantics of System S by defining a very naive abstraction, namely where an abstract state consists only of a single term and on conflict we jump immmediatley to top:
  
 \begin{definition}[$\Naive$ semantics of System S] \normalfont
-  Let $N$ be the set of abstract program states with $N = \State \cup \lbrace \top, \bot \rbrace$. We define a complete partial order $\leq_N$ on $N$
+  Let $\mathcal{N}$ be the set of abstract program states with $\mathcal{N} = \State \cup \lbrace \top, \bot, \ttop, \tbot \rbrace$. We define a finitely complete partial order (lattice) $\leq_\mathcal{N}$ on $\mathcal{N}$
   \[
     \begin{tikzpicture}
-     \matrix (m) [matrix of math nodes, row sep=4em, column sep=2em]
-    {              &        &             & \top &       \\
-      (t_1,\rho_1) & \ldots & (t_n,\rho_n) &      & \fail \\
-                   &        &             & \bot &       \\
+     \matrix (m) [matrix of nodes, row sep=4em, column sep=2em]
+    {                              &                        & \node (top) {$\top$};       &                       &                         \\
+                                   & \node (ttop){$\ttop$}; &                             &                       &                          \\
+      \node (t1) {$(t_1,\rho_1)$}; & \node {\ldots};        & \node (tn) {$(t_n,\rho_n)$}; &                       & \node (fail) {$\fail$}; \\
+                                   &                        & \node (bot) {$\bot$};       &                       &                          \\
     };
 
-    \draw [thick] (m-2-1) -- (m-1-4);
-    \draw [thick] (m-2-3) -- (m-1-4);
-    \draw [thick] (m-2-5) -- (m-1-4);
-    \draw [thick] (m-3-4) -- (m-2-1);
-    \draw [thick] (m-3-4) -- (m-2-3);
-    \draw [thick] (m-3-4) -- (m-2-5);
+    \draw [thick] (ttop) -- (top);
+    \draw [thick] (fail) -- (top);
+    \draw [thick] (t1) -- (ttop);
+    \draw [thick] (tn) -- (ttop);
+    \draw [thick] (bot) -- (t1);
+    \draw [thick] (bot) -- (tn);
+    \draw [thick] (bot) -- (fail);
     \end{tikzpicture}
   \]
 
-  We next define the category $\Naive$ where objects are elements of $N$, arrows are tuples $(x,y) : x \rightarrow y$ for $(x,y) \in N \times N$, the identity $\id_x = (x,x)$, and  composition $(y,z) \circ (x,y) = (x,z).$ Additionally we define the unary operation \emph{reverse} and binary operations \emph{meet} and \emph{join} on arrows with \[(x,y)^{-1} \coloneq (y,x),\] \[ (x_1,x_2) \sqcup (y_1,y_2) \coloneq (x_1 \sqcup x_2, y_1 \sqcup y_2) \] and \[ (x_1,x_2) \sqcap (y_1,y_2) \coloneq (x_1 \sqcap x_2, y_1 \sqcap y_2), \] respectively.
-\end{definition}
+  Next, we define an $\SAlgebra$ for $\Naive$ where objects are elements of $\mathcal{N}$ and arrows $(X,Y) : X' \rightarrow Y'$ iff $(X,Y) \leq (X',Y')$, the identity $\id_X = (X,X)$, and composition $(Y,Z) \comp (X,Y) = (X,Z).$
 
-\begin{definition}\normalfont
-  We continue by defining the abstraction functor $\alpha : \Rel(\State) \rightarrow \Naive$, for objects $S \subseteq \State$ by
-  \[
-     \alpha(S) \coloneq \lub S
-  \]
-  and arrows $R : A \rightarrow B \subseteq \State \times \State$ by
-  \[
-     \alpha(R) \coloneq (\lub A, \lub B).
-  \]
-
-  We now show, that $\alpha$ preserves identities and composition. For all $S \subseteq \State$, \begin{align*}\alpha(\id_S) = (\lub S, \lub S) = \id_{\lub S} = \id_{\alpha(S)}\end{align*} and for all $R : A \rightarrow B, S : B \rightarrow C \subseteq \State \times \State$, \begin{align*} \alpha(S \circ R) = (\lub A, \lub C) = (\lub B, \lub C) \circ (\lub B, \lub C) = \alpha(S) \circ \alpha(R). \end{align*}
-
-  Furthermore, we show that $\alpha$ preserves reverse and all binary meet and joins. Given any arrows $R: X_1 \rightarrow X_2$ and $S:Y_1 \rightarrow Y_2$, since $R^{-1} : X_2 \rightarrow X_1,$
   \begin{align*}
-    \alpha(R^{-1}) = (\lub X_2, \lub X_1)
-                   = (\lub X_1, \lub X_2)^{-1}
-                   = \alpha(R)^{-1}.
+    \lsucc_X &\coloneq
+               \begin{cases} 
+                 (X,X), & X \leq \ttop \\
+                 (\bot,\bot), & X = \fail \\
+                 (\top,\top), & X = \top \\
+               \end{cases} \\
+    \lfail_X &\coloneq
+               \begin{cases} (X,\fail), & \bot < X \leq \ttop \\
+                 (\bot,\bot), & X = \bot \lor X = \fail \\
+                 (\top,\top), & X = \top \\
+               \end{cases} \\
+    \get_X(i) &\coloneq
+                \begin{cases}
+                  ((f(\ldots t_i \ldots),\rho),(t_i,\rho)), & X = (f(\ldots t_i \ldots),\rho) \\
+                  (\ttop,\ttop), & X = \ttop \\
+                  (\bot,\bot), & X = \bot \lor X = \fail \lor \left(X = (f(\ldots t_n),\rho) \land n < i \right) \\
+                  (\top,\ttop), & X = \top \\
+                \end{cases} \\
+    \map_X(i,r) &\coloneq
+                \begin{cases}
+                  ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho')), & X = (f(\ldots t_i \ldots),\rho) \land r = ((t_i,\rho),(t_i',\rho')) \\
+                  (\bot,\bot), & X = (f(\ldots t_i \ldots),\rho) \land \dom(r) \neq (t_i,\rho) \\
+                  (\bot,\bot), & X = (f(\ldots t_n),\rho) \land n < i \\
+                  (X,\ttop), & X = \ttop \lor X = \top \\
+                  (\bot,\bot), & X = \bot \lor X = \fail \\
+                \end{cases} \\
+    \coneq_X(f) &\coloneq
+                \begin{cases}
+                  ((g(\ldots),\rho),(g(\ldots),\rho)), & X = (g(\ldots),\rho) \land f = g \\
+                  (\bot,\bot), & X = (g(\ldots),\rho) \land f \neq g \\
+                  (\ttop,\ttop), & X = \ttop \\
+                  (\top,\ttop), & X = \top \\
+                  (\bot,\bot), & X = \bot \lor X = \fail \\
+                \end{cases} \\
+    \conneq_X(f) &\coloneq
+                \begin{cases}
+                  (X,X), & X = (g(\ldots),\rho) \land f \neq g \\
+                  (\bot,\bot), & X = (g(\ldots),\rho) \land f = g \\
+                  (\ttop,\ttop), & X = \ttop \\
+                  (\top,\ttop), & X = \top \\
+                  (\bot,\bot), & X = \bot \lor X = \fail \\
+                \end{cases} \\
+    \arity_X(n) &\coloneq
+                \begin{cases}
+                  (X,X), & X = (f(\ldots t_m),\rho) \land n = m \\
+                  (\bot,\bot), & X = (f(\ldots t_m),\rho) \land n \neq m \\
+                  (\ttop,\ttop), & X = \ttop \\
+                  (\top,\ttop), & X = \top \\
+                  (\bot,\bot), & X = \bot \lor X = \fail \\
+                \end{cases} \\
   \end{align*}
+
+  We continue by defining the abstraction functor $\alpha : \Rel(\State) \rightarrow \Naive$, for objects $X$ by \[\alpha(X) \coloneq \lub X \] and arrows $R : A \rightarrow B$ by \[\alpha(R) \coloneq (\alpha(\dom(R)), \alpha(\cod(R))). \] The corresponding concretization functor $\gamma : \Naive \rightarrow \Rel(\State)$ is defined by
+  \begin{align*}
+    \gamma((t,\rho)) &\coloneq \setbuildc{ (t,\rho) } \\
+    \gamma(\ttop) &\coloneq \Term \times (\Env) \\
+    \gamma(\top) &\coloneq \Term \times (\Env) \cup \Fail \\
+    \gamma(\bot) &\coloneq \setbuildc{} \\
+  \end{align*}
+
+  We now show, that $(\alpha,\gamma)$ is an morphism between $\SAlgebras$. For all objects X,
+  \begin{align*}
+    \alpha(\id_X) = (\lub X, \lub X) = \id_{\lub X} = \id_{\alpha(X)}
+  \end{align*}
+  and for all $R : A \rightarrow B, S : B \rightarrow C$,
+  \begin{align*}
+    \alpha(S \comp R) &= (\lub A, \lub C) \\
+                      &= (\lub B, \lub C) \comp (\lub A, \lub B) \\
+                      &= (\alpha(\dom(S)), \alpha(\cod(S))) \comp (\alpha(\dom(R)), \alpha(\cod(R))) \\
+                      &= \alpha(S) \comp \alpha(R).
+  \end{align*}
+
   Observe that $R \cup S : X_1 \cup Y_1 \rightarrow X_2 \cup Y_2$ and since $N$ is a complete partial order, it holds that $\forall A,B. \lub(A \cup B) = (\lub A) \sqcup (\lub B),$ then
- \begin{align*} \alpha(R \cup S) = (\lub(X_1 \cup Y_1),\lub(X_2\cup Y_2))
-                                 = ((\lub X_1) \sqcup (\lub Y_1), (\lub X_2) \sqcup (\lub Y_2))
-                                 = (\lub X_1,\lub X_2) \sqcup (\lub Y_1, \lub Y_2)
-                                 = \alpha(R) \sqcup \alpha(S).
+ \begin{align*}
+    \alpha(R \cup S) &= (\lub(X_1 \cup Y_1),\lub(X_2\cup Y_2)) \\
+                     &= ((\lub X_1) \sqcup (\lub Y_1), (\lub X_2) \sqcup (\lub Y_2)) \\
+                     &= (\lub X_1,\lub X_2) \sqcup (\lub Y_1, \lub Y_2) \\
+                     &= \alpha(R) \sqcup \alpha(S).
  \end{align*}
  Analoguosly for meets.
 \end{definition}
+
+% \acks{Casper}
 
 \end{document}
 
