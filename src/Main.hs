@@ -1,68 +1,68 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Main where
 
-import Prelude hiding (id,(.),fail)
-import Data.Text(Text)
+import Prelude hiding (Traversable(..),sum,all,or,and,fail,not,seq)
+import Data.Text(Text,unpack)
+import Data.Map (Map)
+import qualified Data.Map as M
+import Control.Monad
+import Control.Monad.Fix hiding (fix)
 
-main :: IO ()
-main = putStrLn "Hello, Haskell!"
+-- Interface
 
-class RT l where
+class Alternative f where
+  empty :: f a
+  (<|>) :: f a -> f a -> f a
 
-  successLeft :: l
-  failLeft :: l
-  success :: l
-  (×) :: l -> l -> l
-  infixr 3 ×
-  (⊔) :: l -> l -> l
-  infixr 3 ⊔
-  (⊓) :: l -> l -> l
-  infixr 3 ⊓
-  id :: l
-  (○) :: l -> l -> l
-  infixr 9 ○
-  fail :: l
-  set :: Int -> l
-  get :: Int -> l
-  arityGreater :: Int -> l
-  arityEqual :: Int -> l
-  constructorCheck :: Text -> l
-  
+instance Alternative [] where
+  empty = []
+  l1 <|> l2 = l1 ++ l2
 
-absSem :: RT l => Strat -> l
-absSem strat = case strat of
-  Test s ->
-    successLeft ○ (id × absSem s) ⊔
-    fail ○ absSem s
-  Neg s ->
-    failLeft ○ id × absSem s ⊔
-    fail ○ absSem s
-  Seq s1 s2 ->
-    absSem s2 ○ absSem s1
-  Choice s1 s2 ->
-    success ○ absSem s1 ⊔
-    success ○ absSem s2 ⊔
-    (fail ○ absSem s1 ⊓ fail ○ absSem s2)
-  LeftChoice s1 s2 ->
-    success ○ absSem s1 ⊔
-    (fail ○ absSem s1 ⊓ success ○ absSem s2) ⊔
-    (fail ○ absSem s1 ⊓ fail ○ absSem s2)
-  Path i s ->
-    set i ○ id × (absSem s ○ get i) ⊔
-    fail ○ (absSem s ○ get i) ⊔
-    arityGreater i
-  Cong f ss ->
-    foldr (\(s,i) a -> map i s ○ a) id (zip ss [1..]) ⊔
-    fst (foldr (\(s,i) (a,as) -> (fail ○ map i s ○ as ⊔ a, map i s ○ as)) (let i = id in (i,i)) (zip ss [1..])) ⊔
-    constructorCheck f ⊔
-    arityEqual (length ss)
-  where
-    map i s = set i ○ id × (absSem s ○ get i)
-                                                                                                                                    
--- data Operations l =
---     Operations {
---     }
+class Logic f where
+  true :: a -> f a
+  false :: f a
+  not :: a -> f a -> f a
+  or :: f a -> f a -> f a
+  and :: f a -> f a -> f a
+
+instance Logic Maybe where
+  true = Just
+  false = Nothing
+  not _ (Just _) = Nothing
+  not a Nothing = Just a
+  or (Just a) _ = Just a
+  or Nothing (Just a) = Just a
+  or Nothing Nothing = Nothing
+  and Nothing _ = Nothing
+  and _ Nothing = Nothing
+  and (Just a) (Just _) = Just a
+
+class Traversable a where
+  traverse :: Applicative f => (a -> f a) -> (a -> f a)
+
+  -- destruct . construct = id
+  -- construct . destruct = id
+  deconstruct :: a -> (Text,[a])
+  construct :: (Text,[a]) -> a
+
+instance Traversable Term where
+  traverse f (Cons c ts) = Cons c <$> traverseList f ts
+    where
+      traverseList g (x:xs) = (:) <$> g x <*> traverseList g xs
+      traverseList _ [] = pure []
+  deconstruct (Cons c ts) = (c,ts)
+  construct (c,ts) = Cons c ts
+
+children :: (Traversable a, Functor f) => ([a] -> f [a]) -> (a -> f a)
+children f a = let (c,as) = deconstruct a
+               in (\as' -> construct (c,as')) <$> f as
+
+constructor :: Traversable a => a -> Text
+constructor = fst . deconstruct
+
+
+-- Language
 
 type Var = Text
 
@@ -86,64 +86,115 @@ data Strat
     | Where Strat
     | Scope [Var] Strat
 
-data Term
-    = Cons Text [Term]
-    | TVar Var
+data Term = Cons Text [Term] deriving Eq
 
--- class Lattice l where
---   top :: l
---   bot :: l
---   fail :: l
---   join :: l -> l -> l
---   meet :: l -> l -> l
---   fpathp :: Int -> l -> (l -> l) -> l
---   fallp :: l -> (l -> l) -> l
---   fmatchp :: Term -> l -> l
+instance Show Term where
+  show (Cons c ts) = unpack c ++ if null ts then "" else show ts
 
--- fstratp :: Lattice l => Strat -> l -> l
--- fstratp strat r = case strat of
---   Fail -> bot
---   Test s -> bstratp s r top
---   Neg s  -> bstratm s r fail
---   Seq s1 s2 -> fstratp s2 $ fstratp s1 r
---   Choice s1 s2 -> fstratp s1 r `join` fstratp s2 r
---   LeftChoice s1 s2 -> fstratp s1 r `join` (fstratm s1 r `meet` fstratp s2 r)
---   Rec v s1 -> fstratp (subst s1 v (Rec v s1)) r
---   Path i s -> fpathp i r (fstratp s)
---   All s -> fallp r (fstratp s)
---   Match t -> fmatchp t r
+t1 :: Term
+t1 = f[g[c,d],e]
+  where
+    f = Cons "f"
+    g = Cons "g"
+    c = Cons "c" []
+    d = Cons "d" []
+    e = Cons "e" []
 
--- fstratm :: Lattice l => Strat -> l -> l
--- fstratm strat r = case strat of
---   Fail -> fail
---   Test s -> fstratm s r
---   Neg s -> fstratp s r
---   Seq s1 s2 -> 
+data TermV = ConsV Text [TermV]
+           | VarV Var
 
--- bstratp :: Strat -> l -> l -> l
--- bstratp = undefined
+fail :: Logic f => f a
+fail = false
 
--- bstratm :: Strat -> l -> l -> l
--- bstratm = undefined
+id :: Logic f => a -> f a
+id = true
 
--- subst :: Strat -> Var -> Strat -> Strat
--- subst strat v s' = case strat of
---   Test s -> Test (subst s v s')
---   Neg s -> Neg (subst s v s')
---   Fail -> Fail
---   Id -> Id
---   Seq s1 s2 -> Seq (subst s1 v s') (subst s2 v s')
---   Choice s1 s2 -> Choice (subst s1 v s') (subst s2 v s')
---   LeftChoice s1 s2 -> LeftChoice (subst s1 v s') (subst s2 v s')
---   Rec v' s | v' == v   -> Rec v' s
---            | otherwise -> Rec v' (subst s v s')
---   Var v' | v' == v   -> s'
---          | otherwise -> Var v'
---   Path i s -> Path i (subst s v s')
---   One s -> One (subst s v s')
---   Some s -> Some (subst s v s')
---   All s -> All (subst s v s')
---   Match t -> Match t
---   Build t -> Build t
---   Where s -> Where (subst s v s')
---   Scope vars s -> Scope vars (subst s v s')
+test :: Logic f => (a -> f a) -> (a -> f a)
+test f t = true t `and` f t
+
+neg :: Logic f => (a -> f a) -> (a -> f a)
+neg f t = not t (f t)
+
+lchoice :: Logic f => (a -> f a) -> (a -> f a) -> (a -> f a)
+lchoice f g t = f t `or` g t
+
+choice :: Alternative f => (a -> f a) -> (a -> f a) -> (a -> f a)
+choice f g t = f t <|> g t
+
+seq :: Monad f => (a -> f a) -> (a -> f a) -> (a -> f a)
+seq f g = f >=> g
+
+fix :: (MonadFix f) => ((a -> f a) -> (a -> f a)) -> (a -> f a)
+fix f a = do
+  mu <- mfix (return . f)
+  mu a
+
+path :: (Traversable a,Monad f, Logic f) => Int -> (a -> f a) -> (a -> f a)
+path i s = children (nth i s)
+
+congruence :: (Traversable a,Monad f,Logic f) => Text -> [a -> f a] -> (a -> f a)
+congruence c ss t =
+  let (c',ts) = deconstruct t
+  in if c /= c' || length ts /= length ss
+     then false
+     else do
+       ts' <- sequence $ ss <*> ts
+       return $ construct (c',ts')
+
+all :: (Traversable a,Monad f) => (a -> f a) -> (a -> f a)
+all = traverse
+
+one :: (Traversable a,Monad f,Alternative f,Logic f) => (a -> f a) -> (a -> f a)
+one f = children (\chd -> alt [nth i f chd | i <- [1..length chd]])
+
+some :: (Traversable a,Monad f,Logic f) => (a -> f a) -> (a -> f a)
+some f = traverse (\t -> f t `or` pure t)
+
+data Rule = TermV :-> TermV
+
+rewrite :: (Traversable a, Eq a, Monad f,Logic f) => Rule -> (a -> f a)
+rewrite (left :-> right) = match M.empty left >=> build right
+
+match :: (Traversable a, Eq a, Monad f, Logic f) => Map Var a -> TermV -> a -> f (Map Var a)
+match env (VarV x) t =
+  case M.lookup x env of
+    Just t' | t' == t -> true env
+            | otherwise -> false
+    Nothing -> true $ M.insert x t env
+match env (ConsV c ts) t =
+    let (c',ch) = deconstruct t
+    in if c' /= c || length ch /= length ts
+       then false
+       else foldM (uncurry . match) env (zip ts ch)
+
+build :: (Traversable a, Monad f,Logic f) => TermV -> Map Var a -> f a
+build (VarV x) env =
+  case M.lookup x env of
+    Nothing -> false
+    Just t -> true t
+build (ConsV c ts) env = do
+  as <- forM ts $ \t -> build t env
+  return $ construct (c,as)
+
+
+-- Library
+
+topdown :: (Traversable a, MonadFix f) => (a -> f a) -> (a -> f a)
+topdown s = fix $ \mu -> seq s (all mu)
+
+bottomup :: (Traversable a, MonadFix f) => (a -> f a) -> (a -> f a)
+bottomup s = fix $ \mu -> seq (all mu) s
+
+-- Auxiliary functions
+alt :: (Alternative f, Logic f) => [f a] -> f a
+alt (x:xs) = x <|> alt xs
+alt [] = false
+
+nth :: (Monad f,Logic f) => Int -> (a -> f a) -> ([a] -> f [a])
+nth 1 f (x:xs) = (:) <$> f x <*> pure xs
+nth i f (x:xs) = (x:) <$> nth (i-1) f xs
+nth _ _ [] = false
+
+
+main :: IO ()
+main = undefined
