@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
-    Cabal cabal-install hlint mtl
+    Cabal cabal-install hlint mtl containers_0_5_8_1
   ]);
 
 in pkgs.stdenv.mkDerivation {
