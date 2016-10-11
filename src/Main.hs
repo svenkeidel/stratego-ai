@@ -4,13 +4,15 @@ module Main where
 import Prelude hiding (fail)
 
 import Syntax
-import Interpreter hiding (try)
+import Interpreter hiding (try,limit)
 import qualified ConcreteSemantics as C
-import qualified NaiveSemantics as N
-
-import Control.Monad hiding (fail)
+import qualified HoleSemantics as H
+import Multiple
 
 import qualified Data.Map as M
+import Data.Sequence (Seq)
+
+import Text.Printf
 
 f, g :: [TermV] -> TermV
 f = ConsV "f"
@@ -28,13 +30,13 @@ c',d' :: C.Term
 c' = C.Cons "c" []
 d' = C.Cons "d" []
 
-f'', g'' :: [N.Term] -> N.Term
-f'' = N.Cons "f"
-g'' = N.Cons "g"
+f'', g'' :: [H.Term] -> H.Term
+f'' = H.Cons "f"
+g'' = H.Cons "g"
 
-c'',d'' :: N.Term
-c'' = N.Cons "c" []
-d'' = N.Cons "d" []
+c'',d'' :: H.Term
+c'' = H.Cons "c" []
+d'' = H.Cons "d" []
 
 p1 :: Strat
 p1 = Scope ["x","y"] (Match (f [x,y]) `Seq` Build (g [y,x]))
@@ -56,12 +58,27 @@ bottomup s = Rec "x" (Seq (All (Var "x")) s)
 
 main :: IO ()
 main = do
-  print $ runInterp (C.interp p1 (f' [c',d'])) M.empty M.empty
-  print $ runInterp (N.interp p1 (f'' [c'',d''])) M.empty M.empty
-  print $ runInterp (N.interp p1 N.Hole) M.empty M.empty
-  print $ runInterp (C.interp p2 (f' [c',d'])) M.empty M.empty
-  print $ runInterp (N.interp p2 (f'' [c'',d''])) M.empty M.empty
-  print $ runInterp (N.interp p2 N.Hole) M.empty M.empty
-  print $ runInterp (C.interp (topdown (try p1)) (f' [f' [c', d'], d'])) M.empty M.empty
-  print $ runInterp (C.interp (bottomup (try p1)) (f' [f' [c', d'], d'])) M.empty M.empty
-  print $ take 5 $ N.unMultilpe $ runInterp (N.interp (topdown (try p1)) N.Hole) M.empty M.empty
+  interpC p1 (f' [c',d'])
+  interpH p1 (f'' [c'',d''])
+  interpH p1 H.Hole
+  interpC p2 (f' [c',d'])
+  interpH p2 (f'' [c'',d''])
+  interpH p2 H.Hole
+  interpC (topdown (try p1)) (f' [f' [c', d'], d'])
+  interpC (bottomup (try p1)) (f' [f' [c', d'], d'])
+  interpH (topdown (try p1)) H.Hole
+  interpH (bottomup (try p1)) H.Hole
+  where
+    limit = (0,3)
+    interpC p t =
+      printSummary "concrete" p t
+        (runInterp (C.interp p t) M.empty limit M.empty :: Result (C.Term,C.TermEnv))
+    interpH p t =
+      printSummary "hole" p t
+        (runInterp (H.interp p t) M.empty limit M.empty :: Multiple Seq (H.Term,H.TermEnv))
+
+    printSummary :: (Show a,Show b) => String -> Strat -> a -> b -> IO ()
+    printSummary sem p inp out = do
+       printf "semantics: %s\nprogram:   %s\ninput:     %s\noutput:\n%s\n"
+         sem (show p) (show inp) (show out)
+       putStrLn "------------------------------------------------------------\n"
