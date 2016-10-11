@@ -5,36 +5,44 @@ import Prelude hiding (fail)
 
 import Syntax
 import Interpreter hiding (try,limit)
+import ConcreteSemantics (ClosedTerm)
 import qualified ConcreteSemantics as C
+import HoleSemantics (PartialTerm)
 import qualified HoleSemantics as H
 import Multiple
+import GrammarSemantics (Grammar(..),(~>))
 
 import qualified Data.Map as M
 import Data.Sequence (Seq)
 
 import Text.Printf
+import Data.String
 
-f, g :: [TermV] -> TermV
-f = ConsV "f"
-g = ConsV "g"
+f, g :: [Term a] -> Term a
+f = Cons "f"
+g = Cons "g"
 
-x,y :: TermV
-x = VarV "x"
-y = VarV "y"
+c, d :: Term a
+c = Cons "c" []
+d = Cons "d" []
 
-f', g' :: [C.Term] -> C.Term
+x,y :: IsString a => Term a
+x = Var "x"
+y = Var "y"
+
+f', g' :: [ClosedTerm] -> ClosedTerm
 f' = C.Cons "f"
 g' = C.Cons "g"
 
-c',d' :: C.Term
+c',d' :: ClosedTerm
 c' = C.Cons "c" []
 d' = C.Cons "d" []
 
-f'', g'' :: [H.Term] -> H.Term
+f'', g'' :: [PartialTerm] -> PartialTerm
 f'' = H.Cons "f"
 g'' = H.Cons "g"
 
-c'',d'' :: H.Term
+c'',d'' :: PartialTerm
 c'' = H.Cons "c" []
 d'' = H.Cons "d" []
 
@@ -51,10 +59,22 @@ try :: Strat -> Strat
 try s = LeftChoice s Id
 
 topdown :: Strat -> Strat
-topdown s = Rec "x" (Seq s (All (Var "x")))
+topdown s = Rec "x" (Seq s (All (RecVar "x")))
 
 bottomup :: Strat -> Strat
-bottomup s = Rec "x" (Seq (All (Var "x")) s)
+bottomup s = Rec "x" (Seq (All (RecVar "x")) s)
+
+g1 :: Grammar
+g1 = Grammar s
+       [ s ~> f[Var a,Var b]
+       , s ~> c
+       , a ~> g[Var a,Var b]
+       , b ~> d
+       ] 
+  where
+    s = "S"
+    a = "A"
+    b = "B"
 
 main :: IO ()
 main = do
@@ -72,10 +92,10 @@ main = do
     limit = (0,3)
     interpC p t =
       printSummary "concrete" p t
-        (runInterp (C.interp p t) M.empty limit M.empty :: Result (C.Term,C.TermEnv))
+        (runInterp (C.interp p t) M.empty limit M.empty :: Result (ClosedTerm,C.TermEnv))
     interpH p t =
       printSummary "hole" p t
-        (runInterp (H.interp p t) M.empty limit M.empty :: Multiple Seq (H.Term,H.TermEnv))
+        (runInterp (H.interp p t) M.empty limit M.empty :: Multiple Seq (PartialTerm,H.TermEnv))
 
     printSummary :: (Show a,Show b) => String -> Strat -> a -> b -> IO ()
     printSummary sem p inp out = do

@@ -16,8 +16,6 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Map.Lazy.Merge as M
 
-type StratEnv = Map Var Strat
-
 data Interp s f a = Interp { runInterp :: StratEnv -> (Int,Int) -> s -> f (a,s) }
 
 instance Functor f => Functor (Interp s f) where
@@ -144,7 +142,7 @@ leftChoice f s1 s2 t =
 {-# INLINE leftChoice #-}
 
 recur :: (Monad f) => (Strat -> t -> Interp env f t)
-      -> Var -> Strat -> t -> Interp env f t
+      -> StratVar -> Strat -> t -> Interp env f t
 recur f x s t = local (M.insert x s) (f s t)
 {-# INLINE recur #-}
 
@@ -158,7 +156,7 @@ limit f top = do
 {-# INLINE limit #-}
 
 var :: Monad f => (Strat -> t -> Interp env f t)
-    -> Var -> t -> Interp env f t
+    -> StratVar -> t -> Interp env f t
 var f x t = do
   m <- reader (M.lookup x)
   case m of
@@ -166,8 +164,8 @@ var f x t = do
     Nothing -> error "Recursion variable was not in scope"
 {-# INLINE var #-}
 
-scope :: Monad f => (Strat -> t -> Interp (Map Var a) f t)
-      -> [Var] -> Strat -> t -> Interp (Map Var a) f t
+scope :: Monad f => (Strat -> t -> Interp (Map TermVar a) f t)
+      -> [TermVar] -> Strat -> t -> Interp (Map TermVar a) f t
 scope f vars s t = do
     env <- get
     put (foldr M.delete env vars)

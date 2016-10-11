@@ -1,15 +1,28 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Syntax where
 
 import Prelude hiding (maybe,concat)
 
 import Data.Text (Text,unpack,concat)
 import Data.List (intersperse)
+import Data.String (IsString)
 
 import Control.Monad.State
 import Control.Monad.Reader
+import Data.Map (Map)
 
-type Var = Text
+newtype TermVar = TermVar Text
+  deriving (Eq,Ord,IsString)
+
+instance Show TermVar where
+  show (TermVar x) = unpack x
+
+newtype StratVar = StratVar Text
+  deriving (Eq,Ord,IsString)
+
+instance Show StratVar where
+  show (StratVar x) = unpack x
 
 data Strat
     = Test Strat
@@ -19,17 +32,16 @@ data Strat
     | Seq Strat Strat
     | Choice Strat Strat
     | LeftChoice Strat Strat
-    | Rec Var Strat
-    | Var Var
+    | Rec StratVar Strat
+    | RecVar StratVar
     | Path Int Strat
     | Cong Text [Strat]
     | One Strat
     | Some Strat
     | All Strat
-    | Match TermV
-    | Build TermV
---    | Where Strat
-    | Scope [Var] Strat
+    | Match (Term TermVar)
+    | Build (Term TermVar)
+    | Scope [TermVar] Strat
 
 instance Show Strat where
   showsPrec d s0 = case s0 of
@@ -60,13 +72,13 @@ instance Show Strat where
         $ showsPrec (choice_prec+1) s1
         . showString " <+ "
         . showsPrec (choice_prec+1) s2
-    Rec v s -> 
+    Rec (StratVar v) s -> 
       showParen (d > app_prec)
         $ showString "rec "
         . showString (unpack v)
         . showString " "
         . showsPrec (app_prec+1) s
-    Var x ->
+    RecVar (StratVar x) ->
       showString (unpack x)
     Path i s ->
       showParen (d > app_prec)
@@ -94,7 +106,7 @@ instance Show Strat where
         . showsPrec (app_prec+1) t
     Scope vars s ->
       showString "{ "
-      . showString (unpack (concat (intersperse "," vars)))
+      . showString (unpack (concat (intersperse "," (map (\(TermVar v) -> v) vars))))
       . showString ": "
       . shows s
       . showString " }"
@@ -105,13 +117,12 @@ instance Show Strat where
 
 type Constructor = Text
 
-data TermV = ConsV Text [TermV]
-           | VarV Var
+data Term v = Cons Text [Term v]
+           | Var v
 
-instance Show TermV where
-  show (ConsV c ts) = unpack c ++ if null ts then "" else show ts
-  show (VarV x) = unpack x
-
+instance Show v => Show (Term v) where
+  show (Cons c ts) = unpack c ++ if null ts then "" else show ts
+  show (Var x) = show x
 
 class MonadMaybe m where
   maybe :: m a -> (Maybe a -> m b) -> m b
@@ -130,3 +141,5 @@ instance MonadMaybe m => MonadMaybe (StateT s m) where
              $ \m -> case m of
                        Just (a,s') -> runStateT (f (Just a)) s'
                        Nothing -> runStateT (f Nothing) s
+
+type StratEnv = Map StratVar Strat
