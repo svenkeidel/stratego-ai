@@ -3,6 +3,7 @@ module Main where
 
 import Prelude hiding (fail)
 
+import Term
 import Syntax
 import Interpreter hiding (try,limit)
 import ConcreteSemantics (ClosedTerm)

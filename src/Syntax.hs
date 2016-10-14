@@ -1,22 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Syntax where
+module Syntax(Strat(..),StratVar,StratEnv) where
 
-import Prelude hiding (maybe,concat)
+import Term
 
-import Data.Text (Text,unpack,concat)
-import Data.List (intersperse)
+import Prelude hiding (maybe)
+
+import Data.Text (Text,unpack)
+import Data.List (intercalate)
 import Data.String (IsString)
 
 import Control.Monad.State
 import Control.Monad.Reader
 import Data.Map (Map)
-
-newtype TermVar = TermVar Text
-  deriving (Eq,Ord,IsString)
-
-instance Show TermVar where
-  show (TermVar x) = unpack x
 
 newtype StratVar = StratVar Text
   deriving (Eq,Ord,IsString)
@@ -35,7 +30,7 @@ data Strat
     | Rec StratVar Strat
     | RecVar StratVar
     | Path Int Strat
-    | Cong Text [Strat]
+    | Cong Constructor [Strat]
     | One Strat
     | Some Strat
     | All Strat
@@ -106,7 +101,7 @@ instance Show Strat where
         . showsPrec (app_prec+1) t
     Scope vars s ->
       showString "{ "
-      . showString (unpack (concat (intersperse "," (map (\(TermVar v) -> v) vars))))
+      . showString (intercalate "," (map show vars))
       . showString ": "
       . shows s
       . showString " }"
@@ -114,15 +109,6 @@ instance Show Strat where
       app_prec = 10
       seq_prec = 9
       choice_prec = 8
-
-type Constructor = Text
-
-data Term v = Cons Text [Term v]
-           | Var v
-
-instance Show v => Show (Term v) where
-  show (Cons c ts) = unpack c ++ if null ts then "" else show ts
-  show (Var x) = show x
 
 class MonadMaybe m where
   maybe :: m a -> (Maybe a -> m b) -> m b

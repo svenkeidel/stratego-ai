@@ -1,12 +1,10 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 module ConcreteSemantics where
 
 import Prelude hiding (fail,sequence,all)
-import Data.Text (unpack)
 
-import Syntax hiding (Fail,Cons,Var)
+import Term (Constructor,TermVar,Term)
+import qualified Term as T
+import Syntax hiding (Fail)
 import qualified Syntax as S
 import Interpreter
 
@@ -19,7 +17,7 @@ import qualified Data.Map as M
 data ClosedTerm = Cons Constructor [ClosedTerm] deriving Eq
 
 instance Show ClosedTerm where
-  show (Cons c ts) = unpack c ++ if null ts then "" else show ts
+  show (Cons c ts) = show c ++ if null ts then "" else show ts
 
 type TermEnv = Map TermVar ClosedTerm
 
@@ -45,7 +43,7 @@ interp s0 t0@(Cons c ts0) = case s0 of
 
 match :: (Monad f,CanFail f) => Term TermVar -> ClosedTerm -> Interp TermEnv f ClosedTerm
 match f t@(Cons c ts) = case f of
-  S.Var x -> do
+  T.Var x -> do
     env <- get
     case M.lookup x env of
       Just t' | t' == t -> success t
@@ -53,15 +51,15 @@ match f t@(Cons c ts) = case f of
       Nothing -> do
         put $ M.insert x t env
         success t
-  S.Cons c' ts'
+  T.Cons c' ts'
     | c' /= c || length ts' /= length ts -> fail
     | otherwise -> Cons c' <$> zipWithM match ts' ts
 
 build :: (Monad f,CanFail f) => Term TermVar -> Interp TermEnv f ClosedTerm
-build (S.Var x) = do
+build (T.Var x) = do
   env <- get
   case M.lookup x env of
     Nothing -> fail
     Just t -> success t
-build (S.Cons c ts) =
+build (T.Cons c ts) =
   Cons c <$> mapM build ts

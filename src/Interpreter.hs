@@ -5,6 +5,7 @@ module Interpreter where
 
 import Prelude hiding (fail)
 
+import Term
 import Syntax hiding (Fail)
 
 import Control.Arrow (first)
