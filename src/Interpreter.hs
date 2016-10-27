@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Interpreter where
 
 import Prelude hiding (fail)
@@ -16,6 +18,7 @@ import Control.Monad.Reader hiding (fail)
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Map.Lazy.Merge as M
+import Data.Semigroup
 
 data Interp s f a = Interp { runInterp :: StratEnv -> (Int,Int) -> s -> f (a,s) }
 
@@ -40,6 +43,9 @@ instance MonadPlus f => MonadPlus (Interp s f) where
   mzero = Interp $ \_ _ _ -> mzero
   mplus m1 m2 = Interp $ \r i s -> runInterp m1 r i s `mplus` runInterp m2 r i s
 
+instance Semigroup (f (a,s)) => Semigroup (Interp s f a) where
+  m1 <> m2 = Interp $ \r i s -> runInterp m1 r i s <> runInterp m2 r i s
+  
 instance Monad f => MonadState s (Interp s f) where
   get = Interp $ \_ _ s -> return (s,s)
   put s = Interp $ \_ _ _ -> return ((),s)
@@ -53,16 +59,20 @@ instance Monad f => MonadReader StratEnv (Interp s f) where
 class CanFail f where
   success :: a -> f a
   fail :: f a
+
+class Try f b where
   try :: f a -> (Result a -> f b) -> f b
 
 instance (CanFail f) => CanFail (Interp s f) where
   success a = Interp $ \_ _ s -> success (a,s)
   fail = Interp $ \_ _ _ -> fail
-  try int k =
-    Interp $ \r i s -> try (runInterp int r i s) $ \res ->
-      case res of
-        Fail -> runInterp (k Fail) r i s
-        Success (b,s') -> runInterp (k (Success b)) r i s'
+
+try' :: Try f (b,s) => Interp s f a -> (Result a -> Interp s f b) -> Interp s f b
+try' int k =
+  Interp $ \r i s -> try (runInterp int r i s) $ \res ->
+    case res of
+      Fail -> runInterp (k Fail) r i s
+      Success (b,s') -> runInterp (k (Success b)) r i s'
 
 recursionDepth :: Monad f => Interp s f Int
 recursionDepth = Interp $ \_ (i,_) s -> return (i,s)
@@ -101,20 +111,22 @@ instance MonadPlus Result where
 instance CanFail Result where
   success = Success
   fail = Fail
+
+instance Try Result a where
   try r f = f r
 
-test :: (CanFail f) => (Strat -> t -> Interp env f t)
+test :: (CanFail f,Try f (t,env)) => (Strat -> t -> Interp env f t)
      -> Strat -> t -> Interp env f t
-test f s t = try (f s t) $ \r -> case r of
+test f s t = try' (f s t) $ \r -> case r of
     Success _ -> success t
     Fail -> fail
 {-# INLINE test #-}
 
-neg :: (Monad f,CanFail f) => (Strat -> t -> Interp env f t)
+neg :: (Monad f,CanFail f,Try f (t,env)) => (Strat -> t -> Interp env f t)
     -> Strat -> t -> Interp env f t
 neg f s t = do
   env <- get
-  try (f s t) $ \r -> case r of
+  try' (f s t) $ \r -> case r of
     Success _ -> fail
     Fail -> do
       put env
@@ -131,11 +143,11 @@ choice :: (MonadPlus f) => (Strat -> t -> Interp env f t)
 choice f s1 s2 t = f s1 t `mplus` f s2 t
 {-# INLINE choice #-}
 
-leftChoice :: (CanFail f) => (Strat -> t -> Interp env f t)
+leftChoice :: (CanFail f, Try f (t,env)) => (Strat -> t -> Interp env f t)
            -> Strat -> Strat -> t -> Interp env f t
 leftChoice f s1 s2 t =
-  try (f s1 t) $ \r1 ->
-  try (f s2 t) $ \r2 ->
+  try' (f s1 t) $ \r1 ->
+  try' (f s2 t) $ \r2 ->
     case (r1,r2) of
       (Success x,_) -> success x
       (Fail,Success x) -> success x
@@ -202,10 +214,10 @@ one :: (MonadPlus f,CanFail f) => (Strat -> t -> Interp env f t)
 one f s c ts = msum [(c,) <$> nth i (f s) ts | i <- [1..length ts]]
 {-# INLINE one #-}
 
-some :: (MonadPlus f,CanFail f) => (Strat -> t -> Interp env f t)
+some :: (MonadPlus f,CanFail f,Try f ((Bool, [t]), env)) => (Strat -> t -> Interp env f t)
      -> Strat -> Constructor -> [t] -> Interp env f (Constructor,[t])
 some f s c ts0 =
-  let go (t:ts) = try (f s t) $ \m -> case m of
+  let go (t:ts) = try' (f s t) $ \m -> case m of
         Success t' -> do
           (_,ts') <- go ts
           success (True,t':ts')

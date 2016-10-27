@@ -11,7 +11,7 @@ import qualified ConcreteSemantics as C
 import HoleSemantics (PartialTerm)
 import qualified HoleSemantics as H
 import Multiple
-import GrammarSemantics (Grammar(..),(~>))
+--import GrammarSemantics (Grammar,(~>),grammar)
 
 import qualified Data.Map as M
 import Data.Sequence (Seq)
@@ -65,17 +65,17 @@ topdown s = Rec "x" (Seq s (All (RecVar "x")))
 bottomup :: Strat -> Strat
 bottomup s = Rec "x" (Seq (All (RecVar "x")) s)
 
-g1 :: Grammar
-g1 = Grammar s
-       [ s ~> f[Var a,Var b]
-       , s ~> c
-       , a ~> g[Var a,Var b]
-       , b ~> d
-       ] 
-  where
-    s = "S"
-    a = "A"
-    b = "B"
+-- g1 :: Grammar
+-- g1 = grammar s
+--        [ s ~> f[Var a,Var b]
+--        , s ~> c
+--        , a ~> g[Var a,Var b]
+--        , b ~> d
+--        ] 
+--   where
+--     s = "S"
+--     a = "A"
+--     b = "B"
 
 main :: IO ()
 main = do

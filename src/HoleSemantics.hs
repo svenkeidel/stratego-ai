@@ -9,10 +9,12 @@ import Term (Term,Constructor,TermVar)
 import qualified Term as T
 import Syntax
 import Interpreter hiding (Fail)
+import Multiple (Multiple)
 
 import Control.Monad hiding (fail,sequence)
 import Control.Monad.State hiding (fail,sequence)
 
+import Data.Sequence (Seq)
 import Data.Map (Map)
 import qualified Data.Map as M
 
@@ -27,7 +29,7 @@ instance Show PartialTerm where
 
 type TermEnv = Map TermVar PartialTerm
 
-interp :: (MonadPlus f,CanFail f) => Strat -> PartialTerm -> Interp TermEnv f PartialTerm
+interp :: Strat -> PartialTerm -> Interp TermEnv (Multiple Seq) PartialTerm
 interp s0 t = case s0 of
   Test s -> test interp s t
   Neg s -> neg interp s t

@@ -63,9 +63,11 @@ instance (Foldable f,MonadPlus f) => MonadPlus (Multiple f) where
   mplus Bottom x = x
   mplus x Bottom = x
 
-instance (Foldable f,MonadPlus f) => CanFail (Multiple f) where
+instance (Monad f) => CanFail (Multiple f) where
   success = Success . return
   fail = Fail
+
+instance (Foldable f,MonadPlus f) => Try (Multiple f) a where
   try (Success a) k = msum (fmap (k . I.Success) a)
   try Fail k = k I.Fail
   try (SuccessOrFail a) k = try (Success a) k `mplus` k I.Fail
