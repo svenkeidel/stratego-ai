@@ -1,20 +1,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE FlexibleContexts #-}
 module HoleSemantics where
 
-import Prelude hiding (fail,concat,sequence,all)
+import Prelude hiding (fail,concat,sequence,all,uncurry,zipWith)
 import qualified Prelude as P
 
 import Term (Term,Constructor,TermVar)
 import qualified Term as T
 import Syntax
-import Interpreter hiding (Fail)
-import Multiple (Multiple)
+import qualified Syntax as S
+import Cat
 
-import Control.Monad hiding (fail,sequence)
-import Control.Monad.State hiding (fail,sequence)
+import Control.Arrow
 
-import Data.Sequence (Seq)
 import Data.Map (Map)
 import qualified Data.Map as M
 
@@ -29,67 +29,81 @@ instance Show PartialTerm where
 
 type TermEnv = Map TermVar PartialTerm
 
-interp :: Strat -> PartialTerm -> Interp TermEnv (Multiple Seq) PartialTerm
-interp s0 t = case s0 of
-  Test s -> test interp s t
-  Neg s -> neg interp s t
-  Fail -> fail
-  Id -> success t
-  Seq s1 s2 -> sequence interp s1 s2 t
-  Choice s1 s2 -> choice interp s1 s2 t
-  LeftChoice s1 s2 -> leftChoice interp s1 s2 t
-  Rec x s -> limit (recur interp x s t) Hole
-  RecVar x -> limit (var interp x t) Hole
-  Path i s -> case t of
-    Cons c ts -> uncurry Cons <$> path interp i s c ts
-    Hole -> fail `mplus` success Hole
-  Cong c ss -> case t of
-    Cons c' ts -> uncurry Cons <$> cong interp c ss c' ts
-    Hole -> fail `mplus` interp (Cong c ss) (Cons c [Hole | _ <- ss])
-  One s -> case t of
-    Cons c ts -> uncurry Cons <$> one interp s c ts
-    Hole -> fail `mplus` success Hole
-  Some s -> case t of
-    Cons c ts -> uncurry Cons <$> some interp s c ts
-    Hole -> fail `mplus` success Hole
-  All s -> case t of
-    Cons c ts -> uncurry Cons <$> all interp s c ts
-    Hole -> fail `mplus` success Hole
-  Scope xs s -> scope interp xs s t
-  Match f -> match f t
-  Build f -> build f
+interp :: (Interpreter TermEnv p,ArrowChoice p,ArrowPlus p,ArrowApply p) => Strat -> p PartialTerm PartialTerm
+interp s0 = case s0 of
+  Test s -> test (interp s)
+  Neg s -> neg (interp s)
+  S.Fail -> fail
+  Id -> success
+  Seq s1 s2 -> sequence (interp s1) (interp s2)
+  Choice s1 s2 -> choice (interp s1) (interp s2)
+  LeftChoice s1 s2 -> leftChoice (interp s1) (interp s2)
+  Rec x s -> recur x s (interp s)
+  RecVar x -> var x (uncurry interp)
+  Path i s -> lift (path i (interp s))
+  Cong c ss -> proc t -> case t of
+    Cons c' ts' -> do
+      (c'',ts'') <- cong c ss (uncurry interp) -< (c',ts')
+      returnA -< Cons c'' ts''
+    Hole -> fail <+> interp (Cong c ss) -< Cons c [Hole | _ <- ss]
+  One s -> lift (one (interp s))
+  Some s -> lift (some (interp s))
+  All s -> lift (all (interp s))
+  Scope xs s -> scope xs (interp s)
+  Match f -> proc t -> match -< (f,t)
+  Build f -> proc _ -> build -< f
 
-match :: (MonadPlus f,CanFail f) => Term TermVar -> PartialTerm -> Interp TermEnv f PartialTerm
-match (T.Var x) t = do
-  env <- get
-  case M.lookup x env of
-    Just t' | groundEq t t' -> success t
-            | otherwise -> fail `mplus` unify t t'
-    Nothing -> do
-      put $ M.insert x t env
-      success t
-match (T.Cons c ts) (Cons c' ch)
-  | c' /= c || length ch /= length ts = fail
-  | otherwise = Cons c' <$> zipWithM match ts ch
-match (T.Cons c ts) Hole = fail `mplus` (Cons c <$> zipWithM match ts [Hole | _ <- ts ])
+lift :: (Interpreter env p,ArrowChoice p,ArrowPlus p) => p (Constructor,[PartialTerm]) (Constructor,[PartialTerm]) -> p PartialTerm PartialTerm
+lift p = proc t -> case t of
+  Cons c ts -> do
+    (c',ts') <- p -< (c,ts)
+    returnA -< (Cons c' ts')
+  Hole ->
+    fail <+> success -< Hole
+
+match :: (Interpreter TermEnv p, ArrowChoice p,ArrowPlus p) => p (Term TermVar,PartialTerm) PartialTerm
+match = proc (f,t) -> case f of
+  T.Var x -> do
+    env <- getTermEnv -< ()
+    case M.lookup x env of
+      Just t' | groundEq t t' -> success -< t
+              | otherwise -> fail <+> success <<< unify -< (t,t')
+      Nothing -> do
+        putTermEnv -< env
+        success -< t
+  T.Cons c ts -> case t of
+    Cons c' ts'
+      | c /= c' || length ts /= length ts' -> fail -< ()
+      | otherwise -> do
+          ts'' <- zipWith match -< (ts,ts')
+          returnA -< Cons c ts''
+    Hole -> do
+      ts'' <- fail <+> zipWith match -< (ts,[Hole | _ <- ts])
+      returnA -< Cons c ts''
 
 groundEq :: PartialTerm -> PartialTerm -> Bool
 groundEq (Cons c ts) (Cons c' ts')
   | c == c' = P.all (uncurry groundEq) (zip ts ts') 
 groundEq _ _ = False
 
-unify :: (Monad f,CanFail f) => PartialTerm -> PartialTerm -> f PartialTerm
-unify (Cons c ts) (Cons c' ts')
-  | c /= c' || length ts /= length ts' = fail
-  | otherwise = Cons c <$> zipWithM unify ts ts'
-unify Hole t = return t
-unify t Hole = return t
+unify :: (Interpreter env p,ArrowChoice p) => p (PartialTerm,PartialTerm) PartialTerm
+unify = proc (t1,t2) -> case (t1,t2) of
+  (Cons c ts,Cons c' ts')
+    | c /= c' || length ts /= length ts' -> fail -< ()
+    | otherwise -> do
+        ts'' <- zipWith unify -< (ts,ts')
+        returnA -< Cons c ts''
+  (Hole, t) -> returnA -< t
+  (t, Hole) -> returnA -< t
 
-build :: (Monad f,CanFail f) => Term TermVar -> Interp TermEnv f PartialTerm
-build (T.Var x) = do
-  env <- get
-  case M.lookup x env of
-    Nothing -> fail
-    Just t -> success t
-build (T.Cons c ts) =
-  Cons c <$> mapM build ts
+
+build :: (Interpreter TermEnv p, ArrowChoice p) => p (Term TermVar) PartialTerm
+build = proc f -> case f of
+  (T.Var x) -> do
+    env <- getTermEnv -< ()
+    case M.lookup x env of
+      Nothing -> fail -< ()
+      Just t -> success -< t
+  (T.Cons c ts) -> do
+    ts' <- mapA build -< ts
+    returnA -< Cons c ts'

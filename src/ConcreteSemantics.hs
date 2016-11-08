@@ -54,7 +54,7 @@ match = proc (f,t@(Cons c ts)) -> case f of
         putTermEnv -< env
         success -< t
   T.Cons c' ts'
-    | c' /= c || length ts' /= length ts -> fail -< ()
+    | c /= c' || length ts /= length ts' -> fail -< ()
     | otherwise -> do
        ts'' <- zipWith match -< (ts',ts)
        returnA -< Cons c ts''
