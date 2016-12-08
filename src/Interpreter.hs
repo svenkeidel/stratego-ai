@@ -1,254 +1,116 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows #-}
 module Interpreter where
 
-import Prelude hiding (fail)
+import Prelude hiding (fail,(.),id,sum,zipWith, curry, uncurry, flip)
 
-import Term
-import Syntax hiding (Fail)
+import           Term
+import           Syntax hiding (Fail)
 
-import Control.Arrow (first)
-import Control.Applicative
-import Control.Monad hiding (fail)
-import Control.Monad.State hiding (fail)
-import Control.Monad.Reader hiding (fail)
-import Data.Map (Map)
+import           Control.Arrow
+
+import           Control.Category
+
+import           Classes
+
+import           Data.Map (Map)
 import qualified Data.Map as M
-import qualified Data.Map.Lazy.Merge as M
-import Data.Semigroup
+-- import qualified Data.Map.Lazy.Merge as M
 
-data Interp s f a = Interp { runInterp :: StratEnv -> (Int,Int) -> s -> f (a,s) }
+type StratEnv = Map StratVar Strat
 
-instance Functor f => Functor (Interp s f) where
-  fmap f int = Interp $ \r i s -> fmap (first f) (runInterp int r i s)
-
-instance Monad f => Applicative (Interp s f) where
-  pure = return
-  (<*>) = ap
-
-instance MonadPlus f => Alternative (Interp s f) where
-  empty = mzero
-  (<|>) = mplus
-
-instance Monad f => Monad (Interp s f) where
-  return a = Interp $ \_ _ s -> return (a,s)
-  int >>= k = Interp $ \r i s -> do
-                (a,s') <- runInterp int r i s
-                runInterp (k a) r i s'
-
-instance MonadPlus f => MonadPlus (Interp s f) where
-  mzero = Interp $ \_ _ _ -> mzero
-  mplus m1 m2 = Interp $ \r i s -> runInterp m1 r i s `mplus` runInterp m2 r i s
-
-instance Semigroup (f (a,s)) => Semigroup (Interp s f a) where
-  m1 <> m2 = Interp $ \r i s -> runInterp m1 r i s <> runInterp m2 r i s
-  
-instance Monad f => MonadState s (Interp s f) where
-  get = Interp $ \_ _ s -> return (s,s)
-  put s = Interp $ \_ _ _ -> return ((),s)
-  state f = Interp $ \_ _ s -> return (f s)
-
-instance Monad f => MonadReader StratEnv (Interp s f) where
-  ask = Interp $ \r _ s -> return (r,s)
-  local f int = Interp $ \r i s -> runInterp int (f r) i s
-  reader f = Interp $ \r _ s -> return (f r,s)
-
-class CanFail f where
-  success :: a -> f a
-  fail :: f a
-
-class Try f b where
-  try :: f a -> (Result a -> f b) -> f b
-
-instance (CanFail f) => CanFail (Interp s f) where
-  success a = Interp $ \_ _ s -> success (a,s)
-  fail = Interp $ \_ _ _ -> fail
-
-try' :: Try f (b,s) => Interp s f a -> (Result a -> Interp s f b) -> Interp s f b
-try' int k =
-  Interp $ \r i s -> try (runInterp int r i s) $ \res ->
-    case res of
-      Fail -> runInterp (k Fail) r i s
-      Success (b,s') -> runInterp (k (Success b)) r i s'
-
-recursionDepth :: Monad f => Interp s f Int
-recursionDepth = Interp $ \_ (i,_) s -> return (i,s)
-
-recursionLimit :: Monad f => Interp s f Int
-recursionLimit = Interp $ \_ (_,l) s -> return (l,s)
-
-decent :: Interp s f a -> Interp s f a
-decent int = Interp $ \r (i,l) s -> runInterp int r (i+1,l) s
-
-data Result t = Success t | Fail deriving Show
-
-instance Functor Result where
-  fmap f (Success x) = Success (f x)
-  fmap _ Fail = Fail
-
-instance Applicative Result where
-  pure = return
-  (<*>) = ap
-
-instance Alternative Result where
-  empty = mzero
-  (<|>) = mplus
-
-instance Monad Result where
-  return = Success
-  Success a >>= k = k a
-  Fail >>= _ = Fail
-
-instance MonadPlus Result where
-  mzero = Fail
-  Success x `mplus` _ = Success x
-  _ `mplus` Success x = Success x
-  Fail `mplus` Fail = Fail
-
-instance CanFail Result where
-  success = Success
-  fail = Fail
-
-instance Try Result a where
-  try r f = f r
-
-test :: (CanFail f,Try f (t,env)) => (Strat -> t -> Interp env f t)
-     -> Strat -> t -> Interp env f t
-test f s t = try' (f s t) $ \r -> case r of
-    Success _ -> success t
-    Fail -> fail
+test :: Try p => p a a -> p a a
+test f = (id &&& id) >>> try (second f) (p1 >>> success) fail
 {-# INLINE test #-}
 
-neg :: (Monad f,CanFail f,Try f (t,env)) => (Strat -> t -> Interp env f t)
-    -> Strat -> t -> Interp env f t
-neg f s t = do
-  env <- get
-  try' (f s t) $ \r -> case r of
-    Success _ -> fail
-    Fail -> do
-      put env
-      success t
+neg :: Try p => p a a -> p a a
+neg f = try f fail success
 {-# INLINE neg #-}
 
-sequence :: (Monad f) => (Strat -> t -> Interp env f t)
-         -> Strat -> Strat -> t -> Interp env f t
-sequence f s1 s2 t = f s1 t >>= f s2
+sequence :: Category p => p a b -> p b c -> p a c
+sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-choice :: (MonadPlus f) => (Strat -> t -> Interp env f t)
-       -> Strat -> Strat -> t -> Interp env f t
-choice f s1 s2 t = f s1 t `mplus` f s2 t
+choice :: ArrowPlus p => p a b -> p a b -> p a b
+choice f g = f <+> g
 {-# INLINE choice #-}
 
-leftChoice :: (CanFail f, Try f (t,env)) => (Strat -> t -> Interp env f t)
-           -> Strat -> Strat -> t -> Interp env f t
-leftChoice f s1 s2 t =
-  try' (f s1 t) $ \r1 ->
-  try' (f s2 t) $ \r2 ->
-    case (r1,r2) of
-      (Success x,_) -> success x
-      (Fail,Success x) -> success x
-      (Fail,Fail) -> fail
+leftChoice :: Try p => p a b -> p a b -> p a b
+leftChoice f g = try f success (try g success fail)
 {-# INLINE leftChoice #-}
 
-recur :: (Monad f) => (Strat -> t -> Interp env f t)
-      -> StratVar -> Strat -> t -> Interp env f t
-recur f x s t = local (M.insert x s) (f s t)
-{-# INLINE recur #-}
+recur :: Arrow p => StratEnv -> StratVar -> Strat -> (StratEnv -> p a b) -> p a b
+recur env x s p = proc t -> p (M.insert x s env) -< t
 
-limit :: (Monad f,CanFail f) => Interp env f t -> t -> Interp env f t
-limit f top = do
-  depth <- recursionDepth
-  lim <- recursionLimit
-  if depth < lim
-     then decent f
-     else success top
-{-# INLINE limit #-}
-
-var :: Monad f => (Strat -> t -> Interp env f t)
-    -> StratVar -> t -> Interp env f t
-var f x t = do
-  m <- reader (M.lookup x)
-  case m of
-    Just s -> f s t
-    Nothing -> error "Recursion variable was not in scope"
+var :: StratEnv -> StratVar -> (Strat -> p a b) -> p a b
+var env x p = go
+  where
+    go = case M.lookup x env of
+      Just s  -> p s
+      Nothing -> error "Recursion variable was not in scope"
 {-# INLINE var #-}
 
-scope :: Monad f => (Strat -> t -> Interp (Map TermVar a) f t)
-      -> [TermVar] -> Strat -> t -> Interp (Map TermVar a) f t
-scope f vars s t = do
-    env <- get
-    put (foldr M.delete env vars)
-    t' <- f s t
-    env' <- get
-    put $ merge env' env
-    return t'
-  where
-    merge = M.merge M.preserveMissing M.dropMissing $ M.zipWithMatched $ \k x y ->
-            if k `elem` vars then y else x
-{-# INLINE scope #-}
+scope :: (TermEnv (Map TermVar t) p, Arrow p) => [TermVar] -> p a b -> p a b
+scope = undefined
+-- scope vars s = proc t -> do
+--   env  <- getTermEnv -< ()
+--   ()   <- putTermEnv -< foldr M.delete env vars
+--   t'   <- s          -< t
+--   env' <- getTermEnv -< ()
+--   ()   <- putTermEnv -< merge env' env
+--   returnA -< t'
+--   where
+--     merge = M.merge M.preserveMissing M.dropMissing $ M.zipWithMatched $ \k x y ->
+--       if k `elem` vars then y else x
+-- {-# INLINE scope #-}
 
-path :: (Monad f,CanFail f) => (Strat -> t -> Interp env f t)
-     -> Int -> Strat -> Constructor -> [t] -> Interp env f (Constructor,[t])
-path f i s c ts = (c,) <$> nth i (f s) ts
+path :: (CCC p, Try p, HasLists p, HasNumbers p) => Int -> p a a -> p (Constructor,[a]) (Constructor,[a])
+path i f = second (lit i &&& id >>> nth f)
 {-# INLINE path #-}
 
-cong :: (Monad f,CanFail f) => (Strat -> t -> Interp env f t)
-     -> Constructor -> [Strat] -> Constructor -> [t] -> Interp env f (Constructor,[t])
-cong f c ss0 c' ts0
-  | c /= c' || length ts0 /= length ss0 = fail
-  | otherwise =
-      let go (s:ss) (t:ts) = do
-            t' <- f s t
-            ts' <- go ss ts
-            return (t':ts')
-          go _ _ = return []
-      in (c,) <$> go ss0 ts0
+cong :: (CCC p, Try p, HasLists p) => Constructor -> [p a b] -> p (Constructor,[a]) (Constructor,[b])
+cong c ss = proc (c',ts0) ->
+  if c /= c' || length ts0 /= length ss
+  then fail -< ()
+  else second apply -< (c',zip ss ts0)
 {-# INLINE cong #-}
 
-one :: (MonadPlus f,CanFail f) => (Strat -> t -> Interp env f t)
-    -> Strat -> Constructor -> [t] -> Interp env f (Constructor,[t])
-one f s c ts = msum [(c,) <$> nth i (f s) ts | i <- [1..length ts]]
+plus :: (CCC p, ArrowPlus p) => p (p a b, p a b) (p a b)
+plus = curry (((p1.p1 &&& p2) >>> eval) <+> ((p2.p1 &&& p2) >>> eval))
+
+one :: (CCC p, Try p, ArrowPlus p, HasLists p, HasNumbers p) => p a a -> p (Constructor,[a]) (Constructor,[a])
+one f = second (arr length &&& id >>> primRec' zeroArrow (first (curry (nth f)) >>> plus))
 {-# INLINE one #-}
 
-some :: (MonadPlus f,CanFail f,Try f ((Bool, [t]), env)) => (Strat -> t -> Interp env f t)
-     -> Strat -> Constructor -> [t] -> Interp env f (Constructor,[t])
-some f s c ts0 =
-  let go (t:ts) = try' (f s t) $ \m -> case m of
-        Success t' -> do
-          (_,ts') <- go ts
-          success (True,t':ts')
-        Fail -> do
-          (b,ts') <- go ts
-          success (b,t:ts')
-      go [] = success (False,[])
-  in do
-      (oneSucceeded,ts') <- go ts0
+some :: (CCC p, Try p, HasLists p) => p t t -> p (Constructor,[t]) (Constructor,[t])
+some f = second $ proc ts0 -> do
+      (ts',oneSucceeded) <- go -< ts0
       if oneSucceeded
-        then success (c,ts')
-        else fail
+        then success -< ts'
+        else fail -< ()
+  where
+    go = foldList (nil &&& false) (try (first f) (assoc >>> cons *** true) (assoc >>> first cons))
 {-# INLINE some #-}
 
-all :: (MonadPlus f,CanFail f) => (Strat -> t -> Interp env f t)
-    -> Strat -> Constructor -> [t] -> Interp env f (Constructor,[t])
-all f s c ts0 =
-  let go (t:ts) = do
-        t' <- f s t
-        ts' <- go ts
-        success (t':ts')
-      go [] = return []
-  in (c,) <$> go ts0
+all :: (Arrow p,HasLists p) => p a b -> p (Constructor,[a]) (Constructor,[b])
+all f = second (foldList nil (first f >>> cons))
 {-# INLINE all #-}
 
-nth :: (Monad f,CanFail f) => Int -> (a -> Interp s f a) -> ([a] -> Interp s f [a])
-nth 1 f (x:xs) = do
-  x' <- f x
-  return (x':xs)
-nth i f (x:xs) = do
-  xs' <- nth (i-1) f xs
-  return (x:xs')
-nth _ _ [] = fail
+nth :: (CCC p, Try p, HasLists p, HasNumbers p) => p a a -> p (Nat,[a]) [a]
+nth f = primRec' (matchList >>> (fail ||| (first f >>> cons)))
+                 (p2 >>> curry (second (matchList >>> (fail ||| id)) >>> shuffle >>> second eval >>> cons))
+  where
+    shuffle :: Arrow p => p (a,(b,c)) (b,(a,c))
+    shuffle = p1.p2 &&& p1 &&& p2.p2
+{-# NOINLINE nth #-}
 
+mapA :: (CCC p, HasLists p) => p a b -> p [a] [b]
+mapA f = foldList nil (first f >>> cons)
+
+zipWith :: (CCC p, HasLists p) => p (a,b) c -> p ([a],[b]) [c]
+zipWith f = arr (\ x -> case x of
+  (a : as, b : bs) -> Left ((a,b), (as, bs))
+  (_, _)           -> Right ())
+  >>> (f *** zipWith f >>> cons) ||| nil

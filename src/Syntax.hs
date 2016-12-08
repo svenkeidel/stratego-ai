@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module Syntax(Strat(..),StratVar,StratEnv) where
+module Syntax(Strat(..),StratVar) where
 
 import Term
 
@@ -8,10 +8,6 @@ import Prelude hiding (maybe)
 import Data.Text (Text,unpack)
 import Data.List (intercalate)
 import Data.String (IsString)
-
-import Control.Monad.State
-import Control.Monad.Reader
-import Data.Map (Map)
 
 newtype StratVar = StratVar Text
   deriving (Eq,Ord,IsString)
@@ -109,23 +105,3 @@ instance Show Strat where
       app_prec = 10
       seq_prec = 9
       choice_prec = 8
-
-class MonadMaybe m where
-  maybe :: m a -> (Maybe a -> m b) -> m b
-
-instance MonadMaybe Maybe where
-  maybe m f = f m
-
-instance MonadMaybe m => MonadMaybe (ReaderT r m) where
-  maybe rd f = ReaderT
-             $ \r -> maybe (runReaderT rd r)
-             $ \a -> runReaderT (f a) r
-
-instance MonadMaybe m => MonadMaybe (StateT s m) where
-  maybe st f = StateT
-             $ \s -> maybe (runStateT st s)
-             $ \m -> case m of
-                       Just (a,s') -> runStateT (f (Just a)) s'
-                       Nothing -> runStateT (f Nothing) s
-
-type StratEnv = Map StratVar Strat

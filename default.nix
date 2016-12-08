@@ -1,7 +1,8 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
-    Cabal cabal-install hlint mtl containers_0_5_8_1
+let
+  env = pkgs.haskellPackages.ghcWithPackages(p: with p; [
+    Cabal cabal-install hlint mtl text containers hspec
   ]);
 
 in pkgs.stdenv.mkDerivation {
@@ -10,8 +11,5 @@ in pkgs.stdenv.mkDerivation {
   src = ./.;
   buildInputs = [
     env
-    (pkgs.texlive.combine {
-      inherit (pkgs.texlive) scheme-small pgf tikz-cd cm-super stmaryrd stix syntax latexmk;
-    })
   ];
 }

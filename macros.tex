@@ -1,0 +1,101 @@
+\newcommand{\minus}{{\scalebox{0.9}{-}}}
+\newcommand{\plus}{{\scalebox{0.6}{\!+}}}
+\newcommand{\squarediamond}{\mathbin{\text{\tikz [x=1ex,y=1ex,scale=1.5,line width=.1ex,line join=round] \draw (0,0) rectangle (1,1) (.5\pgflinewidth,.5) -- (.5,1ex-.5\pgflinewidth) -- (1ex-.5\pgflinewidth,.5) -- (.5,.5\pgflinewidth) -- (.5\pgflinewidth,.5) -- cycle;}}}
+\renewcommand{\square}{\mathbin{\text{\tikz [x=1ex,y=1ex,scale=1.5,line width=.1ex,line join=round] \draw (0,0) rectangle (1,1);}}}
+\renewcommand{\diamond}{\mathbin{\text{\tikz [x=1ex,y=1ex,scale=1.5,line width=.1ex,line join=round] \draw (.5\pgflinewidth,.5) -- (.5,1ex-.5\pgflinewidth) -- (1ex-.5\pgflinewidth,.5) -- (.5,.5\pgflinewidth) -- (.5\pgflinewidth,.5) -- cycle;}}}
+\newcommand{\state}[1]{\ensuremath \langle #1 \rangle}
+\newcommand{\transition}[2]{\ensuremath \state{#1} & \longrightarrow \state{#2}}
+\newcommand{\termrule}[3]{\ensuremath #1 \xrightarrow{#2} #3}
+\newcommand{\fail}{\ensuremath \text{$\uparrow$}}
+\newcommand{\success}{\ensuremath \text{$\downarrow$}}
+\newcommand{\cont}[2]{\ensuremath \mathbf{#1}(#2)}
+\newcommand{\return}{\ensuremath \hookleftarrow}
+\newcommand{\seq}[2]{\ensuremath \operatorname{seq}(#1,#2)}
+\newcommand{\choice}[2]{\ensuremath \operatorname{choice}(#1,#2)}
+\newcommand{\leftchoice}[2]{\ensuremath \operatorname{lchoice}(#1,#2)}
+\newcommand{\fix}[2]{\ensuremath \operatorname{rec}(#1,#2)}
+\newcommand{\path}[2]{\ensuremath \operatorname{path}(#1,#2)}
+\newcommand{\one}[1]{\ensuremath \operatorname{one}(#1)}
+\newcommand{\all}[1]{\ensuremath \operatorname{all}(#1)}
+\newcommand{\some}[1]{\ensuremath \operatorname{some}(#1)}
+\newcommand{\congr}[1]{\ensuremath \operatorname{cong}(#1)}
+\newcommand{\match}[1]{\ensuremath \operatorname{match}(#1)}
+\newcommand{\build}[1]{\ensuremath \operatorname{build}(#1)}
+\newcommand{\where}[1]{\ensuremath \operatorname{where}(#1)}
+\newcommand{\test}[1]{\ensuremath \operatorname{test}(#1)}
+\newcommand{\negate}[1]{\ensuremath \operatorname{neg}(#1)}
+\newcommand{\scope}[2]{\ensuremath \operatorname{scope}(#1,#2)}
+\newcommand{\vars}[1]{\ensuremath \text{vars}(#1)}
+\newcommand{\alt}{\ensuremath \; | \;}
+\newcommand{\subst}[3]{\ensuremath #1[#2 / #3]}
+\newcommand{\transform}[5]{#1, #2 \xrightarrow{#3} #4, #5}
+\newcommand{\transformx}[4]{#1, #2 \xrightarrow{#3} #4}
+\newcommand{\transformxy}[3]{#1 \xrightarrow{#2} #3}
+\newcommand{\transformfail}[3]{#1, #2 \xrightarrow{#3} \fail}
+\newcommand{\dom}{\ensuremath \operatorname{dom}}
+\newcommand{\cod}{\ensuremath \operatorname{cod}}
+\newcommand{\cjm}{\ensuremath \xmapsto{\text{\tiny cjm}}}
+\newcommand{\mon}{\ensuremath \xmapsto{\text{\tiny mon}}}
+\newcommand{\Strat}{\ensuremath \Cat{Strat}}
+\newcommand{\Term}{\ensuremath \mathbf{Term}}
+\newcommand{\Fail}{\ensuremath \text{$\Uparrow$}}
+\newcommand{\Success}{\ensuremath \text{$\Downarrow$}}
+\newcommand{\Var}{\ensuremath \mathbf{Var}}
+\newcommand{\Constructor}{\ensuremath \Cat{Con}}
+\newcommand{\Env}{\ensuremath \Var \mapsto \Term}
+\newcommand{\Pow}{\ensuremath \mathscr{P}}
+\newcommand{\sem}[1]{\ensuremath \lBrack #1 \rBrack}
+\newcommand{\semn}[1]{\ensuremath \lBrack #1 \rBrack_{\mathcal{N}}}
+\newcommand{\semsalg}[1]{\ensuremath \lBrack #1 \rBrack_{\SAlg}}
+\newcommand{\alphan}{\ensuremath \alpha_\Naive}
+\newcommand{\Disc}[1]{\ensuremath \left\vert #1 \right\vert}
+\newcommand{\Cat}[1]{\ensuremath \mathbf{#1}}
+\newcommand{\Nat}{\ensuremath \mathbb{N}}
+\newcommand{\Hom}[1]{\ensuremath #1}
+\newcommand{\twoHom}[1]{\ensuremath #1}
+\newcommand{\State}{\ensuremath \mathbf{\Sigma} }
+\newcommand{\Statea}{\ensuremath \widehat{\State}}
+\newcommand{\setbuild}[2]{\ensuremath \{\, #1 \mid #2 \,\}}
+\newcommand{\setbuildc}[1]{\ensuremath \{\, #1 \,\}}
+\newcommand{\id}{\ensuremath \operatorname{id}}
+\newcommand{\Id}{\ensuremath \operatorname{Id}}
+\newcommand{\Rel}{\ensuremath \Cat{Rel}}
+\newcommand{\Set}{\ensuremath \Cat{Set}}
+\newcommand{\Naive}{\ensuremath \Cat{Naive}}
+\newcommand{\adjoint}{\ensuremath \dashv}
+\newcommand{\lub}{\ensuremath \bigsqcup}
+\newcommand{\glb}{\ensuremath \bigsqcap}
+\newcommand{\SAlgebra}{\ensuremath \mathcal{S}\text{-algebra}}
+\newcommand{\SAlgebras}{\ensuremath \mathcal{S}\text{-algebras}}
+\newcommand{\SAlg}{\ensuremath \Cat{SAlg}}
+\newcommand{\domain}{\ensuremath \operatorname{domain}}
+\newcommand{\lfail}{\ensuremath \operatorname{fail}}
+\newcommand{\lsucc}{\ensuremath \operatorname{succ}}
+\newcommand{\get}{\ensuremath \operatorname{get}}
+\newcommand{\map}{\ensuremath \operatorname{map}}
+\newcommand{\arity}{\ensuremath \operatorname{arity}}
+\newcommand{\arityeq}{\ensuremath \operatorname{arityeq}}
+\newcommand{\aritylt}{\ensuremath \operatorname{aritylt}}
+\newcommand{\arityneq}{\ensuremath \operatorname{arityneq}}
+\newcommand{\coneq}{\ensuremath \operatorname{coneq}}
+\newcommand{\conneq}{\ensuremath \operatorname{conneq}}
+\newcommand{\ttop}{\ensuremath \top_{\Term}}
+\newcommand{\tbot}{\ensuremath \bot_{\Term}}
+\newcommand{\comp}{\ensuremath \mathrel{\circ}}
+\newcommand{\twocomp}{\ensuremath \mathrel{\circledwhitebullet}}
+\newcommand{\Comp}{\ensuremath \mathop{\bigcirc}}
+\newcommand{\witharity}{\ensuremath \Join}
+\newcommand{\iso}{\ensuremath \cong}
+\newcommand{\lfix}{\ensuremath \operatorname{rec}}
+\newcommand{\FAlg}{\ensuremath F\text{-Alg}}
+\newcommand{\TwoAdj}{\ensuremath 2\text{-Adj}}
+\newcommand{\sendto}[2]{ \{ #1 \} \rightarrow \{ #2 \} }
+\newcommand{\asendto}[2]{ #1 \rightarrow #2 }
+\newcommand{\ontopof}[2]{ \begin{array}{c} #1 \\ #2 \end{array} }
+\newcommand{\eq}[1]{\ensuremath \operatorname{eq}_{#1}}
+\newcommand{\injl}{\ensuremath \operatorname{inj}_1}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "system-s"
+%%% End:

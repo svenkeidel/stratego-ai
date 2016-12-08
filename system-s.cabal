@@ -10,15 +10,26 @@ copyright:           Copyright (c) 2016, Sven Keidel
 category:            Language
 build-type:          Simple
 extra-source-files:  ChangeLog.md, README
-cabal-version:       >=1.10
+cabal-version:       >=1.20
 
-executable system-s
-  main-is:             Main.hs
-  -- other-modules:       
-  -- other-extensions:    
+library
+  ghc-options:         -Wall
+  exposed-modules:     Syntax,
+                       Term,
+                       Classes,
+                       Interpreter
   build-depends:       base,
                        text,
-                       mtl,
-                       transformers
+                       containers
   hs-source-dirs:      src
+  default-language:    Haskell2010
+
+test-suite specs
+  type:                exitcode-stdio-1.0
+  ghc-options:         -Wall
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base,
+                       system-s,
+                       hspec
   default-language:    Haskell2010
