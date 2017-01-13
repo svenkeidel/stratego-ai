@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
 module Classes where
 
 import Prelude hiding (fail,(.),id,sum,zipWith, curry, uncurry, flip, succ)
@@ -10,16 +11,20 @@ import Prelude hiding (fail,(.),id,sum,zipWith, curry, uncurry, flip, succ)
 import           Control.Arrow
 import           Control.Category
 
-type CCC p = (Arrow p, ArrowChoice p, Exponentials p)
+class Arrow p => Products p where
+  p1 :: p (a,b) a
+  p2 :: p (a,b) b
+
+type CCC p = (Arrow p, ArrowChoice p, Exponentials p, Products p)
 
 class Arrow p => Try p where
   success :: p a a
   fail :: p t a
   try :: p a b -> p b c -> p a c ->  p a c
               
-class TermEnv env p | p -> env where
-  getTermEnv :: p () env
-  putTermEnv :: p env ()
+class TermEnv m p | p -> m where
+  getTermEnv :: p () m
+  putTermEnv :: p m ()
 
 class Arrow p => HasLists p where
   -- nil ||| cons is an isomorphism:
@@ -71,7 +76,7 @@ class Exponentials p where
   uncurry :: p a (p b c) -> p (a,b) c
   eval :: p (p a b, a) b
 
-primRec :: (Arrow p, HasNumbers p) => p () a -> p (Nat,a) a -> p Nat a
+primRec :: (Products p, HasNumbers p) => p () a -> p (Nat,a) a -> p Nat a
 primRec f g = foldNat (zero &&& f) ((succ . p1) &&& g) >>> p2
 {-# INLINE primRec #-}
 
@@ -85,14 +90,6 @@ in1 = arr Left
 in2 :: Arrow p => p b (Either a b)
 in2 = arr Right
 
-p1 :: Arrow p => p (a,b) a
-p1 = arr fst
-{-# INLINE p1 #-}
-
-p2 :: Arrow p => p (a,b) b
-p2 = arr snd
-{-# INLINE p2 #-}
-
 true :: Arrow p => p a Bool
 true = arr (const True)
 {-# INLINE true #-}
@@ -101,7 +98,7 @@ false :: Arrow p => p a Bool
 false = arr (const False)
 {-# INLINE false #-}
 
-assoc :: Arrow p => p (a,(b,c)) ((a,b),c)
+assoc :: (Products p) => p (a,(b,c)) ((a,b),c)
 assoc = (p1 &&& (p1 . p2)) &&& (p2 . p2)
 {-# INLINE assoc #-}
 
@@ -115,8 +112,17 @@ distribute = first (curry in1 ||| curry in2) >>> eval
 distribute' :: (CCC p) => p (a, Either b c) (Either (a,b) (a,c))
 distribute' = flip >>> distribute >>> (flip +++ flip)
 
-flip :: Arrow p => p (a,b) (b,a)
+flip :: Products p => p (a,b) (b,a)
 flip = p2 &&& p1
+
+mapA :: (CCC p, HasLists p) => p a b -> p [a] [b]
+mapA f = foldList nil (first f >>> cons)
+
+zipWith :: (CCC p, HasLists p) => p (a,b) c -> p ([a],[b]) [c]
+zipWith f = arr (\ x -> case x of
+  (a : as, b : bs) -> Left ((a,b), (as, bs))
+  (_, _)           -> Right ())
+  >>> (f *** zipWith f >>> cons) ||| nil
 
 instance HasLists (->) where
   foldList f _ [] = f ()

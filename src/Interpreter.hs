@@ -21,7 +21,7 @@ import qualified Data.Map as M
 
 type StratEnv = Map StratVar Strat
 
-test :: Try p => p a a -> p a a
+test :: (Products p, Try p) => p a a -> p a a
 test f = (id &&& id) >>> try (second f) (p1 >>> success) fail
 {-# INLINE test #-}
 
@@ -102,15 +102,6 @@ nth :: (CCC p, Try p, HasLists p, HasNumbers p) => p a a -> p (Nat,[a]) [a]
 nth f = primRec' (matchList >>> (fail ||| (first f >>> cons)))
                  (p2 >>> curry (second (matchList >>> (fail ||| id)) >>> shuffle >>> second eval >>> cons))
   where
-    shuffle :: Arrow p => p (a,(b,c)) (b,(a,c))
+    shuffle :: Products p => p (a,(b,c)) (b,(a,c))
     shuffle = p1.p2 &&& p1 &&& p2.p2
 {-# NOINLINE nth #-}
-
-mapA :: (CCC p, HasLists p) => p a b -> p [a] [b]
-mapA f = foldList nil (first f >>> cons)
-
-zipWith :: (CCC p, HasLists p) => p (a,b) c -> p ([a],[b]) [c]
-zipWith f = arr (\ x -> case x of
-  (a : as, b : bs) -> Left ((a,b), (as, bs))
-  (_, _)           -> Right ())
-  >>> (f *** zipWith f >>> cons) ||| nil

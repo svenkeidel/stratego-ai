@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes#-}
 module ConcreteSemantics where
 
-import Prelude hiding (fail,sequence,all,uncurry,zipWith)
+import Prelude hiding (id,(.),fail,sequence,all,uncurry,zipWith)
 
 import Term (Constructor,TermVar,Term)
 import qualified Term as T
@@ -17,14 +19,13 @@ import Control.Monad hiding (fail,sequence)
 import Control.Category
 import Control.Arrow
 
-import Data.Semigroup ((<>))
 import Data.Map (Map)
 import qualified Data.Map as M
 
+
 data ClosedTerm = Cons Constructor [ClosedTerm] deriving Eq
 data Result a = Success a | Fail
-newtype Interp a b = Interp {runInterp :: (a,Env) -> Result (b,Env)}
-type Env = Map TermVar ClosedTerm
+newtype Interp a b = Interp {runInterp :: (a,Environment) -> Result (b,Environment)}
 
 interp :: StratEnv -> Strat -> Interp ClosedTerm ClosedTerm
 interp env s0 = case s0 of
@@ -78,6 +79,11 @@ lift p = proc (Cons c ts) -> do
   (c',ts') <- p -< (c,ts)
   returnA -< Cons c' ts'
 
+-- Instances -----------------------------------------------------------------------------------------
+
+type Env = Map TermVar ClosedTerm
+data Environment = Singleton Env | Product Environment Environment
+
 instance Show ClosedTerm where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
 
@@ -104,13 +110,19 @@ instance Arrow Interp where
   first f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
   second f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
   f &&& g = Interp $ \x -> case (runInterp f x,runInterp g x) of
-    (Success (b,e'),Success (c,e'')) -> Success ((b,c),e' <> e'')
-    (Fail,_) -> Fail
-    (_,Fail) -> Fail
+    (Success (b,e'),Success (c,e'')) -> Success ((b,c),Product e' e'')
+    (_,_) -> Fail
   f *** g = Interp $ \((a,b),e) -> case (runInterp f (a,e), runInterp g (b,e)) of
-    (Success (c,e'),Success (d,e'')) -> Success ((c,d),e' <> e'')
-    (Fail,_) -> Fail
-    (_,Fail) -> Fail
+    (Success (c,e'),Success (d,e'')) -> Success ((c,d),Product e' e'')
+    (_,_) -> Fail
+
+instance Products Interp where
+  p1 = Interp $ \((a,_),e) -> case e of
+    Product e1 _ -> Success (a,e1)
+    _ -> Fail
+  p2 = Interp $ \((_,b),e) -> case e of
+    Product _ e2 -> Success (b,e2)
+    _ -> Fail
 
 instance ArrowChoice Interp where
   left f = Interp $ \(a,e) -> case a of
@@ -140,11 +152,26 @@ instance ArrowPlus Interp where
     (_,_) -> Fail
 
 instance TermEnv (Map TermVar ClosedTerm) Interp where
-  getTermEnv = Interp $ \((),e) -> Success (e,e)
-  putTermEnv = Interp $ \(e,_) -> Success ((),e)
+  getTermEnv = Interp $ \((),e) -> case e of
+    Singleton e' -> Success (e',e)
+    _ -> Fail
+  putTermEnv = Interp $ \(e,_) -> Success ((),Singleton e)
 
 instance HasLists Interp where
+  foldList f g = Interp $ \(xs,e) -> case xs of
+    (a:as) -> do
+      (b,e') <- runInterp (foldList f g) (as,e)
+      runInterp g ((a,b),e')
+    [] -> runInterp f ((),e)
 
 instance HasNumbers Interp where
+  foldNat f g = Interp $ \(n,e) -> case n of
+    0 -> runInterp f ((),e)
+    _ -> (runInterp (foldNat f g) >=> runInterp g) (n-1,e)
 
 instance Exponentials Interp where
+  curry f = Interp $ \(a,e) -> return (Interp $ \(b,e') -> runInterp f ((a,b),e'), e)
+  uncurry f = Interp $ \((a,b),e) -> do
+    (f',e') <- runInterp f (a,e)
+    runInterp f' (b,e')
+  eval = Interp $ \((f,a),e) -> runInterp f (a,e)
