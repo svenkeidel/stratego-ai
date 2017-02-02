@@ -3,17 +3,17 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes#-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 module ConcreteSemantics where
 
 import Prelude hiding (id,(.),fail,sequence,all,uncurry,zipWith)
 
-import Term (Constructor,TermVar,Term)
-import qualified Term as T
-import Syntax hiding (Fail)
+import Syntax hiding (Fail,TermPattern(..))
+import Syntax (TermPattern)
 import qualified Syntax as S
 import Interpreter
-import Classes
+import Result
 
 import Control.Monad hiding (fail,sequence)
 import Control.Category
@@ -21,157 +21,175 @@ import Control.Arrow
 
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Text (Text)
 
+data ClosedTerm
+  = Cons Constructor [ClosedTerm]
+  | StringLiteral Text
+  | NumberLiteral Int
+  deriving Eq
+newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Result (b,TermEnv) }
 
-data ClosedTerm = Cons Constructor [ClosedTerm] deriving Eq
-data Result a = Success a | Fail
-newtype Interp a b = Interp {runInterp :: (a,Environment) -> Result (b,Environment)}
-
-interp :: StratEnv -> Strat -> Interp ClosedTerm ClosedTerm
-interp env s0 = case s0 of
-  Test s -> test (interp env s)
-  Neg s -> neg (interp env s)
+interp :: Strat -> Interp ClosedTerm ClosedTerm
+interp s0 = case s0 of
   S.Fail -> fail
-  Id -> success
-  Seq s1 s2 -> sequence (interp env s1) (interp env s2)
-  Choice s1 s2 -> choice (interp env s1) (interp env s2)
-  LeftChoice s1 s2 -> leftChoice (interp env s1) (interp env s2)
-  Rec x s -> recur env x s (`interp` s)
-  RecVar x -> var env x (interp env)
-  Path i s -> lift (path i (interp env s))
-  Cong c ss -> lift (cong c (interp env <$> ss))
-  One s -> lift (one (interp env s))
-  Some s -> lift (some (interp env s))
-  All s -> lift (all (interp env s))
-  Scope xs s -> scope xs (interp env s)
+  Id -> id
+  Seq s1 s2 -> sequence (interp s1) (interp s2)
+  GuardedChoice s1 s2 s3 -> guardedChoice (interp s1) (interp s2) (interp s3)
+  One s -> lift (one (interp s))
+  Some s -> lift (some (interp s))
+  All s -> lift (all (interp s))
+  Scope xs s -> scope xs (interp s)
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
+  Let ss body -> let_ ss (interp body)
+  Call f ss ps -> call f ss ps interp
 
-match :: (CCC p, Try p, TermEnv Env p, HasLists p) => p (Term TermVar,ClosedTerm) ClosedTerm
-match = proc (f,t@(Cons c ts)) -> case f of
-  T.Var x -> do
+match :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p (TermPattern, ClosedTerm) ClosedTerm
+match = proc (p,t) -> case p of
+  S.Var "_" -> success -< t
+  S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
-      Just t' | t' == t -> success -< t
-              | otherwise -> fail -< ()
+      Just t' -> unify -< (t,t')
       Nothing -> do
-        putTermEnv -< env
+        putTermEnv -< M.insert x t env
         success -< t
-  T.Cons c' ts'
-    | c /= c' || length ts /= length ts' -> fail -< ()
-    | otherwise -> do
-       ts'' <- zipWith match -< (ts',ts)
-       returnA -< Cons c ts''
+  S.Cons c ts -> case t of
+    Cons c' ts'
+      | c == c' || length ts == length ts' -> do
+          ts'' <- zipWith match -< (ts,ts')
+          success -< Cons c ts''
+      | otherwise -> fail -< ()
+    _ -> fail -< ()
+  S.Explode c ts -> case t of
+    Cons (Constructor c') ts' -> do
+      _ <- match -< (c,StringLiteral c')
+      _ <- match -< (ts, convertToList ts')
+      success -< t
+    _ -> fail -< ()
+  S.StringLiteral s -> case t of
+    StringLiteral s'
+      | s == s' -> success -< t
+      | otherwise -> fail -< ()
+    _ -> fail -< ()
+  S.NumberLiteral n -> case t of
+    NumberLiteral n'
+      | n == n' -> success -< t
+      | otherwise -> fail -< ()
+    _ -> fail -< ()
 
-build :: (CCC p, Try p,TermEnv (Map TermVar ClosedTerm) p, HasLists p) => p (Term TermVar) ClosedTerm
-build = proc f -> case f of
-  (T.Var x) -> do
+unify :: (ArrowChoice p, Try p) => p (ClosedTerm,ClosedTerm) ClosedTerm
+unify = proc (t1,t2) -> case (t1,t2) of
+  (Cons c ts,Cons c' ts')
+    | c == c' || length ts == length ts' -> do
+      ts'' <- zipWith unify -< (ts,ts')
+      returnA -< Cons c ts''
+    | otherwise -> fail -< ()
+  (StringLiteral s, StringLiteral s')
+    | s == s' -> success -< t1
+    | otherwise -> fail -< ()
+  (NumberLiteral n, NumberLiteral n')
+    | n == n' -> success -< t1
+    | otherwise -> fail -< ()
+  (_,_) -> fail -< ()
+
+
+build :: (ArrowChoice p, Try p, HasTermEnv (Map TermVar ClosedTerm) p) => p TermPattern ClosedTerm
+build = proc p -> case p of
+  S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
       Nothing -> fail -< ()
       Just t -> success -< t
-  (T.Cons c ts) -> do
+  S.Cons c ts -> do
     ts' <- mapA build -< ts
-    returnA -< (Cons c ts')
+    returnA -< Cons c ts'
+  S.Explode c ts -> do
+    c' <- build -< c
+    case c' of
+      StringLiteral s -> do
+        ts' <- build -< ts
+        ts'' <- convertFromList -< ts'
+        returnA -< Cons (Constructor s) ts''
+      _ -> fail -< ()
+  S.NumberLiteral n -> returnA -< NumberLiteral n
+  S.StringLiteral s -> returnA -< StringLiteral s
 
-lift :: Arrow p => p (Constructor,[ClosedTerm]) (Constructor,[ClosedTerm]) -> p ClosedTerm ClosedTerm
-lift p = proc (Cons c ts) -> do
-  (c',ts') <- p -< (c,ts)
-  returnA -< Cons c' ts'
+convertToList :: [ClosedTerm] -> ClosedTerm
+convertToList ts = case ts of
+  (x:xs) -> Cons "Cons" [x,convertToList xs]
+  [] -> Cons "Nil" []
+
+convertFromList :: (ArrowChoice p, Try p) => p ClosedTerm [ClosedTerm]
+convertFromList = proc t -> case t of
+  Cons "Cons" [x,tl] -> do
+    xs <- convertFromList -< tl
+    returnA -< x:xs
+  Cons "Nil" [] ->
+    returnA -< []
+  _ -> fail -< ()
+
+lift :: ArrowChoice p => p (Constructor,[ClosedTerm]) (Constructor,[ClosedTerm]) -> p ClosedTerm ClosedTerm
+lift p = proc t -> case t of
+  Cons c ts -> do
+    (c',ts') <- p -< (c,ts)
+    returnA -< Cons c' ts'
+  StringLiteral {} -> returnA -< t
+  NumberLiteral {} -> returnA -< t
 
 -- Instances -----------------------------------------------------------------------------------------
 
-type Env = Map TermVar ClosedTerm
-data Environment = Singleton Env | Product Environment Environment
+type TermEnv = Map TermVar ClosedTerm
 
 instance Show ClosedTerm where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
-
-instance Functor Result where
-  fmap f (Success a) = Success (f a)
-  fmap _ Fail = Fail
-
-instance Applicative Result where
-  pure = return
-  (<*>) = ap
-
-instance Monad Result where
-  return = Success
-  f >>= k = case f of
-    Success a -> k a
-    Fail -> Fail
+  show (StringLiteral s) = show s
+  show (NumberLiteral n) = show n
 
 instance Category Interp where
-  id = Interp Success
-  f . g = Interp $ runInterp g >=> runInterp f
+  id = Interp (const Success)
+  f . g = Interp $ \senv -> runInterp g senv >=> runInterp f senv
 
 instance Arrow Interp where
-  arr f = Interp (\(a,e) -> Success (f a, e))
-  first f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
-  second f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
-  f &&& g = Interp $ \x -> case (runInterp f x,runInterp g x) of
-    (Success (b,e'),Success (c,e'')) -> Success ((b,c),Product e' e'')
-    (_,_) -> Fail
-  f *** g = Interp $ \((a,b),e) -> case (runInterp f (a,e), runInterp g (b,e)) of
-    (Success (c,e'),Success (d,e'')) -> Success ((c,d),Product e' e'')
-    (_,_) -> Fail
-
-instance Products Interp where
-  p1 = Interp $ \((a,_),e) -> case e of
-    Product e1 _ -> Success (a,e1)
-    _ -> Fail
-  p2 = Interp $ \((_,b),e) -> case e of
-    Product _ e2 -> Success (b,e2)
-    _ -> Fail
+  arr f = Interp (\_ (a,e) -> Success (f a, e))
+  first f = Interp $ \senv ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f senv (a,e))
+  second f = Interp $ \senv ((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f senv (b,e))
 
 instance ArrowChoice Interp where
-  left f = Interp $ \(a,e) -> case a of
-    Left b -> fmap (first Left) (runInterp f (b,e))
+  left f = Interp $ \senv (a,e) -> case a of
+    Left b -> fmap (first Left) (runInterp f senv (b,e))
     Right c -> Success (Right c,e)
-  right f = Interp $ \(a,e) -> case a of
+  right f = Interp $ \senv (a,e) -> case a of
     Left c -> Success (Left c,e)
-    Right b -> fmap (first Right) (runInterp f (b,e))
-  f +++ g = Interp $ \(a,e) -> case a of
-    Left b  -> fmap (first Left)  (runInterp f (b,e))
-    Right b -> fmap (first Right) (runInterp g (b,e))
+    Right b -> fmap (first Right) (runInterp f senv (b,e))
+  f +++ g = Interp $ \senv (a,e) -> case a of
+    Left b  -> fmap (first Left)  (runInterp f senv (b,e))
+    Right b -> fmap (first Right) (runInterp g senv (b,e))
 
 instance Try Interp where
-  success = Interp Success
-  fail = Interp (const Fail)
-  try t s f = Interp $ \(a,e) -> case runInterp t (a,e) of
-    Success (b,e') -> runInterp s (b,e')
-    Fail -> runInterp f (a,e)
+  success = Interp (const Success)
+  fail = Interp (const (const Fail))
+  try t s f = Interp $ \senv (a,e) -> case runInterp t senv (a,e) of
+    Success (b,e') -> runInterp s senv (b,e')
+    Fail -> runInterp f senv (a,e)
 
 instance ArrowZero Interp where
-  zeroArrow = Interp (const Fail)
+  zeroArrow = Interp (const (const Fail))
 
 instance ArrowPlus Interp where
-  f <+> g = Interp $ \x -> case (runInterp f x,runInterp g x) of
+  f <+> g = Interp $ \senv x -> case (runInterp f senv x,runInterp g senv x) of
     (Success y,_) -> Success y
     (_,Success y) -> Success y
     (_,_) -> Fail
 
-instance TermEnv (Map TermVar ClosedTerm) Interp where
-  getTermEnv = Interp $ \((),e) -> case e of
-    Singleton e' -> Success (e',e)
-    _ -> Fail
-  putTermEnv = Interp $ \(e,_) -> Success ((),Singleton e)
+instance ArrowApply Interp where
+  app = undefined
 
-instance HasLists Interp where
-  foldList f g = Interp $ \(xs,e) -> case xs of
-    (a:as) -> do
-      (b,e') <- runInterp (foldList f g) (as,e)
-      runInterp g ((a,b),e')
-    [] -> runInterp f ((),e)
+instance HasTermEnv (Map TermVar ClosedTerm) Interp where
+  getTermEnv = Interp $ \_ ((),e) -> Success (e,e)
+  putTermEnv = Interp $ \_ (e,_) -> Success ((),Singleton e)
 
-instance HasNumbers Interp where
-  foldNat f g = Interp $ \(n,e) -> case n of
-    0 -> runInterp f ((),e)
-    _ -> (runInterp (foldNat f g) >=> runInterp g) (n-1,e)
-
-instance Exponentials Interp where
-  curry f = Interp $ \(a,e) -> return (Interp $ \(b,e') -> runInterp f ((a,b),e'), e)
-  uncurry f = Interp $ \((a,b),e) -> do
-    (f',e') <- runInterp f (a,e)
-    runInterp f' (b,e')
-  eval = Interp $ \((f,a),e) -> runInterp f (a,e)
+instance HasStratEnv Interp where
+  readStratEnv = Interp $ \senv (_,e) -> return (senv,e)
+  localStratEnv f = Interp $ \_ ((a,senv'),e) -> runInterp f senv' (a,e)

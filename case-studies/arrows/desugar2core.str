@@ -1,0 +1,760 @@
+specification
+
+signature
+  constructors
+    Cons         : a * List(a) -> List(a)
+    Tuple        : Pat() * List(Pat()) -> APat()
+    Constr       : Gcon() -> Exp()
+    VarFunLHS    : Var() * List(APat()) -> FunLHS()
+    ECons        : Exp() * List(Exp()) -> Exps2()
+    ArrOpApp     : ArrCommand() * Qop() * ArrCommand() -> ArrCommand()
+    ArrForm      : Exp() * List(ArrCommand()) -> ArrCommand()
+    ArrAppBin    : ArrCommand() * Exp() -> ArrCommand()
+    ArrDo        : ArrStmtList() -> ArrCommand()
+    ArrIf        : Exp() * ArrCommand() * ArrCommand() -> ArrCommand()
+    ArrLet       : Declbinds() * ArrCommand() -> ArrCommand()
+    ArrAbs       : Fargs() * ArrCommand() -> ArrCommand()
+    ArrHigher    : Exp() * Exp() -> ArrCommand()
+    ArrFirst     : Exp() * Exp() -> ArrCommand()
+    OpApp        : Exp() * Qop() * Exp() -> Exp()
+    AppBin       : Exp() * Exp() -> Exp()
+    If           : AnyExp() * AnyExp() * Exp() -> Exp()
+    Let          : Declbinds() * Exp() -> Exp()
+    Abs          : Fargs() * Exp() -> Exp()
+    Product      : Exps2() -> Exp()
+    Var          : Varid() -> Var()
+    ArrProcedure : APat() * ArrCommand() -> Exp()
+    ArrStmtSeq   : ArrStmt() * ArrExplStmtList() -> ArrExplStmtList()
+    ArrStmtList  : ArrExplStmtList() -> ArrStmtList()
+    ArrCmdStmt   : ArrCommand() -> ArrStmt()
+    ArrBindStmt  : Pat() * ArrCommand() -> ArrStmt()
+    ArrLetStmt   : Declbinds() -> ArrStmt()
+    BinCon       : Qconsym() -> Qcon()
+    Unit         : Gcon()
+    Nil          : List(a)
+                 : a * b -> Tuple(Cons(a, Cons(b, Nil())))
+
+
+strategies
+  desugar_arrow_0_0(|) =
+    {n_11, o_11, p_11, q_11, r_11, t_11, s_11, u_11:
+      ?ArrProcedure(o_11, n_11)
+      ; ?q_11
+      ; !o_11
+      ; free_pat_vars_0_0
+      ; ?p_11
+      ; !q_11
+      ; ?t_11
+      ; !p_11
+      ; tuple_0_0
+      ; ?r_11
+      ; !t_11
+      ; ?u_11
+      ; !n_11
+      ; desugar_arrow_p__0_1(|p_11)
+      ; ?s_11
+      ; !u_11
+      ; !OpApp(
+           AppBin(
+             Var("arr"{}){}
+           , Abs([o_11|[]{}]{}, r_11){}
+           ){}
+         , ">>>"{}
+         , s_11
+         ){}
+    }
+
+  desugar_arrow_p__0_1(|l_30 : ATerm()) =
+    {h_16, i_16, j_16, k_16:
+      ?ArrFirst(i_16, h_16)
+      ; ?k_16
+      ; !l_30
+      ; tuple_pat_0_0
+      ; ?j_16
+      ; !k_16
+      ; !OpApp(
+           AppBin(
+             Var("arr"{}){}
+           , Abs([j_16|[]{}]{}, h_16){}
+           ){}
+         , ">>>"{}
+         , i_16
+         ){}
+    }
+    < id
+    + {c_16, d_16, e_16, f_16:
+        ?ArrHigher(c_16, d_16)
+        ; ?f_16
+        ; !l_30
+        ; tuple_pat_0_0
+        ; ?e_16
+        ; !f_16
+        ; !OpApp(
+             AppBin(
+               Var("arr"{}){}
+             , Abs(
+                 [e_16|[]{}]{}
+               , Product(
+                   ECons(c_16, [d_16|[]{}]{}){}
+                 ){}
+               ){}
+             ){}
+           , ">>>"{}
+           , Var("app"{}){}
+           ){}
+      }
+      < id
+      + {o_15, p_15, q_15, r_15, w_15, s_15, x_15, t_15, y_15, u_15, z_15, v_15, a_16:
+          ?ArrIf(o_15, p_15, q_15)
+          ; ?w_15
+          ; !l_30
+          ; tuple_pat_0_0
+          ; ?r_15
+          ; !w_15
+          ; ?x_15
+          ; !l_30
+          ; tuple_0_0
+          ; ?s_15
+          ; !x_15
+          ; ?y_15
+          ; !l_30
+          ; tuple_0_0
+          ; ?t_15
+          ; !y_15
+          ; ?z_15
+          ; !p_15
+          ; desugar_arrow_p__0_1(|l_30)
+          ; ?u_15
+          ; !z_15
+          ; ?a_16
+          ; !q_15
+          ; desugar_arrow_p__0_1(|l_30)
+          ; ?v_15
+          ; !a_16
+          ; !OpApp(
+               AppBin(
+                 Var("arr"{}){}
+               , Abs(
+                   [r_15|[]{}]{}
+                 , If(
+                     o_15
+                   , AppBin(Constr("Left"{}){}, s_15){}
+                   , AppBin(Constr("Right"{}){}, t_15){}
+                   ){}
+                 ){}
+               ){}
+             , ">>>"{}
+             , OpApp(u_15, "|||"{}, v_15){}
+             ){}
+        }
+        < id
+        + {c_15, d_15, e_15, f_15, g_15, h_15, k_15, i_15, l_15, j_15, m_15:
+            ?ArrLet(d_15, c_15)
+            ; ?g_15
+            ; !d_15
+            ; free_decls_vars_0_0
+            ; ?e_15
+            ; !(l_30, e_15){}
+            ; conc_0_0
+            ; ?f_15
+            ; !g_15
+            ; ?k_15
+            ; !l_30
+            ; tuple_pat_0_0
+            ; ?h_15
+            ; !k_15
+            ; ?l_15
+            ; !f_15
+            ; tuple_0_0
+            ; ?i_15
+            ; !l_15
+            ; ?m_15
+            ; !c_15
+            ; desugar_arrow_p__0_1(|f_15)
+            ; ?j_15
+            ; !m_15
+            ; !OpApp(
+                 AppBin(
+                   Var("arr"{}){}
+                 , Abs(
+                     [h_15|[]{}]{}
+                   , Let(d_15, i_15){}
+                   ){}
+                 ){}
+               , ">>>"{}
+               , j_15
+               ){}
+          }
+          < id
+          + {q_14, r_14, s_14, t_14, u_14, v_14, y_14, w_14, z_14, x_14, a_15:
+              ?ArrAbs([r_14|[]], q_14)
+              ; ?u_14
+              ; !r_14
+              ; free_pat_vars_0_0
+              ; ?s_14
+              ; !(l_30, s_14){}
+              ; conc_0_0
+              ; ?t_14
+              ; !u_14
+              ; ?y_14
+              ; !l_30
+              ; tuple_pat_0_0
+              ; ?v_14
+              ; !y_14
+              ; ?z_14
+              ; !t_14
+              ; tuple_0_0
+              ; ?w_14
+              ; !z_14
+              ; ?a_15
+              ; !q_14
+              ; desugar_arrow_p__0_1(|t_14)
+              ; ?x_14
+              ; !a_15
+              ; !OpApp(
+                   AppBin(
+                     Var("arr"{}){}
+                   , Abs(
+                       [Tuple(
+                          v_14
+                        , [Var("p"{}){}|[]{}]{}
+                        ){}|[]{}]{}
+                     , w_14
+                     ){}
+                   ){}
+                 , ">>>"{}
+                 , x_14
+                 ){}
+            }
+            < id
+            + {h_14, i_14, j_14, m_14, k_14, n_14, l_14, o_14:
+                ?ArrAppBin(i_14, h_14)
+                ; ?m_14
+                ; !l_30
+                ; tuple_pat_0_0
+                ; ?j_14
+                ; !m_14
+                ; ?n_14
+                ; !l_30
+                ; tuple_0_0
+                ; ?k_14
+                ; !n_14
+                ; ?o_14
+                ; !i_14
+                ; desugar_arrow_p__0_1(|l_30)
+                ; ?l_14
+                ; !o_14
+                ; !OpApp(
+                     AppBin(
+                       Var("arr"{}){}
+                     , Abs(
+                         [j_14|[]{}]{}
+                       , Product(
+                           ECons(k_14, [h_14|[]{}]{}){}
+                         ){}
+                       ){}
+                     ){}
+                   , ">>>"{}
+                   , l_14
+                   ){}
+              }
+              < id
+              + {w_13, x_13, y_13, z_13, a_14, c_14, b_14, d_14, e_14, f_14:
+                  ?ArrForm(w_13, x_13)
+                  ; ?z_13
+                  ; ?c_14
+                  ; !l_30
+                  ; tuple_pat_0_0
+                  ; ?a_14
+                  ; !c_14
+                  ; ?d_14
+                  ; !l_30
+                  ; tuple_0_0
+                  ; ?b_14
+                  ; !d_14
+                  ; !Abs([a_14|[]{}]{}, b_14){}
+                  ; ?y_13
+                  ; !z_13
+                  ; ?f_14
+                  ; !x_13
+                  ; map_1_0(desugar_arrow_p__0_1(|l_30)|)
+                  ; ?e_14
+                  ; !f_14
+                  ; !(w_13, e_14){}
+                  ; apply_all_0_1(|y_13)
+                }
+                < id
+                + {s_13, t_13, u_13:
+                    ?ArrOpApp(t_13, s_13, u_13)
+                    ; !ArrForm(
+                         BinCon(s_13){}
+                       , [t_13|[u_13|[]{}]{}]{}
+                       ){}
+                    ; desugar_arrow_p__0_1(|l_30)
+                  }
+                  < id
+                  + {q_13:
+                      ?ArrDo(ArrStmtList(ArrCmdStmt(q_13)))
+                      ; !q_13
+                      ; desugar_arrow_p__0_1(|l_30)
+                    }
+                    < id
+                    + {e_13, f_13, g_13, h_13, i_13, j_13, m_13, k_13, n_13, l_13, o_13:
+                        ?ArrDo(
+                           ArrStmtList(ArrStmtSeq(ArrLetStmt(f_13), e_13))
+                         )
+                        ; ?i_13
+                        ; !f_13
+                        ; free_decls_vars_0_0
+                        ; ?g_13
+                        ; !(l_30, g_13){}
+                        ; conc_0_0
+                        ; ?h_13
+                        ; !i_13
+                        ; ?m_13
+                        ; !l_30
+                        ; tuple_pat_0_0
+                        ; ?j_13
+                        ; !m_13
+                        ; ?n_13
+                        ; !h_13
+                        ; tuple_0_0
+                        ; ?k_13
+                        ; !n_13
+                        ; ?o_13
+                        ; !ArrDo(ArrStmtList(e_13){}){}
+                        ; desugar_arrow_p__0_1(|h_13)
+                        ; ?l_13
+                        ; !o_13
+                        ; !OpApp(
+                             AppBin(
+                               Var("arr"{}){}
+                             , Abs(
+                                 [j_13|[]{}]{}
+                               , Let(f_13, k_13){}
+                               ){}
+                             ){}
+                           , ">>>"{}
+                           , l_13
+                           ){}
+                      }
+                      < id
+                      + {r_12, s_12, t_12, y_12, u_12, z_12, v_12, a_13, w_12, b_13, x_12, c_13:
+                          ?ArrDo(
+                             ArrStmtList(ArrStmtSeq(ArrCmdStmt(r_12), s_12))
+                           )
+                          ; ?y_12
+                          ; !l_30
+                          ; tuple_pat_0_0
+                          ; ?t_12
+                          ; !y_12
+                          ; ?z_12
+                          ; !l_30
+                          ; tuple_0_0
+                          ; ?u_12
+                          ; !z_12
+                          ; ?a_13
+                          ; !l_30
+                          ; tuple_0_0
+                          ; ?v_12
+                          ; !a_13
+                          ; ?b_13
+                          ; !r_12
+                          ; desugar_arrow_p__0_1(|l_30)
+                          ; ?w_12
+                          ; !b_13
+                          ; ?c_13
+                          ; !ArrDo(ArrStmtList(s_12){}){}
+                          ; desugar_arrow_p__0_1(|l_30)
+                          ; ?x_12
+                          ; !c_13
+                          ; !OpApp(
+                               AppBin(
+                                 Var("arr"{}){}
+                               , Abs(
+                                   [t_12|[]{}]{}
+                                 , Product(
+                                     ECons(u_12, [v_12|[]{}]{}){}
+                                   ){}
+                                 ){}
+                               ){}
+                             , ">>>"{}
+                             , OpApp(
+                                 AppBin(Var("first"{}){}, w_12){}
+                               , ">>>"{}
+                               , OpApp(
+                                   AppBin(
+                                     Var("arr"{}){}
+                                   , Var("snd"{}){}
+                                   ){}
+                                 , ">>>"{}
+                                 , x_12
+                                 ){}
+                               ){}
+                             ){}
+                        }
+                        < id
+                        + {w_11, x_11, y_11, z_11, a_12, b_12, c_12, j_12, d_12, k_12, e_12, l_12, f_12, m_12, g_12, n_12, h_12, o_12, i_12, p_12:
+                            ?ArrDo(
+                               ArrStmtList(
+                                 ArrStmtSeq(ArrBindStmt(y_11, w_11), x_11)
+                               )
+                             )
+                            ; ?b_12
+                            ; !y_11
+                            ; free_pat_vars_0_0
+                            ; ?z_11
+                            ; !(z_11, l_30){}
+                            ; conc_0_0
+                            ; ?a_12
+                            ; !b_12
+                            ; ?j_12
+                            ; !l_30
+                            ; tuple_pat_0_0
+                            ; ?c_12
+                            ; !j_12
+                            ; ?k_12
+                            ; !l_30
+                            ; tuple_0_0
+                            ; ?d_12
+                            ; !k_12
+                            ; ?l_12
+                            ; !l_30
+                            ; tuple_0_0
+                            ; ?e_12
+                            ; !l_12
+                            ; ?m_12
+                            ; !w_11
+                            ; desugar_arrow_p__0_1(|l_30)
+                            ; ?f_12
+                            ; !m_12
+                            ; ?n_12
+                            ; !l_30
+                            ; tuple_pat_0_0
+                            ; ?g_12
+                            ; !n_12
+                            ; ?o_12
+                            ; !a_12
+                            ; tuple_0_0
+                            ; ?h_12
+                            ; !o_12
+                            ; ?p_12
+                            ; !ArrDo(ArrStmtList(x_11){}){}
+                            ; desugar_arrow_p__0_1(|a_12)
+                            ; ?i_12
+                            ; !p_12
+                            ; !OpApp(
+                                 AppBin(
+                                   Var("arr"{}){}
+                                 , Abs(
+                                     [c_12|[]{}]{}
+                                   , Product(
+                                       ECons(d_12, [e_12|[]{}]{}){}
+                                     ){}
+                                   ){}
+                                 ){}
+                               , ">>>"{}
+                               , OpApp(
+                                   AppBin(Var("first"{}){}, f_12){}
+                                 , ">>>"{}
+                                 , OpApp(
+                                     AppBin(
+                                       Var("arr"{}){}
+                                     , Abs(
+                                         [Tuple(y_11, [g_12|[]{}]{}){}|[]{}]{}
+                                       , h_12
+                                       ){}
+                                     ){}
+                                   , ">>>"{}
+                                   , i_12
+                                   ){}
+                                 ){}
+                               ){}
+                          }
+
+  tuple_pat_0_0(|) =
+    ?[]
+    ; !Constr(Unit(){}){}
+    < id
+    + {n_16:
+        ?[n_16|[]] ; !n_16
+      }
+      < id
+      + {l_16, m_16:
+          ?[l_16|m_16]
+          ; !Tuple(l_16, m_16){}
+        }
+
+  tuple_0_0(|) =
+    ?[]
+    ; !Constr(Unit(){}){}
+    < id
+    + {q_16:
+        ?[q_16|[]] ; !q_16
+      }
+      < id
+      + {o_16, p_16:
+          ?[o_16|p_16]
+          ; !Product(ECons(o_16, p_16){}){}
+        }
+
+  free_pat_vars_0_0(|) =
+    collect_all_1_0(?Var(_)|)
+
+  free_decls_vars_0_0(|) =
+    collect_all_3_0(
+      ?Var(_)
+    , union_0_0
+    , {r_16 :
+       ?VarFunLHS(r_16, _) ; !r_16}
+    |
+    )
+
+  apply_all_0_1(|m_30 : ATerm()) =
+    {x_16:
+      ?(x_16, []) ; !x_16
+    }
+    < id
+    + {t_16, u_16, v_16:
+        ?(t_16, [u_16|v_16])
+        ; !( AppBin(
+               t_16
+             , OpApp(
+                 AppBin(Var("arr"{}){}, m_30){}
+               , ">>>"{}
+               , u_16
+               ){}
+             ){}
+           , v_16
+           ){}
+        ; apply_all_0_1(|m_30)
+      }
+
+  map_1_0(d_17 : ATerm() -> ATerm()|) =
+    let e_17(|) =
+          ?[]
+          < id
+          + {y_16, z_16, a_17, b_17, c_17:
+              ?[y_16|z_16]{^c_17}
+              ; !y_16
+              ; d_17
+              ; ?a_17
+              ; !z_16
+              ; e_17
+              ; ?b_17
+              ; ![a_17|b_17]{^c_17}
+            }
+    in
+      e_17
+    end
+
+  collect_all_1_0(f_17 : ATerm() -> ATerm()|) =
+    collect_all_2_0(f_17, union_0_0|)
+
+  collect_all_2_0(g_17 : ATerm() -> ATerm(), h_17 : ATerm() -> ATerm()|) =
+    let i_17(|) =
+          {j_17, l_17, k_17, m_17:
+            ?l_17
+            ; g_17
+            ; ?j_17
+            ; !l_17
+            ; ?m_17
+            ; crush_3_0(
+                ![]{}
+              , h_17
+              , i_17
+              |
+              )
+            ; ?k_17
+            ; !m_17
+            ; ![j_17|k_17]{}
+          }
+          < id
+          + crush_3_0(
+              ![]{}
+            , h_17
+            , i_17
+            |
+            )
+    in
+      i_17
+    end
+
+  collect_all_3_0(n_17 : ATerm() -> ATerm(), o_17 : ATerm() -> ATerm(), p_17 : ATerm() -> ATerm()|) =
+    let q_17(|) =
+          {r_17, t_17, s_17, u_17:
+            ?t_17
+            ; n_17
+            ; ?r_17
+            ; !t_17
+            ; ?u_17
+            ; crush_3_0(
+                ![]{}
+              , o_17
+              , q_17
+              |
+              )
+            ; ?s_17
+            ; !u_17
+            ; ![r_17|s_17]{}
+          }
+          < id
+          + p_17 ; q_17
+            < id
+            + crush_3_0(
+                ![]{}
+              , o_17
+              , q_17
+              |
+              )
+    in
+      q_17
+    end
+
+  crush_3_0(w_17 : ATerm() -> ATerm(), x_17 : ATerm() -> ATerm(), y_17 : ATerm() -> ATerm()|) =
+    {v_17:
+      ?_#(v_17)
+      ; !v_17
+      ; foldr_3_0(w_17, x_17, y_17|)
+    }
+
+  foldr_3_0(b_18 : ATerm() -> ATerm(), c_18 : ATerm() -> ATerm(), d_18 : ATerm() -> ATerm()|) =
+    ?[] ; b_18
+    < id
+    + {z_17, a_18, e_18, g_18, f_18, h_18:
+        ?[z_17|a_18]
+        ; ?g_18
+        ; !z_17
+        ; d_18
+        ; ?e_18
+        ; !g_18
+        ; ?h_18
+        ; !a_18
+        ; foldr_3_0(b_18, c_18, d_18|)
+        ; ?f_18
+        ; !h_18
+        ; !(e_18, f_18){}
+        ; c_18
+      }
+
+  conc_0_0(|) =
+    {i_18, j_18:
+      ?(i_18, j_18)
+      ; !i_18
+      ; at_end_1_0(!j_18|)
+    }
+    < id
+    + {k_18:
+        ?""#(k_18)
+        ; !k_18
+        ; concat_0_0
+      }
+
+  at_end_1_0(q_18 : ATerm() -> ATerm()|) =
+    let r_18(|) =
+          {l_18, m_18, n_18, o_18, p_18:
+            ?[l_18|m_18]{^p_18}
+            ; !l_18
+            ; ?n_18
+            ; !m_18
+            ; r_18
+            ; ?o_18
+            ; ![n_18|o_18]{^p_18}
+          }
+          < id
+          + ?[] ; q_18
+    in
+      r_18
+    end
+
+  concat_0_0(|) =
+    let u_18(|) =
+          ?[]
+          < id
+          + {s_18, t_18:
+              ?[s_18|t_18]
+              ; !s_18
+              ; at_end_1_0(!t_18 ; u_18|)
+            }
+    in
+      u_18
+    end
+
+  union_0_0(|) =
+    {v_18, w_18:
+      let c_19(|) =
+            ?[] ; !v_18
+            < id
+            + HdMember_1_0(!v_18|) ; c_19
+              < id
+              + {x_18, y_18, z_18, a_19, b_19:
+                  ?[x_18|y_18]{^b_19}
+                  ; !x_18
+                  ; ?z_18
+                  ; !y_18
+                  ; c_19
+                  ; ?a_19
+                  ; ![z_18|a_19]{^b_19}
+                }
+      in
+        ?(w_18, v_18)
+        ; !w_18
+        ; c_19
+      end
+    }
+
+  HdMember_1_0(g_19 : ATerm() -> ATerm()|) =
+    {d_19, e_19, h_19:
+      ?[e_19|d_19]
+      ; ?h_19
+      ; g_19
+      ; fetch_1_0(
+          {f_19:
+            ?f_19
+            ; !(e_19, f_19){}
+            ; eq_0_0
+          }
+        |
+        )
+      ; !h_19
+      ; !d_19
+    }
+
+  fetch_1_0(s_19 : ATerm() -> ATerm()|) =
+    let t_19(|) =
+          {i_19, j_19, k_19, l_19, m_19:
+            ?[i_19|j_19]{^m_19}
+            ; !i_19
+            ; s_19
+            ; ?k_19
+            ; !j_19
+            ; ?l_19
+            ; ![k_19|l_19]{^m_19}
+          }
+          < id
+          + {n_19, o_19, p_19, q_19, r_19:
+              ?[n_19|o_19]{^r_19}
+              ; !n_19
+              ; ?p_19
+              ; !o_19
+              ; t_19
+              ; ?q_19
+              ; ![p_19|q_19]{^r_19}
+            }
+    in
+      t_19
+    end
+
+  eq_0_0(|) =
+    {u_19 :
+     ?(u_19, u_19)}
+
+  oncetd_1_0(w_19 : ATerm() -> ATerm()|) =
+    let x_19(|) =
+          w_19 < id + one(x_19)
+    in
+      x_19
+    end
+
+  main_0_0(|) =
+    oncetd_1_0(desugar_arrow_0_0|)

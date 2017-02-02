@@ -1,0 +1,7 @@
+module test
+
+imports libstrategolib
+
+strategies
+
+  main = io-wrap( ?x#([x]); !x#([x,x]) )
