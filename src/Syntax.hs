@@ -236,6 +236,14 @@ instance Arbitrary Constructor where
 arbitraryLetter :: Gen Text
 arbitraryLetter = T.singleton <$> choose ('A','Z')
 
+instance Num TermPattern where
+  t1 + t2 = Cons "Add" [t1,t2]
+  t1 - t2 = Cons "Sub" [t1,t2]
+  t1 * t2 = Cons "Mul" [t1,t2]
+  abs t = Cons "Abs" [t]
+  signum t = Cons "Signum" [t]
+  fromInteger = NumberLiteral . fromIntegral
+
 instance Arbitrary TermPattern where
   arbitrary = do
     h <- choose (0,7)

@@ -34,13 +34,13 @@ alphaEnv = fmap alphaTerm
 alphaResult :: Seq (Result (C.Term,C.TermEnv)) -> Seq (Result (W.Term,W.TermEnv))
 alphaResult = (fmap.fmap) (alphaTerm *** alphaEnv)
 
-sound'' :: Strat -> Property
-sound'' s = property $ do
+sound'' :: W.Fuel -> Strat -> Property
+sound'' i s = property $ do
   (t1,t2) <- C.similar
-  return $ sound' s (S.fromList [t1,t2])
+  return $ sound' i s (S.fromList [t1,t2])
 
-sound' :: Strat -> Seq C.Term -> Property
-sound' s ts = sound s M.empty (fmap (id &&& const M.empty) ts)
+sound' :: W.Fuel -> Strat -> Seq C.Term -> Property
+sound' i s ts = sound i s M.empty (fmap (id &&& const M.empty) ts)
 
 {-         Seq (C.interp s)
 Seq C.Term --------------> Seq (C.Term)
@@ -49,9 +49,9 @@ Seq C.Term --------------> Seq (C.Term)
    v|        W.interp s     >= v|
  W.Term -------------------> W.Term
 -}
-sound :: Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
-sound s senv ts =
-  let abs = W.eval s senv $ lubs $ fmap (alphaTerm *** alphaEnv) ts
+sound :: W.Fuel -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
+sound i s senv ts =
+  let abs = W.eval i s senv $ lubs $ fmap (alphaTerm *** alphaEnv) ts
       con = alphaResult $ C.eval s senv <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)

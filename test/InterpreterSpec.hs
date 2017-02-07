@@ -6,12 +6,16 @@ import Prelude hiding ((.),id,succ,pred,all,fail,sequence,map)
 import Syntax hiding (Fail)
 import Interpreter
 import Result
+
 import qualified ConcreteSemantics as C
+import qualified WildcardSemantics as W
+
 import WildcardSemanticsSoundness
 
 import Control.Arrow
 
 import qualified Data.Map as M
+import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
 import Text.Printf
@@ -92,21 +96,35 @@ spec = do
   describe "call" $
     it "should support recursion" $ do
       let senv = M.fromList [("map", Closure map M.empty)]
-      let t = C.convertToList (C.NumberLiteral <$> [2, 3, 4])
+      let t = C.convertToList [2, 3, 4]
       C.eval (Match "x" `Seq`
               Call "map" [Build (NumberLiteral 1)] ["x"]) senv (t, M.empty)
         `shouldBe`
-           Success (C.convertToList (C.NumberLiteral <$> [1, 1, 1]), M.fromList [("x",t)])
+           Success (C.convertToList [1, 1, 1], M.fromList [("x",t)])
 
-  describe "let" $
+  describe "let" $ do
     it "should support recursion" $ do
       let t = C.convertToList (C.NumberLiteral <$> [2, 3, 4])
-      C.eval (Let [("map", map)]
+      ceval (Let [("map", map)]
                   (Match "x" `Seq`
-                   Call "map" [Build (NumberLiteral 1)] ["x"])) M.empty (t, M.empty)
+                   Call "map" [Build 1] ["x"])) t
         `shouldBe`
-           Success (C.convertToList (C.NumberLiteral <$> [1, 1, 1]), M.fromList [("x",t)])
+           Success (C.convertToList [1, 1, 1], M.fromList [("x",t)])
 
+    it "should work for the abstract case" $ do
+      let cons x xs = W.Cons "Cons" [x,xs]
+      let t = cons 2 W.Wildcard
+      fmap fst <$> weval 5 (Let [("map", map)]
+                  (Match "x" `Seq`
+                   Call "map" [Build 1] ["x"])) t
+        `shouldBe`
+           S.fromList 
+             [ Success $ W.convertToList [1]
+             , Success $ W.convertToList [1,1]
+             , Success $ W.convertToList [1,1,1]
+             , Fail
+             , Fail
+             , Success (cons 1 (cons 1 (cons 1 (cons W.Wildcard W.Wildcard))))]
 
   describe "unify" $
     prop "should compare terms" $ \t1 t2 ->
@@ -124,6 +142,19 @@ spec = do
            if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
 
   describe "soundness" $ do
+    prop "call" $ do
+      i <- choose (0,10)
+      j <- choose (0,10)
+      l <- C.similarTerms i 7 2 10
+      let (l1,l2) = splitAt j l
+      let t1 = C.convertToList l1
+      let t2 = C.convertToList l2
+      return $ counterexample (printf "t: %s\n"
+                                      (show (lub (alphaTerm t1) (alphaTerm t2))))
+             $ sound' 12 (Let [("map", map)]
+                  (Match "x" `Seq`
+                   Call "map" [Build 1] ["x"]))
+                 (S.fromList [t1,t2])
 
     prop "match" $ do
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
@@ -132,7 +163,7 @@ spec = do
                  (printf "pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     (show matchPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' (Match matchPattern) (S.fromList [t2,t3])
+             $ sound' 10 (Match matchPattern) (S.fromList [t2,t3])
 
     prop "build" $ do
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
@@ -144,7 +175,7 @@ spec = do
                  (printf "match pattern: %s\nbuild pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     (show matchPattern) (show buildPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
+             $ sound' 10 (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
   where
 
@@ -166,8 +197,8 @@ spec = do
     ceval :: Strat -> C.Term -> Result (C.Term,C.TermEnv)
     ceval s t = C.eval s M.empty (t,M.empty)
 
-    -- wildcardTermEnv :: Strat -> W.TermEnv -> W.PartialTerm -> [Result W.TermEnv]
-    -- wildcardTermEnv s tenv t = fmap (fmap snd) (toList $ W.eval s M.empty tenv t)
+    weval :: Int -> Strat -> W.Term -> Seq (Result (W.Term,W.TermEnv))
+    weval i s t = W.eval i s M.empty (t,M.empty)
 
     succ :: Arrow p => p Int Int
     succ = arr (+ 1)

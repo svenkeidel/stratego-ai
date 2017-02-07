@@ -147,11 +147,6 @@ lift p = proc t -> case t of
 
 -- Instances -----------------------------------------------------------------------------------------
 
-instance Show Term where
-  show (Cons c ts) = show c ++ if null ts then "" else show ts
-  show (StringLiteral s) = show s
-  show (NumberLiteral n) = show n
-
 instance Category Interp where
   id = Interp (const Success)
   f . g = Interp $ \senv -> runInterp g senv >=> runInterp f senv
@@ -180,7 +175,7 @@ instance Try Interp where
     Fail -> runInterp f senv (a,e)
 
 instance ArrowZero Interp where
-  zeroArrow = Interp (const (const Fail))
+  zeroArrow = fail
 
 instance ArrowPlus Interp where
   f <+> g = Interp $ \senv x -> case (runInterp f senv x,runInterp g senv x) of
@@ -198,6 +193,19 @@ instance HasTermEnv (Map TermVar Term) Interp where
 instance HasStratEnv Interp where
   readStratEnv = Interp $ \senv (_,e) -> return (senv,e)
   localStratEnv f = Interp $ \_ ((a,senv'),e) -> runInterp f senv' (a,e)
+
+instance Show Term where
+  show (Cons c ts) = show c ++ if null ts then "" else show ts
+  show (StringLiteral s) = show s
+  show (NumberLiteral n) = show n
+
+instance Num Term where
+  t1 + t2 = Cons "Add" [t1,t2]
+  t1 - t2 = Cons "Sub" [t1,t2]
+  t1 * t2 = Cons "Mul" [t1,t2]
+  abs t = Cons "Abs" [t]
+  signum t = Cons "Signum" [t]
+  fromInteger = NumberLiteral . fromIntegral
 
 instance Arbitrary Term where
   arbitrary = do

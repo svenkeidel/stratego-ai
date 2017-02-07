@@ -35,23 +35,26 @@ data Term
 type TermEnv = Map TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
 
-eval :: Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
-eval s = runInterp (interp  s)
+eval :: Int -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
+eval fuel s = runInterp (interp fuel s)
 
-interp :: Strat -> Interp Term Term
-interp s0 = case s0 of
+type Fuel = Int
+
+interp :: Fuel -> Strat -> Interp Term Term
+interp 0 _ = proc _ -> fail <+> success -< Wildcard
+interp i s0 = case s0 of
   S.Fail -> fail
   Id -> id
-  GuardedChoice s1 s2 s3 -> guardedChoice (interp s1) (interp s2) (interp s3)
-  Seq s1 s2 -> sequence (interp s1) (interp s2)
-  One s -> lift (one (interp s))
-  Some s -> lift (some (interp s))
-  All s -> lift (all (interp s))
-  Scope xs s -> scope xs (interp s)
+  GuardedChoice s1 s2 s3 -> guardedChoice (interp i s1) (interp i s2) (interp i s3)
+  Seq s1 s2 -> sequence (interp i s1) (interp i s2)
+  One s -> lift (one (interp i s))
+  Some s -> lift (some (interp i s))
+  All s -> lift (all (interp i s))
+  Scope xs s -> scope xs (interp i s)
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
-  Let ss body -> let_ ss (interp body)
-  Call f ss ps -> call f ss ps interp
+  Let ss body -> let_ ss (interp i body)
+  Call f ss ps -> call f ss ps (interp (i-1))
 
 match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv (Map TermVar Term) p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
@@ -164,12 +167,6 @@ lift p = proc t -> case t of
 type Env = Map TermVar Term
 data Environment = Singleton Env | Product Environment Environment
 
-instance Show Term where
-  show (Cons c ts) = show c ++ if null ts then "" else show ts
-  show (StringLiteral s) = show s
-  show (NumberLiteral n) = show n
-  show Wildcard = "_"
-
 instance Category Interp where
   id = Interp (const (return . Success))
   f . g = Interp $ \senv x -> do
@@ -219,6 +216,20 @@ instance HasTermEnv TermEnv Interp where
 instance HasStratEnv Interp where
   readStratEnv = Interp $ \senv (_,tenv) -> return (Success (senv,tenv))
   localStratEnv f = Interp $ \_ ((x,senv),tenv) -> runInterp f senv (x,tenv)
+
+instance Show Term where
+  show (Cons c ts) = show c ++ if null ts then "" else show ts
+  show (StringLiteral s) = show s
+  show (NumberLiteral n) = show n
+  show Wildcard = "_"
+
+instance Num Term where
+  t1 + t2 = Cons "Add" [t1,t2]
+  t1 - t2 = Cons "Sub" [t1,t2]
+  t1 * t2 = Cons "Mul" [t1,t2]
+  abs t = Cons "Abs" [t]
+  signum t = Cons "Signum" [t]
+  fromInteger = NumberLiteral . fromIntegral
 
 instance Arbitrary Term where
   arbitrary = do
