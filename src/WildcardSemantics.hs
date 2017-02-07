@@ -6,7 +6,6 @@
 module WildcardSemantics where
 
 import Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
-import qualified Prelude as P
 
 import Result
 import Syntax hiding (Fail,TermPattern(..))
@@ -14,6 +13,7 @@ import Syntax (TermPattern)
 import qualified Syntax as S
 import Interpreter
 
+import Control.Monad hiding (fail,sequence)
 import Control.Category
 import Control.Arrow
 
@@ -23,17 +23,22 @@ import qualified Data.Map as M
 import Data.Sequence (Seq)
 import Data.Text (Text)
 
-data PartialTerm
-    = Cons Constructor [PartialTerm]
+import Test.QuickCheck hiding (Result(..))
+
+data Term
+    = Cons Constructor [Term]
     | StringLiteral Text
     | NumberLiteral Int
     | Wildcard
     deriving Eq
 
-type TermEnv = Map TermVar PartialTerm
+type TermEnv = Map TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
 
-interp :: Strat -> Interp PartialTerm PartialTerm
+eval :: Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
+eval s = runInterp (interp  s)
+
+interp :: Strat -> Interp Term Term
 interp s0 = case s0 of
   S.Fail -> fail
   Id -> id
@@ -48,7 +53,7 @@ interp s0 = case s0 of
   Let ss body -> let_ ss (interp body)
   Call f ss ps -> call f ss ps interp
 
-match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv (Map TermVar PartialTerm) p) => p (TermPattern,PartialTerm) PartialTerm
+match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv (Map TermVar Term) p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -60,7 +65,7 @@ match = proc (p,t) -> case p of
         success -< t
   S.Cons c ts -> case t of
     Cons c' ts'
-      | c == c' || length ts == length ts' -> do
+      | c == c' && length ts == length ts' -> do
           ts'' <- zipWith match -< (ts,ts')
           success -< Cons c ts''
       | otherwise -> fail -< ()
@@ -87,10 +92,10 @@ match = proc (p,t) -> case p of
     Wildcard -> fail <+> success -< NumberLiteral n
     _ -> fail -< ()
 
-unify :: (ArrowPlus p, ArrowChoice p, Try p) => p (PartialTerm,PartialTerm) PartialTerm
+unify :: (ArrowPlus p, ArrowChoice p, Try p) => p (Term,Term) Term
 unify = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
-    | c == c' || length ts == length ts' -> do
+    | c == c' && length ts == length ts' -> do
       ts'' <- zipWith unify -< (ts,ts')
       returnA -< Cons c ts''
     | otherwise -> fail -< ()
@@ -104,7 +109,7 @@ unify = proc (t1,t2) -> case (t1,t2) of
   (t, Wildcard) -> fail <+> success -< t
   (_,_) -> fail -< ()
 
-build :: (ArrowPlus p, ArrowChoice p, Try p,HasTermEnv (Map TermVar PartialTerm) p) => p TermPattern PartialTerm
+build :: (ArrowPlus p, ArrowChoice p, Try p, HasTermEnv (Map TermVar Term) p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -113,7 +118,7 @@ build = proc p -> case p of
       Just t -> success -< t
   S.Cons c ts -> do
     ts' <- mapA build -< ts
-    returnA -< (Cons c ts')
+    returnA -< Cons c ts'
   S.Explode c ts -> do
     c' <- build -< c
     case c' of
@@ -123,16 +128,17 @@ build = proc p -> case p of
         case ts'' of
           Just tl -> success -< Cons (Constructor s) tl
           Nothing -> fail <+> success -< Wildcard
+      Wildcard -> fail <+> success -< Wildcard
       _ -> fail -< ()
   S.NumberLiteral n -> returnA -< NumberLiteral n
   S.StringLiteral s -> returnA -< StringLiteral s
 
-convertToList :: [PartialTerm] -> PartialTerm
+convertToList :: [Term] -> Term
 convertToList ts = case ts of
   (x:xs) -> Cons "Cons" [x,convertToList xs]
   [] -> Cons "Nil" []
 
-convertFromList :: (ArrowChoice p, Try p) => p PartialTerm (Maybe [PartialTerm])
+convertFromList :: (ArrowChoice p, Try p) => p Term (Maybe [Term])
 convertFromList = proc t -> case t of
   Cons "Cons" [x,tl] -> do
     xs <- convertFromList -< tl
@@ -143,8 +149,8 @@ convertFromList = proc t -> case t of
   _ -> fail -< ()
 
 lift :: (Try p,ArrowChoice p,ArrowPlus p)
-     => p (Constructor,[PartialTerm]) (Constructor,[PartialTerm])
-     -> p PartialTerm PartialTerm
+     => p (Constructor,[Term]) (Constructor,[Term])
+     -> p Term Term
 lift p = proc t -> case t of
   Cons c ts -> do
     (c',ts') <- p -< (c,ts)
@@ -155,11 +161,13 @@ lift p = proc t -> case t of
 
 -- Instances -----------------------------------------------------------------------------------------
 
-type Env = Map TermVar PartialTerm
+type Env = Map TermVar Term
 data Environment = Singleton Env | Product Environment Environment
 
-instance Show PartialTerm where
+instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
+  show (StringLiteral s) = show s
+  show (NumberLiteral n) = show n
   show Wildcard = "_"
 
 instance Category Interp where
@@ -211,3 +219,23 @@ instance HasTermEnv TermEnv Interp where
 instance HasStratEnv Interp where
   readStratEnv = Interp $ \senv (_,tenv) -> return (Success (senv,tenv))
   localStratEnv f = Interp $ \_ ((x,senv),tenv) -> runInterp f senv (x,tenv)
+
+instance Arbitrary Term where
+  arbitrary = do
+    height <- choose (0,7)
+    width <- choose (0,4)
+    arbitraryTerm height width
+
+arbitraryTerm :: Int -> Int -> Gen Term
+arbitraryTerm 0 _ =
+  oneof
+    [ Cons <$> arbitrary <*> pure []
+    , StringLiteral <$> arbitraryLetter
+    , NumberLiteral <$> choose (0,9)
+    , pure Wildcard
+    ]
+arbitraryTerm h w = do
+  w' <- choose (0,w)
+  c <- arbitrary
+  fmap (Cons c) $ vectorOf w' $ join $
+    arbitraryTerm <$> choose (0,h-1) <*> pure w

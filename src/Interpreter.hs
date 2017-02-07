@@ -15,7 +15,8 @@ import           Control.Category
 
 import           Data.Map (Map)
 import qualified Data.Map as M
--- import qualified Data.Map.Lazy.Merge as M
+
+import           Text.Printf
 
 class Arrow p => Try p where
   success :: p a a
@@ -44,25 +45,6 @@ guardedChoice = try
 sequence :: Category p => p a b -> p b c -> p a c
 sequence f g = f >>> g
 {-# INLINE sequence #-}
-
-path :: (Try p, ArrowChoice p, ArrowApply p) => Int -> p a a -> p (Constructor,[a]) (Constructor,[a])
-path i f = second (nth' i f)
-{-# INLINE path #-}
-
-cong :: (Try p, ArrowChoice p, ArrowApply p) => Constructor -> [p a b] -> p (Constructor,[a]) (Constructor,[b])
-cong c ss0 = proc (c',ts0) ->
-  if c /= c' || length ts0 /= length ss0
-  then fail -< ()
-  else second apply -< (c', (ss0, ts0))
-  where
-    apply = proc (ss1,ts1) -> case (ss1,ts1) of
-      (s:ss,t:ts) -> do
-        t' <- app -< (s,t)
-        ts' <- apply -< (ss,ts)
-        returnA -< t':ts'
-      ([],[]) -> returnA -< []
-      _ -> fail -< () -- already checked that ts0 and ss have same length, i.e. cannot happen
-{-# INLINE cong #-}
 
 one :: (Try p, ArrowPlus p, ArrowChoice p) => p a a -> p (Constructor,[a]) (Constructor,[a])
 one f = second go
@@ -99,63 +81,51 @@ scope vars s = proc t -> do
   ()   <- putTermEnv -< foldr M.delete env vars
   t'   <- s          -< t
   env' <- getTermEnv -< ()
-  ()   <- putTermEnv -< merge env' env
+  ()   <- putTermEnv -< env `M.union` foldr M.delete env' vars
   returnA -< t'
-  where
-    merge = undefined
-      -- M.merge is available in containers 0.5.8.1 and later
-      -- M.merge M.preserveMissing M.dropMissing $ M.zipWithMatched $ \k x y ->
-      --   if k `elem` vars then y else x
 {-# INLINE scope #-}
 
 let_ :: (ArrowChoice p, HasStratEnv p) =>
         [(StratVar,Strategy)] -> p a b -> p a b
 let_ ss s = proc t -> do
   senv <- readStratEnv -< ()
-  localStratEnv s -< (t, M.union (M.fromList ss) senv)
+  let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
+  localStratEnv s -< (t, M.union (M.fromList ss') senv)
 
-call :: (ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (Map TermVar t) p) =>
+call :: (Show t, Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (Map TermVar t) p) =>
         StratVar -> [Strat] -> [TermVar] -> (Strat -> p a b) -> p a b
-call f strategies actualTermArgs interp = proc a -> do
+call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of
-    Just (Strategy stratVars formalTermArgs body) -> do
+    Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
-      terms <- lookupTermVars -< actualTermArgs
-      () <- putTermEnv -< M.union (M.fromList (zip formalTermArgs terms)) tenv
-      b <- localStratEnv (interp body) -<< (a,extendStratEnv stratVars senv)
- 
-      -- does not implement semantics, but saner to avoid term variables
-      -- leaking out of strategy call.
-      putTermEnv -< tenv
-
+      putTermEnv <<< bindTermArgs -< (tenv,zip actualTermArgs formalTermArgs)
+      let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
+                                 (if M.null senv' then senv else senv')
+      b <- localStratEnv (interp body) -<< (a,senv'')
+      tenv' <- getTermEnv -< ()
+      putTermEnv -< tenv `M.union` foldr M.delete tenv' formalTermArgs
       returnA -< b
-    Nothing -> error "strategy not in scope" -< ()
+    Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
   where
-    extendStratEnv stratVars =
-      M.union $
-       M.fromList $
-        zip stratVars [ Strategy [] [] s| s <- strategies]
 
-lookupTermVars :: HasTermEnv (Map TermVar t) p => p [TermVar] [t]
-lookupTermVars = undefined
+    bindTermArgs :: (Try p, ArrowChoice p) =>
+        p (Map TermVar t, [(TermVar,TermVar)]) (Map TermVar t)
+    bindTermArgs = proc (tenv,l) -> case l of
+      (actual,formal) : rest ->
+        case M.lookup actual tenv of
+          Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
+          Nothing -> fail -< ()
+      [] -> returnA -< tenv
+
+    bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
+    bindStratArgs [] senv = senv
+    bindStratArgs ((v,Call v' [] []) : ss) senv
+      | Just s <- M.lookup v' senv = M.insert v s (bindStratArgs ss senv)
+    bindStratArgs ((v,s) : ss) senv =
+      M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
 
 -- Auxiliary Functions
-
-nth' :: (Try p, ArrowChoice p, ArrowApply p) => Int -> p a a -> p [a] [a]
-nth' n f = proc l -> nth f -<< (n,l)
-{-# NOINLINE nth' #-}
-
-nth :: (Try p, ArrowChoice p) => p a a -> p (Int,[a]) [a]
-nth f = proc (n,l) -> case (n,l) of
-  (_,[]) -> fail -< ()
-  (1, t:ts) -> do
-    t' <- f -< t
-    returnA -< t' : ts
-  (i, t:ts) -> do
-    ts' <- nth f -< (i-1,ts)
-    returnA -< t : ts'
-
 mapA :: (ArrowChoice p) => p a b -> p [a] [b]
 mapA f = proc l -> case l of
   (t:ts) -> do

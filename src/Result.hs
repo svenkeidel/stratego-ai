@@ -3,6 +3,7 @@ module Result where
 import Control.Monad
 
 data Result a = Success a | Fail
+  deriving (Eq,Show)
 
 instance Functor Result where
   fmap f (Success a) = Success (f a)

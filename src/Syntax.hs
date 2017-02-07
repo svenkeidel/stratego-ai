@@ -10,10 +10,15 @@ import           ATerm
 import           Control.Monad.Except
 
 import           Data.Text (Text,pack,unpack)
+import qualified Data.Text as T
 import           Data.List (intercalate)
 import           Data.String (IsString(..))
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Set (Set)
+import qualified Data.Set as S
+
+import           Test.QuickCheck hiding (subterms)
 
 newtype Constructor = Constructor Text
   deriving (Eq,IsString)
@@ -30,11 +35,12 @@ newtype TermVar = TermVar Text
   deriving (Eq,Ord)
 
 newtype StratVar = StratVar Text deriving (Eq,Ord,IsString)
-data Module = Module Signature StratEnv deriving (Show,Eq)
+data Module = Module Signature (Map StratVar Strategy) deriving (Show,Eq)
 type Signature = [Sort]
 data Sort = Sort deriving (Show,Eq)
 data Strategy = Strategy [StratVar] [TermVar] Strat deriving (Show,Eq)
-type StratEnv = Map StratVar Strategy
+data Closure = Closure Strategy StratEnv deriving (Eq)
+type StratEnv = Map StratVar Closure
 data Strat
   = Fail
   | Id
@@ -49,6 +55,16 @@ data Strat
   | Call StratVar [Strat] [TermVar]
   | Let [(StratVar,Strategy)] Strat
   deriving (Eq)
+
+patternVars :: TermPattern -> Set TermVar
+patternVars t = case t of
+  Cons _ ts -> S.unions $ patternVars <$> ts
+  Explode f l -> patternVars f `S.union` patternVars l
+  Var x -> S.singleton x
+  _ -> S.empty
+
+patternVars' :: TermPattern -> [TermVar]
+patternVars' = S.toList . patternVars
 
 parseModule :: MonadError String m => ATerm -> m Module
 parseModule t = case t of
@@ -133,8 +149,14 @@ instance Show TermPattern where
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
 
+instance IsString TermPattern where
+  fromString = Var . fromString
+
 instance IsString TermVar where
   fromString = TermVar . pack
+
+instance IsString Strat where
+  fromString s = Call (fromString s) [] []
 
 instance Show TermVar where
   show (TermVar x) = unpack x
@@ -199,5 +221,62 @@ instance Show Strat where
       seq_prec = 9
       choice_prec = 8
 
+instance Show Closure where
+  show (Closure s _) = show s
+
 instance Show StratVar where
   show (StratVar x) = unpack x
+
+instance Arbitrary TermVar where
+  arbitrary = TermVar . T.singleton <$> choose ('a','z')
+
+instance Arbitrary Constructor where
+  arbitrary = Constructor <$> arbitraryLetter
+
+arbitraryLetter :: Gen Text
+arbitraryLetter = T.singleton <$> choose ('A','Z')
+
+instance Arbitrary TermPattern where
+  arbitrary = do
+    h <- choose (0,7)
+    w <- choose (0,4)
+    arbitraryTermPattern h w arbitrary
+
+arbitraryTermPattern :: Int -> Int -> Gen TermVar -> Gen TermPattern
+arbitraryTermPattern h w var
+  | h == 0 =
+      oneof
+        [ Cons <$> arbitrary <*> pure []
+        , StringLiteral <$> arbitraryLetter
+        , NumberLiteral <$> choose (0,9)
+        , Var <$> var
+        ]
+  | otherwise = do
+      w' <- choose (0,w)
+      oneof
+        [ do
+          c <- arbitrary
+          fmap (Cons c) $ vectorOf w' $ do
+            h' <- choose (0,h-1)
+            arbitraryTermPattern h' w var
+        , Explode <$> arbitraryStringPattern
+                  <*> arbitraryListPattern w'
+        ]
+
+  where
+    arbitraryStringPattern :: Gen TermPattern
+    arbitraryStringPattern =
+      oneof
+        [ Var <$> var
+        , StringLiteral <$> arbitraryLetter
+        ]
+
+    arbitraryListPattern :: Int -> Gen TermPattern
+    arbitraryListPattern len =
+      if len == 0
+        then return $ Cons "Nil" []
+        else do
+          h' <- choose (0,h-1)
+          tp <- arbitraryTermPattern h' w var
+          tl <- arbitraryListPattern (len-1)
+          return $ Cons "Cons" [tp,tl]

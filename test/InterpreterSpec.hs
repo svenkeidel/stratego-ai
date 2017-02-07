@@ -1,15 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 module InterpreterSpec(main, spec) where
 
-import Prelude hiding ((.),id,succ,pred,all,fail,sequence)
+import Prelude hiding ((.),id,succ,pred,all,fail,sequence,map)
 
-import Syntax
+import Syntax hiding (Fail)
 import Interpreter
+import Result
+import qualified ConcreteSemantics as C
+import WildcardSemanticsSoundness
 
-import Control.Category
 import Control.Arrow
 
+import qualified Data.Map as M
+import qualified Data.Sequence as S
+
+import Text.Printf
+
 import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck hiding (Result(..))
 
 main :: IO ()
 main = hspec spec
@@ -17,28 +26,20 @@ main = hspec spec
 spec :: Spec
 spec = do
 
-  describe "the strategy guarded choice" $ do
+  describe "guarded choice" $ do
     it "should execute the second strategy if the first succeeds" $
       runKleisli (guardedChoice succ succ pred) n `shouldBe` Just (n + 2)
     it "should execute the third strategy if the first fails" $
       runKleisli (guardedChoice fail succ pred) n `shouldBe` Just (n - 1)
 
-  describe "the strategy sequence" $ do
+  describe "sequence" $ do
     it "should thread the results of applying the first strategy to the second" $
       runKleisli (sequence succ succ) n `shouldBe` Just (n + 2)
     it "should fail if at least one of the specified strategy fails" $ do
       runKleisli (sequence fail succ) n `shouldBe` (Nothing :: Maybe Int)
       runKleisli (sequence succ fail) n `shouldBe` (Nothing :: Maybe Int)
 
-  describe "the strategy congruence" $ do
-    it "should fail if the constructors are not equal" $
-      runKleisli (cong "g" (replicate 5 succ)) ("f",[1,2,3,4,5,6::Int]) `shouldBe` (Nothing :: Maybe (Constructor,[Int]))
-    it "should fail if the arities of the terms does not match" $
-      runKleisli (cong "f" (replicate 5 succ)) ("f",[1,2,3,4,5,6]) `shouldBe` (Nothing :: Maybe (Constructor,[Int]))
-    it "should in all other cases apply arrows element wise" $
-      runKleisli (cong "f" [id,succ,id]) ("f",[1,2,3]) `shouldBe` (Just ("f",[1,3,3]) :: Maybe (Constructor,[Int]))
-
-  describe "the strategy one" $ do
+  describe "one" $ do
     it "should apply an strategy to one subterm non-deterministically" $ do
       runKleisli (one succ) ("f",[1,2,3,4,5,6]) `shouldBe`
         [ ("f",[2,2,3,4,5,6])
@@ -59,32 +60,115 @@ spec = do
     it "should fail if the strategy fails on all subterms" $
       runKleisli (one fail) ("f",[1,2,3,4,5,6::Int]) `shouldBe` (runKleisli fail () :: [(Constructor,[Int])])
 
-  describe "the strategy some" $ do
+  describe "some" $ do
     it "should apply an arrow to as many subterms as possible" $ do
       runKleisli (some succ) ("f",[1,2,3,4,5,6]) `shouldBe` Just ("f",[2,3,4,5,6,7])
       runKleisli (some incEven) ("f",[1,2,3,4,5,6]) `shouldBe` Just ("f",[1,3,3,5,5,7])
     it "should fail if the specified strategy fails for all suterms" $
       runKleisli (some fail) ("f",[1,2,3,4,5,6]) `shouldBe` (Nothing :: Maybe (Constructor,[Int]))
 
-  describe "the strategy all" $ do
+  describe "all" $ do
     it "should apply an arrow all subterms" $ do
       runKleisli (all succ) ("f",[1,2,3,4,5,6]) `shouldBe` Just ("f",[2,3,4,5,6,7])
       runKleisli (all fail) ("f",[]::[Int]) `shouldBe` (Just ("f",[]) :: Maybe (Constructor,[Int]))
     it "should fail if the specified strategy fails for at least one subterm" $
       runKleisli (all fail) ("f",[1,2,3,4,5,6]::[Int]) `shouldBe` (Nothing :: Maybe (Constructor,[Int]))
 
-  describe "nth" $ do
-    it "should apply an arrow to the nth element of a list" $ do
-      runKleisli (nth succ) (1,[1,2,3,4,5,6]) `shouldBe` Just [2,2,3,4,5,6]
-      runKleisli (nth succ) (2,[1,2,3,4,5,6]) `shouldBe` Just [1,3,3,4,5,6]
-      runKleisli (nth succ) (3,[1,2,3,4,5,6]) `shouldBe` Just [1,2,4,4,5,6]
-      runKleisli (nth succ) (4,[1,2,3,4,5,6]) `shouldBe` Just [1,2,3,5,5,6]
-      runKleisli (nth succ) (5,[1,2,3,4,5,6]) `shouldBe` Just [1,2,3,4,6,6]
-      runKleisli (nth succ) (6,[1,2,3,4,5,6]) `shouldBe` Just [1,2,3,4,5,7]
-    it "should fail if the index is out of bounds" $
-      runKleisli (nth succ) (7,[1,2,3,4,5,6]) `shouldBe` Nothing
+  describe "scope" $ do
+    it "should hide declare variables" $ do
+      let tenv = M.fromList [("x", term1)]
+      C.eval (Scope ["x"] (Build "x")) M.empty (term2,tenv)
+        `shouldBe` Fail
+      C.eval (Scope ["x"] (Match "x")) M.empty (term2,tenv)
+        `shouldBe` Success (term2,tenv)
+
+    it "should make non-declared variables available" $ do
+      let tenv = M.fromList [("x", term1)]
+      C.eval (Scope ["y"] (Build "x")) M.empty (term2,tenv) `shouldBe`
+        Success (term1,tenv)
+      C.eval (Scope ["y"] (Match "z")) M.empty (term2,tenv) `shouldBe`
+        Success (term2,M.fromList [("x", term1), ("z", term2)])
+
+  describe "call" $
+    it "should support recursion" $ do
+      let senv = M.fromList [("map", Closure map M.empty)]
+      let t = C.convertToList (C.NumberLiteral <$> [2, 3, 4])
+      C.eval (Match "x" `Seq`
+              Call "map" [Build (NumberLiteral 1)] ["x"]) senv (t, M.empty)
+        `shouldBe`
+           Success (C.convertToList (C.NumberLiteral <$> [1, 1, 1]), M.fromList [("x",t)])
+
+  describe "let" $
+    it "should support recursion" $ do
+      let t = C.convertToList (C.NumberLiteral <$> [2, 3, 4])
+      C.eval (Let [("map", map)]
+                  (Match "x" `Seq`
+                   Call "map" [Build (NumberLiteral 1)] ["x"])) M.empty (t, M.empty)
+        `shouldBe`
+           Success (C.convertToList (C.NumberLiteral <$> [1, 1, 1]), M.fromList [("x",t)])
+
+
+  describe "unify" $
+    prop "should compare terms" $ \t1 t2 ->
+      runKleisli C.unify (t1,t2) `shouldBe`
+        if t1 == t2 then Just t1 else Nothing
+
+  describe "match" $ do
+    prop "should introduce variables" $ \t ->
+      ceval (Match "x" `Seq` Match "y") t `shouldBe`
+        Success (t, M.fromList [("x", t), ("y", t)])
+
+    prop "should support linear pattern matching" $ \t1 t2 ->
+      let t' = C.Cons "f" [t1,t2]
+      in ceval (Match (Cons "f" ["x","x"])) t' `shouldBe`
+           if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
+
+  describe "soundness" $ do
+
+    prop "match" $ do
+      [t1,t2,t3] <- C.similarTerms 3 7 2 10
+      matchPattern <- C.similarTermPattern t1 3
+      return $ counterexample
+                 (printf "pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
+                    (show matchPattern) (show t2) (show t3)
+                    (show (lub (alphaTerm t2) (alphaTerm t3))))
+             $ sound' (Match matchPattern) (S.fromList [t2,t3])
+
+    prop "build" $ do
+      [t1,t2,t3] <- C.similarTerms 3 7 2 10
+      matchPattern <- C.similarTermPattern t1 3
+      let vars = patternVars' matchPattern
+      buildPattern <- arbitraryTermPattern 5 2 $
+        if not (null vars) then elements vars else arbitrary
+      return $ counterexample
+                 (printf "match pattern: %s\nbuild pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
+                    (show matchPattern) (show buildPattern) (show t2) (show t3)
+                    (show (lub (alphaTerm t2) (alphaTerm t3))))
+             $ sound' (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
   where
+
+    map = Strategy ["f"] ["l"] (Scope ["x","xs","x'","xs'"] (
+            Build "l" `Seq`
+            GuardedChoice
+              (Match (Cons "Cons" ["x","xs"]))
+              (Build "x" `Seq`
+               Call "f" [] [] `Seq`
+               Match "x'" `Seq`
+               Call "map" ["f"] ["xs"] `Seq`
+               Match "xs'" `Seq`
+               Build (Cons "Cons" ["x'", "xs'"]))
+              (Build (Cons "Nil" []))))
+
+    term1 = C.NumberLiteral 1
+    term2 = C.NumberLiteral 2
+
+    ceval :: Strat -> C.Term -> Result (C.Term,C.TermEnv)
+    ceval s t = C.eval s M.empty (t,M.empty)
+
+    -- wildcardTermEnv :: Strat -> W.TermEnv -> W.PartialTerm -> [Result W.TermEnv]
+    -- wildcardTermEnv s tenv t = fmap (fmap snd) (toList $ W.eval s M.empty tenv t)
+
     succ :: Arrow p => p Int Int
     succ = arr (+ 1)
 

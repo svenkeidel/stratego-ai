@@ -23,14 +23,21 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
 
-data ClosedTerm
-  = Cons Constructor [ClosedTerm]
+import Test.QuickCheck hiding (Result(..))
+
+data Term
+  = Cons Constructor [Term]
   | StringLiteral Text
   | NumberLiteral Int
   deriving Eq
-newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Result (b,TermEnv) }
 
-interp :: Strat -> Interp ClosedTerm ClosedTerm
+type TermEnv = Map TermVar Term
+newtype Interp a b = Interp { runInterp :: StratEnv -> (a,TermEnv) -> Result (b,TermEnv) }
+
+eval :: Strat -> StratEnv -> (Term,TermEnv) -> Result (Term,TermEnv)
+eval s = runInterp (interp s)
+
+interp :: Strat -> Interp Term Term
 interp s0 = case s0 of
   S.Fail -> fail
   Id -> id
@@ -45,7 +52,7 @@ interp s0 = case s0 of
   Let ss body -> let_ ss (interp body)
   Call f ss ps -> call f ss ps interp
 
-match :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p (TermPattern, ClosedTerm) ClosedTerm
+match :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p (TermPattern, Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -57,7 +64,7 @@ match = proc (p,t) -> case p of
         success -< t
   S.Cons c ts -> case t of
     Cons c' ts'
-      | c == c' || length ts == length ts' -> do
+      | c == c' && length ts == length ts' -> do
           ts'' <- zipWith match -< (ts,ts')
           success -< Cons c ts''
       | otherwise -> fail -< ()
@@ -79,10 +86,10 @@ match = proc (p,t) -> case p of
       | otherwise -> fail -< ()
     _ -> fail -< ()
 
-unify :: (ArrowChoice p, Try p) => p (ClosedTerm,ClosedTerm) ClosedTerm
+unify :: (ArrowChoice p, Try p) => p (Term,Term) Term
 unify = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
-    | c == c' || length ts == length ts' -> do
+    | c == c' && length ts == length ts' -> do
       ts'' <- zipWith unify -< (ts,ts')
       returnA -< Cons c ts''
     | otherwise -> fail -< ()
@@ -95,7 +102,7 @@ unify = proc (t1,t2) -> case (t1,t2) of
   (_,_) -> fail -< ()
 
 
-build :: (ArrowChoice p, Try p, HasTermEnv (Map TermVar ClosedTerm) p) => p TermPattern ClosedTerm
+build :: (ArrowChoice p, Try p, HasTermEnv (Map TermVar Term) p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -116,12 +123,12 @@ build = proc p -> case p of
   S.NumberLiteral n -> returnA -< NumberLiteral n
   S.StringLiteral s -> returnA -< StringLiteral s
 
-convertToList :: [ClosedTerm] -> ClosedTerm
+convertToList :: [Term] -> Term
 convertToList ts = case ts of
   (x:xs) -> Cons "Cons" [x,convertToList xs]
   [] -> Cons "Nil" []
 
-convertFromList :: (ArrowChoice p, Try p) => p ClosedTerm [ClosedTerm]
+convertFromList :: (ArrowChoice p, Try p) => p Term [Term]
 convertFromList = proc t -> case t of
   Cons "Cons" [x,tl] -> do
     xs <- convertFromList -< tl
@@ -130,7 +137,7 @@ convertFromList = proc t -> case t of
     returnA -< []
   _ -> fail -< ()
 
-lift :: ArrowChoice p => p (Constructor,[ClosedTerm]) (Constructor,[ClosedTerm]) -> p ClosedTerm ClosedTerm
+lift :: ArrowChoice p => p (Constructor,[Term]) (Constructor,[Term]) -> p Term Term
 lift p = proc t -> case t of
   Cons c ts -> do
     (c',ts') <- p -< (c,ts)
@@ -140,9 +147,7 @@ lift p = proc t -> case t of
 
 -- Instances -----------------------------------------------------------------------------------------
 
-type TermEnv = Map TermVar ClosedTerm
-
-instance Show ClosedTerm where
+instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
@@ -184,12 +189,64 @@ instance ArrowPlus Interp where
     (_,_) -> Fail
 
 instance ArrowApply Interp where
-  app = undefined
+  app = Interp $ \senv ((f,b),e) -> runInterp f senv (b,e)
 
-instance HasTermEnv (Map TermVar ClosedTerm) Interp where
+instance HasTermEnv (Map TermVar Term) Interp where
   getTermEnv = Interp $ \_ ((),e) -> Success (e,e)
-  putTermEnv = Interp $ \_ (e,_) -> Success ((),Singleton e)
+  putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
 
 instance HasStratEnv Interp where
   readStratEnv = Interp $ \senv (_,e) -> return (senv,e)
   localStratEnv f = Interp $ \_ ((a,senv'),e) -> runInterp f senv' (a,e)
+
+instance Arbitrary Term where
+  arbitrary = do
+    h <- choose (0,7)
+    w <- choose (0,4)
+    arbitraryTerm h w
+
+height :: Term -> Int
+height t = case t of
+  Cons _ ts -> maximum (fmap height ts ++ [0]) + 1
+  _ -> 1
+
+similar :: Gen (Term,Term)
+similar = do
+  [t1,t2] <- similarTerms 2 5 2 7
+  return (t1,t2)
+
+similarTerms :: Int -> Int -> Int -> Int -> Gen [Term]
+similarTerms m h w similarity = do
+  t <- arbitraryTerm h w
+  replicateM m (go 1 t)
+  where
+    go :: Int -> Term -> Gen Term
+    go i t = distribution (i,height t + similarity) (arbitraryTerm h w) $ case t of
+       Cons c ts -> Cons c <$> traverse (go (i+1)) ts
+       _ -> return t
+
+similarTermPattern :: Term -> Int -> Gen TermPattern
+similarTermPattern t0 similarity = go 0 t0
+  where
+    go :: Int -> Term -> Gen TermPattern
+    go i t = distribution (i,height t + similarity) (S.Var <$> arbitrary) $ case t of
+       Cons c ts -> S.Cons c <$> traverse (go (i+1)) ts
+       StringLiteral s -> return $ S.StringLiteral s
+       NumberLiteral n -> return $ S.NumberLiteral n
+
+distribution :: (Int,Int) -> Gen a -> Gen a -> Gen a
+distribution (p,n) a b = oneof (replicate p a ++ replicate (n-p) b)
+
+arbitraryTerm :: Int -> Int -> Gen Term
+arbitraryTerm 0 _ =
+  oneof
+    [ Cons <$> arbitrary <*> pure []
+    , StringLiteral <$> arbitraryLetter
+    , NumberLiteral <$> choose (0,9)
+    ]
+arbitraryTerm h w = do
+  w' <- choose (0,w)
+  c <- arbitrary
+  fmap (Cons c) $ vectorOf w' $ join $
+    arbitraryTerm <$> choose (0,h-1) <*> pure w
+
