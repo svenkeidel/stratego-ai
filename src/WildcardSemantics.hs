@@ -5,34 +5,38 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WildcardSemantics where
 
-import Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
+import           Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
 
-import Result
-import Syntax hiding (Fail,TermPattern(..))
-import Syntax (TermPattern)
+import           Result
+import           Syntax hiding (Fail,TermPattern(..))
+import           Syntax (TermPattern)
 import qualified Syntax as S
-import Interpreter
+import           Interpreter
 
-import Control.Monad hiding (fail,sequence)
-import Control.Category
-import Control.Arrow
+import           Control.Arrow
+import           Control.Category
+import           Control.Monad hiding (fail,sequence)
 
-import Data.Semigroup ((<>))
-import Data.Map (Map)
-import qualified Data.Map as M
-import Data.Sequence (Seq)
-import Data.Text (Text)
+import           Data.Semigroup ((<>))
+import           Data.Sequence (Seq)
+import qualified Data.Sequence as S
+import qualified Data.HashSet as H
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text)
+import           Data.Hashable
+import           Data.Foldable (foldl')
 
-import Test.QuickCheck hiding (Result(..))
+import           Test.QuickCheck hiding (Result(..))
 
 data Term
     = Cons Constructor [Term]
     | StringLiteral Text
     | NumberLiteral Int
     | Wildcard
-    deriving Eq
+    deriving (Eq)
 
-type TermEnv = Map TermVar Term
+type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
 
 eval :: Int -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
@@ -42,7 +46,7 @@ type Fuel = Int
 
 interp :: Fuel -> Strat -> Interp Term Term
 interp 0 _ = proc _ -> fail <+> success -< Wildcard
-interp i s0 = case s0 of
+interp i s0 = dedup $ case s0 of
   S.Fail -> fail
   Id -> id
   GuardedChoice s1 s2 s3 -> guardedChoice (interp i s1) (interp i s2) (interp i s3)
@@ -55,8 +59,14 @@ interp i s0 = case s0 of
   Build f -> proc _ -> build -< f
   Let ss body -> let_ ss (interp i body)
   Call f ss ps -> call f ss ps (interp (i-1))
+  where
+    dedup :: Interp Term Term -> Interp Term Term
+    dedup f = Interp $ \senv x -> dedup' $ runInterp f senv x
 
-match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv (Map TermVar Term) p) => p (TermPattern,Term) Term
+    dedup' :: Seq (Result (Term,TermEnv)) -> Seq (Result (Term,TermEnv))
+    dedup' = foldl' (\s a -> s S.|> a) S.empty . foldl' (\m k -> H.insert k m) H.empty
+
+match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv TermEnv p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -78,10 +88,24 @@ match = proc (p,t) -> case p of
     _ -> fail -< ()
   S.Explode c ts -> case t of
     Cons (Constructor c') ts' -> do
-      _ <- match -< (c,StringLiteral c')
-      _ <- match -< (ts, convertToList ts')
+      match -< (c,StringLiteral c')
+      match -< (ts, convertToList ts')
       success -< t
-    _ -> fail -< ()
+    StringLiteral _ -> do
+      match -< (ts, convertToList [])
+      success -< t
+    NumberLiteral _ -> do
+      match -< (ts, convertToList [])
+      success -< t
+    Wildcard ->
+      (do
+        match -< (c,  Wildcard)
+        match -< (ts, Wildcard)
+        success -< t)
+      <+>
+      (do
+        match -< (ts, convertToList [])
+        success -< t)
   S.StringLiteral s -> case t of
     StringLiteral s'
       | s == s' -> success -< t
@@ -112,7 +136,7 @@ unify = proc (t1,t2) -> case (t1,t2) of
   (t, Wildcard) -> fail <+> success -< t
   (_,_) -> fail -< ()
 
-build :: (ArrowPlus p, ArrowChoice p, Try p, HasTermEnv (Map TermVar Term) p) => p TermPattern Term
+build :: (ArrowPlus p, ArrowChoice p, Try p, HasTermEnv TermEnv p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -163,9 +187,6 @@ lift p = proc t -> case t of
   Wildcard -> fail <+> success -< Wildcard
 
 -- Instances -----------------------------------------------------------------------------------------
-
-type Env = Map TermVar Term
-data Environment = Singleton Env | Product Environment Environment
 
 instance Category Interp where
   id = Interp (const (return . Success))
@@ -223,6 +244,13 @@ instance Show Term where
   show (NumberLiteral n) = show n
   show Wildcard = "_"
 
+instance Ord Term where
+  (Cons c ts) <= (Cons c' ts') = c <= c' && ts <= ts'
+  (StringLiteral s) <= (StringLiteral s') = s <= s'
+  (NumberLiteral n) <= (NumberLiteral n') = n <= n'
+  _ <= Wildcard = True
+  _ <= _ = False
+
 instance Num Term where
   t1 + t2 = Cons "Add" [t1,t2]
   t1 - t2 = Cons "Sub" [t1,t2]
@@ -230,6 +258,12 @@ instance Num Term where
   abs t = Cons "Abs" [t]
   signum t = Cons "Signum" [t]
   fromInteger = NumberLiteral . fromIntegral
+
+instance Hashable Term where
+  hashWithSalt s (Cons c ts) = s `hashWithSalt` (0::Int) `hashWithSalt` c `hashWithSalt` ts
+  hashWithSalt s (StringLiteral t) = s `hashWithSalt` (1::Int) `hashWithSalt` t
+  hashWithSalt s (NumberLiteral n) = s `hashWithSalt` (2::Int) `hashWithSalt` n
+  hashWithSalt s Wildcard = s `hashWithSalt` (3::Int)
 
 instance Arbitrary Term where
   arbitrary = do

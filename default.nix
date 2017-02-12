@@ -2,7 +2,8 @@
 
 let
   hsEnv = pkgs.haskellPackages.ghcWithPackages(p: with p; [
-    Cabal cabal-install attoparsec hlint text containers hspec mtl
+    Cabal cabal-install attoparsec hlint text containers unordered-containers hspec mtl
+    pretty
   ]);
 
   texEnv = (pkgs.texlive.combine {
@@ -14,6 +15,6 @@ in pkgs.stdenv.mkDerivation {
   version = "0.0.1";
   src = ./.;
   buildInputs = [
-    hsEnv texEnv
+    hsEnv # texEnv
   ];
 }

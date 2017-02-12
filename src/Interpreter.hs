@@ -13,8 +13,8 @@ import           Control.Arrow
 
 import           Control.Category
 
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 
 import           Text.Printf
 
@@ -27,7 +27,7 @@ class HasTermEnv m p | p -> m where
   getTermEnv :: p () m
   putTermEnv :: p m ()
 
-extendTermEnv :: (Arrow p, HasTermEnv (Map TermVar t) p) => p (TermVar,t) ()
+extendTermEnv :: (Arrow p, HasTermEnv (HashMap TermVar t) p) => p (TermVar,t) ()
 extendTermEnv = proc (v,t) -> do
   env <- getTermEnv -< ()
   putTermEnv -< M.insert v t env
@@ -75,7 +75,7 @@ all :: ArrowChoice p => p a b -> p (Constructor,[a]) (Constructor,[b])
 all f = second (mapA f)
 {-# INLINE all #-}
 
-scope :: (Arrow p, HasTermEnv (Map TermVar t) p) => [TermVar] -> p a b -> p a b
+scope :: (Arrow p, HasTermEnv (HashMap TermVar t) p) => [TermVar] -> p a b -> p a b
 scope vars s = proc t -> do
   env  <- getTermEnv -< ()
   ()   <- putTermEnv -< foldr M.delete env vars
@@ -92,7 +92,7 @@ let_ ss s = proc t -> do
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
   localStratEnv s -< (t, M.union (M.fromList ss') senv)
 
-call :: (Show t, Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (Map TermVar t) p) =>
+call :: (Show t, Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (HashMap TermVar t) p) =>
         StratVar -> [Strat] -> [TermVar] -> (Strat -> p a b) -> p a b
 call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
@@ -110,7 +110,7 @@ call f actualStratArgs actualTermArgs interp = proc a -> do
   where
 
     bindTermArgs :: (Try p, ArrowChoice p) =>
-        p (Map TermVar t, [(TermVar,TermVar)]) (Map TermVar t)
+        p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
     bindTermArgs = proc (tenv,l) -> case l of
       (actual,formal) : rest ->
         case M.lookup actual tenv of

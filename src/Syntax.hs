@@ -9,19 +9,21 @@ import           ATerm
 
 import           Control.Monad.Except
 
+import           Data.Hashable
 import           Data.Text (Text,pack,unpack)
 import qualified Data.Text as T
 import           Data.List (intercalate)
 import           Data.String (IsString(..))
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 import           Data.Set (Set)
 import qualified Data.Set as S
 
 import           Test.QuickCheck hiding (subterms)
 
-newtype Constructor = Constructor Text
-  deriving (Eq,IsString)
+newtype Constructor = Constructor Text deriving (Eq,Ord,IsString,Hashable)
+newtype TermVar = TermVar Text deriving (Eq,Ord,Hashable)
+newtype StratVar = StratVar Text deriving (Eq,Ord,IsString,Hashable)
 
 data TermPattern
   = Cons Constructor [TermPattern]
@@ -31,16 +33,15 @@ data TermPattern
   | NumberLiteral Int
   deriving (Eq)
 
-newtype TermVar = TermVar Text
-  deriving (Eq,Ord)
+data Module = Module Signature Strategies deriving (Show,Eq)
+type Signature = HashMap Constructor FunType
+data Sort = Sort Text [Sort] | SortVar Text deriving (Show,Eq)
+data FunType = FunType [Sort] Sort deriving (Show,Eq)
 
-newtype StratVar = StratVar Text deriving (Eq,Ord,IsString)
-data Module = Module Signature (Map StratVar Strategy) deriving (Show,Eq)
-type Signature = [Sort]
-data Sort = Sort deriving (Show,Eq)
+type Strategies = HashMap StratVar Strategy
 data Strategy = Strategy [StratVar] [TermVar] Strat deriving (Show,Eq)
 data Closure = Closure Strategy StratEnv deriving (Eq)
-type StratEnv = Map StratVar Closure
+type StratEnv = HashMap StratVar Closure
 data Strat
   = Fail
   | Id
@@ -55,6 +56,12 @@ data Strat
   | Call StratVar [Strat] [TermVar]
   | Let [(StratVar,Strategy)] Strat
   deriving (Eq)
+
+leftChoice :: Strat -> Strat -> Strat
+leftChoice f g = GuardedChoice f Id g
+
+stratEnv :: Module -> StratEnv
+stratEnv (Module _ senv) = fmap (`Closure` M.empty) senv
 
 patternVars :: TermPattern -> Set TermVar
 patternVars t = case t of
@@ -72,11 +79,38 @@ parseModule t = case t of
     Module <$> parseSignature sig <*> (M.fromList <$> traverse parseStrategy strats)
   _ -> throwError $ "unexpected input while parsing module from aterm: " ++ show t
 
-parseSignature :: (MonadError String m) => [ATerm] -> m Signature
--- TODO: Implement correctly
-parseSignature _ = return []
+parseSignature :: MonadError String m => [ATerm] -> m Signature
+parseSignature t = case t of
+  ATerm "Constructors" [List constrs]:rest -> do
+    sig <- M.fromList <$> traverse parseConstructor constrs
+    sig' <- parseSignature rest
+    return $ M.union sig sig'
+  [] -> return M.empty
+  _ -> throwError $ "unexpected input while parsing signature from aterm: " ++ show t
 
-parseStrategy :: (MonadError String m) => ATerm -> m (StratVar,Strategy)
+parseConstructor :: MonadError String m => ATerm -> m (Constructor,FunType)
+parseConstructor t = case t of
+  ATerm "OpDecl" [String con, body] -> do
+    typ <- parseFunType body
+    return (Constructor con,typ)
+  _ -> throwError $ "unexpected input while parsing constructor from aterm: " ++ show t  
+
+parseFunType :: MonadError String m => ATerm -> m FunType
+parseFunType t = case t of
+  ATerm "FunType" [List args,res] -> FunType <$> traverse parseSort args <*> parseSort res
+  ATerm "ConstType" _ -> FunType <$> pure [] <*> parseSort t
+  _ -> throwError $ "unexpected input while parsing funtype from aterm: " ++ show t
+
+parseSort :: MonadError String m => ATerm -> m Sort
+parseSort t = case t of
+  ATerm "ConstType" [t'] -> parseSort t'
+  ATerm "Sort" [String sortName, List params] ->
+    Sort sortName <$> traverse parseSort params
+  ATerm "SortVar" [String v] ->
+    return $ SortVar v
+  _ -> throwError $ "unexpected input while parsing sort from aterm: " ++ show t
+
+parseStrategy :: MonadError String m => ATerm -> m (StratVar,Strategy)
 parseStrategy strat = case strat of
   ATerm "SDefT" [String name, List stratVars, List termVars, body] -> do
     str <- Strategy <$> parseStratVars stratVars

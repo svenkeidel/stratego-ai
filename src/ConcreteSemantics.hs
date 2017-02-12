@@ -7,31 +7,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ConcreteSemantics where
 
-import Prelude hiding (id,(.),fail,sequence,all,uncurry,zipWith)
+import           Prelude hiding (id,(.),fail,sequence,all,uncurry,zipWith)
 
-import Syntax hiding (Fail,TermPattern(..))
-import Syntax (TermPattern)
+import           Syntax hiding (Fail,TermPattern(..))
+import           Syntax (TermPattern)
 import qualified Syntax as S
-import Interpreter
-import Result
+import           Interpreter
+import           Result
 
-import Control.Monad hiding (fail,sequence)
-import Control.Category
-import Control.Arrow
+import           Control.Monad hiding (fail,sequence)
+import           Control.Category
+import           Control.Arrow
 
-import Data.Map (Map)
-import qualified Data.Map as M
-import Data.Text (Text)
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text)
+import           Data.String (IsString(..))
+import           Data.Hashable
 
-import Test.QuickCheck hiding (Result(..))
+import           Test.QuickCheck hiding (Result(..))
 
 data Term
   = Cons Constructor [Term]
   | StringLiteral Text
   | NumberLiteral Int
-  deriving Eq
+  deriving (Eq)
 
-type TermEnv = Map TermVar Term
+type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp { runInterp :: StratEnv -> (a,TermEnv) -> Result (b,TermEnv) }
 
 eval :: Strat -> StratEnv -> (Term,TermEnv) -> Result (Term,TermEnv)
@@ -71,10 +73,15 @@ match = proc (p,t) -> case p of
     _ -> fail -< ()
   S.Explode c ts -> case t of
     Cons (Constructor c') ts' -> do
-      _ <- match -< (c,StringLiteral c')
-      _ <- match -< (ts, convertToList ts')
+      match -< (c,StringLiteral c')
+      match -< (ts, convertToList ts')
       success -< t
-    _ -> fail -< ()
+    StringLiteral _ -> do
+      match -< (ts, convertToList [])
+      success -< t
+    NumberLiteral _ -> do
+      match -< (ts, convertToList [])
+      success -< t
   S.StringLiteral s -> case t of
     StringLiteral s'
       | s == s' -> success -< t
@@ -102,7 +109,7 @@ unify = proc (t1,t2) -> case (t1,t2) of
   (_,_) -> fail -< ()
 
 
-build :: (ArrowChoice p, Try p, HasTermEnv (Map TermVar Term) p) => p TermPattern Term
+build :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -186,7 +193,7 @@ instance ArrowPlus Interp where
 instance ArrowApply Interp where
   app = Interp $ \senv ((f,b),e) -> runInterp f senv (b,e)
 
-instance HasTermEnv (Map TermVar Term) Interp where
+instance HasTermEnv TermEnv Interp where
   getTermEnv = Interp $ \_ ((),e) -> Success (e,e)
   putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
 
@@ -199,6 +206,9 @@ instance Show Term where
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
 
+instance IsString Term where
+  fromString = StringLiteral . fromString
+
 instance Num Term where
   t1 + t2 = Cons "Add" [t1,t2]
   t1 - t2 = Cons "Sub" [t1,t2]
@@ -206,6 +216,11 @@ instance Num Term where
   abs t = Cons "Abs" [t]
   signum t = Cons "Signum" [t]
   fromInteger = NumberLiteral . fromIntegral
+
+instance Hashable Term where
+  hashWithSalt s (Cons c ts) = s `hashWithSalt` (0::Int) `hashWithSalt` c `hashWithSalt` ts
+  hashWithSalt s (StringLiteral t) = s `hashWithSalt` (1::Int) `hashWithSalt` t
+  hashWithSalt s (NumberLiteral n) = s `hashWithSalt` (2::Int) `hashWithSalt` n
 
 instance Arbitrary Term where
   arbitrary = do

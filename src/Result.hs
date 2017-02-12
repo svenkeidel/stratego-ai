@@ -1,9 +1,10 @@
 module Result where
 
 import Control.Monad
+import Data.Hashable
 
 data Result a = Success a | Fail
-  deriving (Eq,Show)
+  deriving (Eq,Ord,Show)
 
 instance Functor Result where
   fmap f (Success a) = Success (f a)
@@ -18,3 +19,7 @@ instance Monad Result where
   f >>= k = case f of
     Success a -> k a
     Fail -> Fail
+
+instance Hashable a => Hashable (Result a) where
+  hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a
+  hashWithSalt s Fail = s `hashWithSalt` (1::Int)

@@ -5,7 +5,7 @@ module WildcardSemanticsSoundness where
 
 import Prelude hiding (Ord(..),abs)
 
-import Syntax(Strat,StratEnv,TermPattern)
+import Syntax(Strat,StratEnv)
 import Result
 
 import qualified ConcreteSemantics as C
@@ -13,7 +13,7 @@ import qualified WildcardSemantics as W
 
 import Control.Arrow
 
-import qualified Data.Map as M
+import qualified Data.HashMap.Lazy as M
 
 import Data.Foldable (toList)
 import Data.Sequence (Seq)
@@ -55,12 +55,6 @@ sound i s senv ts =
       con = alphaResult $ C.eval s senv <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)
-
-test :: Gen (TermPattern,W.Term)
-test = do
-  [t1,t2,t3] <- C.similarTerms 3 7 2 10
-  tp <- C.similarTermPattern t1 3
-  return (tp,lub (alphaTerm t2) (alphaTerm t3))
 
 class PartOrd a where
   (<=) :: a -> a -> Bool

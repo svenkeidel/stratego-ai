@@ -1,28 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
 module InterpreterSpec(main, spec) where
 
-import Prelude hiding ((.),id,succ,pred,all,fail,sequence,map)
+import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map)
 
-import Syntax hiding (Fail)
-import Interpreter
-import Result
-
+import           Syntax hiding (Fail)
+import           Interpreter
+import           Result
 import qualified ConcreteSemantics as C
 import qualified WildcardSemantics as W
+import           WildcardSemanticsSoundness
 
-import WildcardSemanticsSoundness
+import           Control.Arrow
 
-import Control.Arrow
-
-import qualified Data.Map as M
-import Data.Sequence (Seq)
+import           Data.Foldable (toList)
+import           Data.Hashable
+import qualified Data.HashMap.Lazy as M
+import qualified Data.HashSet as H
+import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
-import Text.Printf
+import           Text.Printf
 
-import Test.Hspec
-import Test.Hspec.QuickCheck
-import Test.QuickCheck hiding (Result(..))
+import           Test.Hspec
+import           Test.Hspec.QuickCheck
+import           Test.QuickCheck hiding (Result(..))
 
 main :: IO ()
 main = hspec spec
@@ -93,15 +94,6 @@ spec = do
       C.eval (Scope ["y"] (Match "z")) M.empty (term2,tenv) `shouldBe`
         Success (term2,M.fromList [("x", term1), ("z", term2)])
 
-  describe "call" $
-    it "should support recursion" $ do
-      let senv = M.fromList [("map", Closure map M.empty)]
-      let t = C.convertToList [2, 3, 4]
-      C.eval (Match "x" `Seq`
-              Call "map" [Build (NumberLiteral 1)] ["x"]) senv (t, M.empty)
-        `shouldBe`
-           Success (C.convertToList [1, 1, 1], M.fromList [("x",t)])
-
   describe "let" $ do
     it "should support recursion" $ do
       let t = C.convertToList (C.NumberLiteral <$> [2, 3, 4])
@@ -117,7 +109,7 @@ spec = do
       fmap fst <$> weval 5 (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"])) t
-        `shouldBe`
+        `shouldBe'`
            S.fromList 
              [ Success $ W.convertToList [1]
              , Success $ W.convertToList [1,1]
@@ -126,23 +118,16 @@ spec = do
              , Fail
              , Success (cons 1 (cons 1 (cons 1 (cons W.Wildcard W.Wildcard))))]
 
-  describe "unify" $
-    prop "should compare terms" $ \t1 t2 ->
-      runKleisli C.unify (t1,t2) `shouldBe`
-        if t1 == t2 then Just t1 else Nothing
+  describe "call" $ do
+    it "should support recursion" $ do
+      let senv = M.fromList [("map", Closure map M.empty)]
+      let t = C.convertToList [2, 3, 4]
+      C.eval (Match "x" `Seq`
+              Call "map" [Build (NumberLiteral 1)] ["x"]) senv (t, M.empty)
+        `shouldBe`
+           Success (C.convertToList [1, 1, 1], M.fromList [("x",t)])
 
-  describe "match" $ do
-    prop "should introduce variables" $ \t ->
-      ceval (Match "x" `Seq` Match "y") t `shouldBe`
-        Success (t, M.fromList [("x", t), ("y", t)])
-
-    prop "should support linear pattern matching" $ \t1 t2 ->
-      let t' = C.Cons "f" [t1,t2]
-      in ceval (Match (Cons "f" ["x","x"])) t' `shouldBe`
-           if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
-
-  describe "soundness" $ do
-    prop "call" $ do
+    prop "should be sound" $ do
       i <- choose (0,10)
       j <- choose (0,10)
       l <- C.similarTerms i 7 2 10
@@ -156,7 +141,17 @@ spec = do
                    Call "map" [Build 1] ["x"]))
                  (S.fromList [t1,t2])
 
-    prop "match" $ do
+  describe "match" $ do
+    prop "should introduce variables" $ \t ->
+      ceval (Match "x" `Seq` Match "y") t `shouldBe`
+        Success (t, M.fromList [("x", t), ("y", t)])
+
+    prop "should support linear pattern matching" $ \t1 t2 ->
+      let t' = C.Cons "f" [t1,t2]
+      in ceval (Match (Cons "f" ["x","x"])) t' `shouldBe`
+           if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
+
+    prop "should be sound" $ do
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       return $ counterexample
@@ -165,7 +160,14 @@ spec = do
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
              $ sound' 10 (Match matchPattern) (S.fromList [t2,t3])
 
-    prop "build" $ do
+    it "should succeed when exploding literals" $
+      ceval (Match (Explode "_" "x")) 1 `shouldBe`
+         Success (1, M.fromList [("x", C.Cons "Nil" [])])
+
+     
+
+  describe "build" $
+    prop "should be sound" $ do
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       let vars = patternVars' matchPattern
@@ -177,7 +179,16 @@ spec = do
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
              $ sound' 10 (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
+  describe "unify" $
+    prop "should compare terms" $ \t1 t2 ->
+      runKleisli C.unify (t1,t2) `shouldBe`
+        if t1 == t2 then Just t1 else Nothing
+
   where
+
+    shouldBe' :: (Show a, Eq a, Hashable a) => Seq a -> Seq a -> Expectation
+    shouldBe' s1 s2 = H.fromList (toList s1) `shouldBe` H.fromList (toList s2)
+    infix 1 `shouldBe'`
 
     map = Strategy ["f"] ["l"] (Scope ["x","xs","x'","xs'"] (
             Build "l" `Seq`
