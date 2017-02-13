@@ -18,7 +18,7 @@ import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 
 import           Data.Semigroup ((<>))
-import           Data.Sequence (Seq)
+import           Data.Sequence (Seq,(|>))
 import qualified Data.Sequence as S
 import qualified Data.HashSet as H
 import           Data.HashMap.Lazy (HashMap)
@@ -38,6 +38,39 @@ data Term
 
 type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
+
+newtype F a b = F (a -> b, (a,b) -> a)
+
+instance Category F where
+  id = F (id, snd)
+  F (f,f') . F (g,g') = F (f.g, \(a,c) -> g' (a ,f' (g a,c)))
+
+{-
+id . g = g
+
+F (id,snd) . F (g,g')
+ = F (id.g, \(a,c) -> g' (a ,snd (g a,c)))
+ = F (g, \(a,c) -> g' (a , c))
+ = F (g, g')
+
+
+f . id = f
+
+F (f,f') . F (id,snd)
+ = F (f.g, \(a,c) -> snd (a ,f' (id a,c)))
+ = F (f.g, \(a,c) -> f' (a,c))
+ = F (f.g, f')
+
+(f . g) . h = f . (g . h)
+
+(F (f,f') . F (g,g')) . F (h,h')
+  = F (f.g, \(b,d) -> g' (b ,f' (g b,d))) . F (h,h')
+  = F (f.g.h, \(a,d) -> h' (a, (\(b,d') -> g' (b ,f' (g b,d'))) (h a, d)))
+  = F (f.g.h, \(a,d) -> h' (a, g' (h a ,f' (g (h a), d))))
+  = F (f.g.h, \(a,d) -> (\(a',c) -> h' (a', g' (h a', c))) (a, f' ((g . h) a, d)))
+  = F (f,f') . F (g.h, \(a,c) -> h' (a, g' (h a, c)))
+  = F (f,f') . (F (g,g') . F (h,h'))
+-}
 
 eval :: Int -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
 eval fuel s = runInterp (interp fuel s)
@@ -64,7 +97,8 @@ interp i s0 = dedup $ case s0 of
     dedup f = Interp $ \senv x -> dedup' $ runInterp f senv x
 
     dedup' :: Seq (Result (Term,TermEnv)) -> Seq (Result (Term,TermEnv))
-    dedup' = foldl' (\s a -> s S.|> a) S.empty . foldl' (\m k -> H.insert k m) H.empty
+    dedup' = foldl' (|>) S.empty
+           . foldl' (flip H.insert) H.empty
 
 match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv TermEnv p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
