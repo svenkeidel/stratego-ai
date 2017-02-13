@@ -6,15 +6,12 @@ import ATerm
 import Syntax
 import Result
 
-import HaskellPretty
 import qualified ConcreteSemantics as C
-import qualified WildcardSemantics as W
 
 import Paths_system_s
 
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text.IO as T
-import qualified Data.Sequence as S
 
 import Test.Hspec
 
@@ -33,17 +30,13 @@ spec =
       C.eval (Call "union_0_0" [] []) (stratEnv module_) (t,M.empty)
         `shouldBe`
            Success (C.convertToList [1,3,2,4], M.empty)
-      W.eval 5 (Call "union_0_0" [] [])
-           (stratEnv module_) (W.Wildcard,M.empty)
-        `shouldBe`
-           S.empty
 
     it "concat should work" $ \module_ ->
       let l = C.convertToList (fmap C.convertToList [[1,2,3],[4,5],[],[6]])
       in C.eval (Call "concat_0_0" [] []) (stratEnv module_) (l,M.empty)
         `shouldBe`
            Success (C.convertToList [1,2,3,4,5,6], M.empty)
-    
+
     it "free-pat-vars should work" $ \module_ ->
       let var x = C.Cons "Var" [x]
           tuple x y = C.Cons "Tuple" [x,C.convertToList y]
@@ -52,12 +45,6 @@ spec =
       in C.eval (Call "free_pat_vars_0_0" [] []) (stratEnv module_) (t,M.empty)
           `shouldBe`
              Success (C.convertToList [var "b", var "c", var "a"], M.empty)
-
-    it "desugar-arrow should work" $ \module_ ->
-      ppResults (W.eval 3 (Call "desugar_arrow_0_0" [] [])
-           (stratEnv module_) (W.Wildcard,M.empty))
-        `shouldBe`
-           ""
 
   where
     parseArrowCaseStudy = do

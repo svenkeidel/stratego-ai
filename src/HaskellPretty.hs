@@ -6,7 +6,6 @@ import           Result
 
 import           Data.Foldable(toList)
 import           Data.Sequence (Seq)
-import qualified Data.Sequence as S
 
 import           Text.PrettyPrint hiding (sep)
 
@@ -16,10 +15,7 @@ ppResults res = braces
               $ cat
               $ punctuate (comma <> space)
               $ toList
-              $ fmap ppResult
-              $ S.reverse
-              $ S.sort 
-              $ (fmap.fmap) fst res
+              $ ppResult <$> (fmap.fmap) fst res
 
 ppResult :: Result Term -> Doc
 ppResult res = case res of

@@ -39,39 +39,6 @@ data Term
 type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
 
-newtype F a b = F (a -> b, (a,b) -> a)
-
-instance Category F where
-  id = F (id, snd)
-  F (f,f') . F (g,g') = F (f.g, \(a,c) -> g' (a ,f' (g a,c)))
-
-{-
-id . g = g
-
-F (id,snd) . F (g,g')
- = F (id.g, \(a,c) -> g' (a ,snd (g a,c)))
- = F (g, \(a,c) -> g' (a , c))
- = F (g, g')
-
-
-f . id = f
-
-F (f,f') . F (id,snd)
- = F (f.g, \(a,c) -> snd (a ,f' (id a,c)))
- = F (f.g, \(a,c) -> f' (a,c))
- = F (f.g, f')
-
-(f . g) . h = f . (g . h)
-
-(F (f,f') . F (g,g')) . F (h,h')
-  = F (f.g, \(b,d) -> g' (b ,f' (g b,d))) . F (h,h')
-  = F (f.g.h, \(a,d) -> h' (a, (\(b,d') -> g' (b ,f' (g b,d'))) (h a, d)))
-  = F (f.g.h, \(a,d) -> h' (a, g' (h a ,f' (g (h a), d))))
-  = F (f.g.h, \(a,d) -> (\(a',c) -> h' (a', g' (h a', c))) (a, f' ((g . h) a, d)))
-  = F (f,f') . F (g.h, \(a,c) -> h' (a, g' (h a, c)))
-  = F (f,f') . (F (g,g') . F (h,h'))
--}
-
 eval :: Int -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
 eval fuel s = runInterp (interp fuel s)
 
@@ -277,13 +244,6 @@ instance Show Term where
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
   show Wildcard = "_"
-
-instance Ord Term where
-  (Cons c ts) <= (Cons c' ts') = c <= c' && ts <= ts'
-  (StringLiteral s) <= (StringLiteral s') = s <= s'
-  (NumberLiteral n) <= (NumberLiteral n') = n <= n'
-  _ <= Wildcard = True
-  _ <= _ = False
 
 instance Num Term where
   t1 + t2 = Cons "Add" [t1,t2]
