@@ -1,29 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module HaskellPretty where
 
-import           WildcardSemantics
-import           Result
-
-import           Data.Foldable(toList)
-import           Data.Sequence (Seq)
-
-import           Text.PrettyPrint hiding (sep)
-
-
-ppResults :: Seq (Result (Term,TermEnv)) -> Doc
-ppResults res = braces
-              $ cat
-              $ punctuate (comma <> space)
-              $ toList
-              $ ppResult <$> (fmap.fmap) fst res
-
-ppResult :: Result Term -> Doc
-ppResult res = case res of
-  Success t -> ppHaskell t
-  Fail -> text "Fail"
+import WildcardSemantics
+import Text.PrettyPrint hiding (sep)
 
 ppHaskell :: Term -> Doc
 ppHaskell t = case t of
+  Cons "ArrProcedure" [pat,cmd] ->
+    text "proc " <> ppHaskell pat <> text " -> " <> ppHaskell cmd
   Cons "OpApp" [l,Cons o [],r] ->
     ppHaskell l <> space <> text (show o) <> space <> ppHaskell r
   Cons "AppBin" [f,x] ->

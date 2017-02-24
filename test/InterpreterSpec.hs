@@ -152,22 +152,22 @@ spec = do
            if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
 
     prop "should be sound" $ do
+      i <- choose (0,1)
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       return $ counterexample
-                 (printf "pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
-                    (show matchPattern) (show t2) (show t3)
+                 (printf "i: %d\npattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
+                    i (show matchPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' 10 (Match matchPattern) (S.fromList [t2,t3])
+             $ sound' i (Match matchPattern) (S.fromList [t2,t3])
 
     it "should succeed when exploding literals" $
       ceval (Match (Explode "_" "x")) 1 `shouldBe`
          Success (1, M.fromList [("x", C.Cons "Nil" [])])
 
-     
-
   describe "build" $
     prop "should be sound" $ do
+      i <- choose (0,1)
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       let vars = patternVars' matchPattern
@@ -177,7 +177,7 @@ spec = do
                  (printf "match pattern: %s\nbuild pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     (show matchPattern) (show buildPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' 10 (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
+             $ sound' i (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
   describe "unify" $
     prop "should compare terms" $ \t1 t2 ->

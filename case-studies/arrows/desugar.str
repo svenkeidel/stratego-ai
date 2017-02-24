@@ -9,7 +9,6 @@ rules
        >>> $(<desugar-arrow'(|pat-vars)> cmd) ]|
   where <free-pat-vars> pat => pat-vars
 
-
   desugar-arrow'(|vars) :
     cmd |[ $f -< $e ]| ->
     |[ arr (\$(<tuple-pat> vars) -> $e) >>> $f ]|

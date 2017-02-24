@@ -10,7 +10,8 @@ build-type:          Simple
 extra-source-files:  ChangeLog.md, README
 cabal-version:       >=1.20
 
-data-files:          case-studies/arrows/desugar2core.aterm
+data-files:          case-studies/arrows/arrows.aterm
+data-files:          case-studies/pcf/pcf.aterm
 
 library
   ghc-options:         -Wall
@@ -21,7 +22,9 @@ library
                        ConcreteSemantics,
                        WildcardSemantics,
                        WildcardSemanticsSoundness,
-                       HaskellPretty
+                       PrettyPrint,
+                       HaskellPretty,
+                       PCFPretty
   build-depends:       base,
                        QuickCheck,
                        attoparsec,
@@ -34,7 +37,7 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
 
-Executable arrow-case-study
+Executable case-studies
   Build-Depends:       base,
                        QuickCheck,
                        attoparsec,
@@ -45,7 +48,7 @@ Executable arrow-case-study
                        pretty,
                        text,
                        system-s
-  hs-source-dirs:      case-studies/arrows
+  hs-source-dirs:      case-studies
   main-is:             Main.hs
   default-language:    Haskell2010
 

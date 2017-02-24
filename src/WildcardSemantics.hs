@@ -20,6 +20,7 @@ import           Control.Monad hiding (fail,sequence)
 import           Data.Semigroup ((<>))
 import           Data.Sequence (Seq,(|>))
 import qualified Data.Sequence as S
+import           Data.HashSet (HashSet)
 import qualified Data.HashSet as H
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -38,14 +39,15 @@ data Term
 
 type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Seq (Result (b,TermEnv))}
-
-eval :: Int -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
-eval fuel s = runInterp (interp fuel s)
-
 type Fuel = Int
 
+eval :: Fuel -> Strat -> StratEnv -> (Term,TermEnv) -> Seq (Result (Term,TermEnv))
+eval fuel s = runInterp (interp fuel s)
+
 interp :: Fuel -> Strat -> Interp Term Term
-interp 0 _ = proc _ -> fail <+> success -< Wildcard
+interp 0 s = proc _ -> do
+  -- approximateTermEnv H.empty s -< ()
+  fail <+> success -< Wildcard
 interp i s0 = dedup $ case s0 of
   S.Fail -> fail
   Id -> id
@@ -59,13 +61,14 @@ interp i s0 = dedup $ case s0 of
   Build f -> proc _ -> build -< f
   Let ss body -> let_ ss (interp i body)
   Call f ss ps -> call f ss ps (interp (i-1))
-  where
-    dedup :: Interp Term Term -> Interp Term Term
-    dedup f = Interp $ \senv x -> dedup' $ runInterp f senv x
 
-    dedup' :: Seq (Result (Term,TermEnv)) -> Seq (Result (Term,TermEnv))
-    dedup' = foldl' (|>) S.empty
-           . foldl' (flip H.insert) H.empty
+
+dedup :: (Hashable b,Eq b) => Interp a b -> Interp a b
+dedup f = Interp $ \senv x -> dedup' $ runInterp f senv x
+
+dedup' :: (Hashable a,Eq a) => Seq a -> Seq a
+dedup' = foldl' (|>) S.empty
+       . foldl' (flip H.insert) H.empty
 
 match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv TermEnv p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
@@ -187,6 +190,43 @@ lift p = proc t -> case t of
   NumberLiteral {} -> returnA -< t
   Wildcard -> fail <+> success -< Wildcard
 
+
+approximateTermEnv :: HashSet StratVar -> Strat -> Interp () ()
+approximateTermEnv senv s0 = case s0 of
+  S.Fail -> fail
+  Id -> id
+  GuardedChoice s1 s2 s3 ->
+    guardedChoice (approximateTermEnv senv s1) (approximateTermEnv senv s2) (approximateTermEnv senv s3)
+  Seq s1 s2 ->
+    sequence (approximateTermEnv senv s1) (approximateTermEnv senv s2)
+  One s -> approximateTermEnv senv s <+> fail
+  Some s -> approximateTermEnv senv s <+> fail
+  All s -> approximateTermEnv senv s <+> fail
+  Scope xs s -> scope xs (approximateTermEnv senv s)
+  Build _ -> id
+  Match p -> proc _ -> approximateMatch -< p
+  Let ss body -> let_ ss (approximateTermEnv senv body)
+  Call f ss ps ->
+    if H.member f senv
+    then id
+    else call f ss ps (approximateTermEnv (H.insert f senv))
+  where
+    approximateMatch = proc p -> case p of
+      S.Var "_" -> returnA -< ()
+      S.Var x -> do
+        env <- getTermEnv -< ()
+        putTermEnv -< M.insert x Wildcard env
+        success <+> fail -< ()
+      S.Cons _ ts -> do
+        _ <- mapA approximateMatch -< ts
+        success <+> fail -< ()
+      S.Explode c ts -> do
+        approximateMatch -< c
+        approximateMatch -< ts
+        success <+> fail -< ()
+      _ -> returnA -< ()
+
+
 -- Instances -----------------------------------------------------------------------------------------
 
 instance Category Interp where
@@ -214,7 +254,7 @@ instance ArrowChoice Interp where
     Right b -> (fmap.fmap) (first Right) (runInterp g senv (b,e))
 
 instance Try Interp where
-  success = Interp (const (return . Success))
+  success = id
   fail = Interp (const (const (return Fail)))
   try t s f = Interp $ \senv (a,e) -> do
     x <- runInterp t senv (a,e)

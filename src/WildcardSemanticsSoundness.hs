@@ -42,19 +42,23 @@ sound'' i s = property $ do
 sound' :: W.Fuel -> Strat -> Seq C.Term -> Property
 sound' i s ts = sound i s M.empty (fmap (id &&& const M.empty) ts)
 
-{-         Seq (C.interp s)
-Seq C.Term --------------> Seq (C.Term)
+{-         P (C.eval s)
+P (T x E) --------------> P (T x E)
    |^                          |^
    ||                          ||
-   v|        W.interp s     >= v|
- W.Term -------------------> W.Term
+   v|        W.eval s       >= v|
+ T x E --------------------> T' x E'
 -}
 sound :: W.Fuel -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
 sound i s senv ts =
-  let abs = W.eval i s senv $ lubs $ fmap (alphaTerm *** alphaEnv) ts
+  let abs = W.eval i s senv $ alphaDom ts
       con = alphaResult $ C.eval s senv <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)
+
+  where
+    alphaDom :: Seq (C.Term,C.TermEnv) -> (W.Term,W.TermEnv)
+    alphaDom = lubs . fmap (alphaTerm *** alphaEnv)
 
 class PartOrd a where
   (<=) :: a -> a -> Bool

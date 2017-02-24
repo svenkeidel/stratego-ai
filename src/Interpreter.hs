@@ -92,8 +92,8 @@ let_ ss s = proc t -> do
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
   localStratEnv s -< (t, M.union (M.fromList ss') senv)
 
-call :: (Show t, Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (HashMap TermVar t) p) =>
-        StratVar -> [Strat] -> [TermVar] -> (Strat -> p a b) -> p a b
+call :: (Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (HashMap TermVar t) p)
+     => StratVar -> [Strat] -> [TermVar] -> (Strat -> p a b) -> p a b
 call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of

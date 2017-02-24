@@ -58,7 +58,7 @@ data Strat
   deriving (Eq)
 
 leftChoice :: Strat -> Strat -> Strat
-leftChoice f g = GuardedChoice f Id g
+leftChoice f = GuardedChoice f Id
 
 stratEnv :: Module -> StratEnv
 stratEnv (Module _ senv) = fmap (`Closure` M.empty) senv
@@ -176,6 +176,26 @@ parseTermPattern p = case p of
 instance Show Constructor where
   show (Constructor c) = unpack c
 
+instance Arbitrary TermVar where
+  arbitrary = TermVar . T.singleton <$> choose ('a','z')
+
+instance Show TermVar where
+  show (TermVar x) = unpack x
+
+instance IsString TermVar where
+  fromString = TermVar . pack
+
+instance IsString TermPattern where
+  fromString = Var . fromString
+
+instance Hashable TermPattern where
+  hashWithSalt s x = case x of
+    Cons c ts -> s `hashWithSalt` (0::Int) `hashWithSalt` c `hashWithSalt` ts
+    Explode t1 t2 -> s `hashWithSalt` (1::Int) `hashWithSalt` t1 `hashWithSalt` t2
+    Var tv -> s `hashWithSalt` (2::Int) `hashWithSalt` tv
+    StringLiteral l -> s `hashWithSalt` (3::Int) `hashWithSalt` l
+    NumberLiteral l -> s `hashWithSalt` (5::Int) `hashWithSalt` l
+
 instance Show TermPattern where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
   show (Var x) = show x
@@ -183,17 +203,23 @@ instance Show TermPattern where
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
 
-instance IsString TermPattern where
-  fromString = Var . fromString
-
-instance IsString TermVar where
-  fromString = TermVar . pack
-
 instance IsString Strat where
   fromString s = Call (fromString s) [] []
 
-instance Show TermVar where
-  show (TermVar x) = unpack x
+instance Hashable Strat where
+  hashWithSalt s x = case x of
+    Fail -> s `hashWithSalt` (0::Int)
+    Id -> s `hashWithSalt` (1::Int)
+    Seq e1 e2 -> s `hashWithSalt` (2::Int) `hashWithSalt` e1 `hashWithSalt` e2
+    GuardedChoice e1 e2 e3 -> s `hashWithSalt` (3::Int) `hashWithSalt` e1 `hashWithSalt` e2 `hashWithSalt` e3
+    One e -> s `hashWithSalt` (4::Int) `hashWithSalt` e
+    Some e -> s `hashWithSalt` (5::Int) `hashWithSalt` e
+    All e -> s `hashWithSalt` (6::Int) `hashWithSalt` e
+    Match t -> s `hashWithSalt` (7::Int) `hashWithSalt` t
+    Build t -> s `hashWithSalt` (8::Int) `hashWithSalt` t
+    Scope tv e -> s `hashWithSalt` (9::Int) `hashWithSalt` tv `hashWithSalt` e
+    Call sv ss tv -> s `hashWithSalt` (10::Int) `hashWithSalt` sv `hashWithSalt` ss `hashWithSalt` tv
+    Let bnds body -> s `hashWithSalt` (11::Int) `hashWithSalt` bnds `hashWithSalt` body
 
 instance Show Strat where
   showsPrec d s0 = case s0 of
@@ -255,14 +281,14 @@ instance Show Strat where
       seq_prec = 9
       choice_prec = 8
 
+instance Hashable Strategy where
+  hashWithSalt s (Strategy svs tvs body) = s `hashWithSalt` svs `hashWithSalt` tvs `hashWithSalt` body
+
 instance Show Closure where
   show (Closure s _) = show s
 
 instance Show StratVar where
   show (StratVar x) = unpack x
-
-instance Arbitrary TermVar where
-  arbitrary = TermVar . T.singleton <$> choose ('a','z')
 
 instance Arbitrary Constructor where
   arbitrary = Constructor <$> arbitraryLetter
