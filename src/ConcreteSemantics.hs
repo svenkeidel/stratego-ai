@@ -34,33 +34,33 @@ data Term
   deriving (Eq)
 
 type TermEnv = HashMap TermVar Term
-newtype Interp a b = Interp { runInterp :: StratEnv -> (a,TermEnv) -> Result (b,TermEnv) }
+newtype Interp a b = Interp { runInterp :: (a,TermEnv) -> Result (b,TermEnv) }
 
-eval :: Strat -> StratEnv -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval s = runInterp (interp s)
+eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
+eval senv s = runInterp (eval' senv s)
 
-interp :: Strat -> Interp Term Term
-interp s0 = case s0 of
+eval' :: StratEnv -> Strat -> Interp Term Term
+eval' senv s0 = case s0 of
   S.Fail -> fail
   Id -> id
-  Seq s1 s2 -> sequence (interp s1) (interp s2)
-  GuardedChoice s1 s2 s3 -> guardedChoice (interp s1) (interp s2) (interp s3)
-  One s -> lift (one (interp s))
-  Some s -> lift (some (interp s))
-  All s -> lift (all (interp s))
-  Scope xs s -> scope xs (interp s)
+  Seq s1 s2 -> eval' senv s2 . eval' senv s1
+  GuardedChoice s1 s2 s3 -> try (eval' senv s1) (eval' senv s2) (eval' senv s3)
+  One s -> lift (one (eval' senv s))
+  Some s -> lift (some (eval' senv s))
+  All s -> lift (all (eval' senv s))
+  Scope xs s -> scope xs (eval' senv s)
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
-  Let ss body -> let_ ss (interp body)
-  Call f ss ps -> call f ss ps interp
+  Let bnds body -> let_ senv bnds body eval'
+  Call f ss ps -> call senv f ss ps eval'
 
-match :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p (TermPattern, Term) Term
+match :: Interp (TermPattern, Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
-      Just t' -> unify -< (t,t')
+      Just t' -> equal -< (t,t')
       Nothing -> do
         putTermEnv -< M.insert x t env
         success -< t
@@ -93,11 +93,11 @@ match = proc (p,t) -> case p of
       | otherwise -> fail -< ()
     _ -> fail -< ()
 
-unify :: (ArrowChoice p, Try p) => p (Term,Term) Term
-unify = proc (t1,t2) -> case (t1,t2) of
+equal :: (ArrowChoice p, Try p) => p (Term,Term) Term
+equal = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
     | c == c' && length ts == length ts' -> do
-      ts'' <- zipWith unify -< (ts,ts')
+      ts'' <- zipWith equal -< (ts,ts')
       returnA -< Cons c ts''
     | otherwise -> fail -< ()
   (StringLiteral s, StringLiteral s')
@@ -109,13 +109,13 @@ unify = proc (t1,t2) -> case (t1,t2) of
   (_,_) -> fail -< ()
 
 
-build :: (ArrowChoice p, Try p, HasTermEnv TermEnv p) => p TermPattern Term
+build :: Interp TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
+      Just t -> returnA -< t
       Nothing -> fail -< ()
-      Just t -> success -< t
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     returnA -< Cons c ts'
@@ -155,51 +155,50 @@ lift p = proc t -> case t of
 -- Instances -----------------------------------------------------------------------------------------
 
 instance Category Interp where
-  id = Interp (const Success)
-  f . g = Interp $ \senv -> runInterp g senv >=> runInterp f senv
-
-instance Arrow Interp where
-  arr f = Interp (\_ (a,e) -> Success (f a, e))
-  first f = Interp $ \senv ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f senv (a,e))
-  second f = Interp $ \senv ((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f senv (b,e))
-
-instance ArrowChoice Interp where
-  left f = Interp $ \senv (a,e) -> case a of
-    Left b -> fmap (first Left) (runInterp f senv (b,e))
-    Right c -> Success (Right c,e)
-  right f = Interp $ \senv (a,e) -> case a of
-    Left c -> Success (Left c,e)
-    Right b -> fmap (first Right) (runInterp f senv (b,e))
-  f +++ g = Interp $ \senv (a,e) -> case a of
-    Left b  -> fmap (first Left)  (runInterp f senv (b,e))
-    Right b -> fmap (first Right) (runInterp g senv (b,e))
+  id = Interp $ \a -> Success a
+  f . g = Interp $ \a ->
+    case runInterp g a of
+      Success b -> runInterp f b
+      Fail -> Fail
 
 instance Try Interp where
-  success = Interp (const Success)
-  fail = Interp (const (const Fail))
-  try t s f = Interp $ \senv (a,e) -> case runInterp t senv (a,e) of
-    Success (b,e') -> runInterp s senv (b,e')
-    Fail -> runInterp f senv (a,e)
+  fail = Interp $ \_ -> Fail
+  try f g h = Interp $ \a ->
+    case runInterp f a of
+      Success b -> runInterp g b 
+      Fail -> runInterp h a
+
+instance Arrow Interp where
+  arr f = Interp (\(a,e) -> Success (f a, e))
+  first f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
+  second f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
+
+instance ArrowChoice Interp where
+  left f = Interp $ \(a,e) -> case a of
+    Left b -> first Left <$> runInterp f (b,e)
+    Right c -> Success (Right c,e)
+  right f = Interp $ \(a,e) -> case a of
+    Left c -> Success (Left c,e)
+    Right b -> first Right <$> runInterp f (b,e)
+  f +++ g = Interp $ \(a,e) -> case a of
+    Left b  -> first Left  <$> runInterp f (b,e)
+    Right b -> first Right <$> runInterp g (b,e)
 
 instance ArrowZero Interp where
   zeroArrow = fail
 
 instance ArrowPlus Interp where
-  f <+> g = Interp $ \senv x -> case (runInterp f senv x,runInterp g senv x) of
+  f <+> g = Interp $ \x -> case (runInterp f x,runInterp g x) of
     (Success y,_) -> Success y
     (_,Success y) -> Success y
     (_,_) -> Fail
 
 instance ArrowApply Interp where
-  app = Interp $ \senv ((f,b),e) -> runInterp f senv (b,e)
+  app = Interp $ \((f,b),e) -> runInterp f (b,e)
 
 instance HasTermEnv TermEnv Interp where
-  getTermEnv = Interp $ \_ ((),e) -> Success (e,e)
-  putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
-
-instance HasStratEnv Interp where
-  readStratEnv = Interp $ \senv (_,e) -> return (senv,e)
-  localStratEnv f = Interp $ \_ ((a,senv'),e) -> runInterp f senv' (a,e)
+  getTermEnv = Interp $ \((),e) -> Success (e,e)
+  putTermEnv = Interp $ \(e,_) -> Success ((),e)
 
 instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts

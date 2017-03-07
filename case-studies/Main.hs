@@ -39,6 +39,6 @@ caseStudy name function depth pprint = do
     Left e -> fail (show e)
     Right module_ -> forM_ [1..depth::Int] $ \n -> do
       printf "W.eval %d (call %s) Wildcard\n" n function
-      let res = W.eval n (Call (fromString function) [] []) (stratEnv module_) (W.Wildcard,M.empty)
+      let res = W.eval n (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
       print $ ppResults pprint res
       putStrLn ""

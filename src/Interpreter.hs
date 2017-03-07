@@ -19,9 +19,11 @@ import qualified Data.HashMap.Lazy as M
 import           Text.Printf
 
 class Arrow p => Try p where
-  success :: p a a
   fail :: p t a
   try :: p a b -> p b c -> p a c ->  p a c
+
+success :: Try p => p a a
+success = id
               
 class HasTermEnv m p | p -> m where
   getTermEnv :: p () m
@@ -85,45 +87,40 @@ scope vars s = proc t -> do
   returnA -< t'
 {-# INLINE scope #-}
 
-let_ :: (ArrowChoice p, HasStratEnv p) =>
-        [(StratVar,Strategy)] -> p a b -> p a b
-let_ ss s = proc t -> do
-  senv <- readStratEnv -< ()
+let_ :: StratEnv -> [(StratVar,Strategy)] -> Strat -> (StratEnv -> Strat -> p a b) -> p a b
+let_ senv ss body interp =
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
-  localStratEnv s -< (t, M.union (M.fromList ss') senv)
+  in interp (M.union (M.fromList ss') senv) body
 
-call :: (Try p, ArrowChoice p, ArrowApply p, HasStratEnv p, HasTermEnv (HashMap TermVar t) p)
-     => StratVar -> [Strat] -> [TermVar] -> (Strat -> p a b) -> p a b
-call f actualStratArgs actualTermArgs interp = proc a -> do
-  senv <- readStratEnv -< ()
+call :: (Try p, ArrowChoice p, ArrowApply p, HasTermEnv (HashMap TermVar t) p)
+     => StratEnv -> StratVar -> [Strat] -> [TermVar] -> (StratEnv -> Strat -> p a b) -> p a b
+call senv f actualStratArgs actualTermArgs interp = proc a ->
   case M.lookup f senv of
     Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
       putTermEnv <<< bindTermArgs -< (tenv,zip actualTermArgs formalTermArgs)
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
-      b <- localStratEnv (interp body) -<< (a,senv'')
+      b <- interp senv'' body -<< a
       tenv' <- getTermEnv -< ()
       putTermEnv -< tenv `M.union` foldr M.delete tenv' formalTermArgs
       returnA -< b
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
-  where
 
-    bindTermArgs :: (Try p, ArrowChoice p) =>
-        p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
-    bindTermArgs = proc (tenv,l) -> case l of
-      (actual,formal) : rest ->
-        case M.lookup actual tenv of
-          Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
-          Nothing -> fail -< ()
-      [] -> returnA -< tenv
+bindTermArgs :: (Try p, ArrowChoice p) =>
+    p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
+bindTermArgs = proc (tenv,l) -> case l of
+ (actual,formal) : rest -> case M.lookup actual tenv of
+    Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
+    Nothing -> fail -< ()
+ [] -> returnA -< tenv
 
-    bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
-    bindStratArgs [] senv = senv
-    bindStratArgs ((v,Call v' [] []) : ss) senv
-      | Just s <- M.lookup v' senv = M.insert v s (bindStratArgs ss senv)
-    bindStratArgs ((v,s) : ss) senv =
-      M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
+bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
+bindStratArgs [] senv = senv
+bindStratArgs ((v,Call v' [] []) : ss) senv
+    | Just s <- M.lookup v' senv = M.insert v s (bindStratArgs ss senv)
+bindStratArgs ((v,s) : ss) senv =
+    M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
 
 -- Auxiliary Functions
 mapA :: (ArrowChoice p) => p a b -> p [a] [b]
@@ -143,7 +140,6 @@ zipWith f = proc x -> case x of
   _ -> returnA -< []
 
 instance Try (Kleisli Maybe) where
-  success = Kleisli Just
   fail = Kleisli $ const Nothing
   try e s f = Kleisli $ \a ->
                 case runKleisli e a of
@@ -151,7 +147,6 @@ instance Try (Kleisli Maybe) where
                   Nothing -> runKleisli f a
 
 instance Try (Kleisli []) where
-  success = Kleisli (: [])
   fail = Kleisli $ const []
   try e s f = Kleisli $ \a ->
                 case runKleisli e a of

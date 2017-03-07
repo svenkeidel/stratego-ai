@@ -43,22 +43,28 @@ sound' :: W.Fuel -> Strat -> Seq C.Term -> Property
 sound' i s ts = sound i s M.empty (fmap (id &&& const M.empty) ts)
 
 {-         P (C.eval s)
-P (T x E) --------------> P (T x E)
+P (T x E) --------------> P (R (T x E))
    |^                          |^
    ||                          ||
    v|        W.eval s       >= v|
- T x E --------------------> T' x E'
+ T' x E' --------------> P (R (T' x E'))
 -}
 sound :: W.Fuel -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
 sound i s senv ts =
-  let abs = W.eval i s senv $ alphaDom ts
-      con = alphaResult $ C.eval s senv <$> ts
+  let abs = W.eval i senv s $ alphaDom ts
+      con = alphaResult $ C.eval senv s <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)
 
-  where
-    alphaDom :: Seq (C.Term,C.TermEnv) -> (W.Term,W.TermEnv)
-    alphaDom = lubs . fmap (alphaTerm *** alphaEnv)
+alphaDom :: Seq (C.Term,C.TermEnv) -> (W.Term,W.TermEnv)
+alphaDom = lubs . fmap (alphaTerm *** alphaEnv)
+
+weaklyContinuous :: W.Fuel -> Strat -> Seq (C.Term,C.TermEnv) -> Property
+weaklyContinuous i s ts =
+  let l = W.eval i M.empty s (alphaDom ts)
+      r = ts >>= \(t,e) -> W.eval i M.empty s (alphaTerm t,alphaEnv e)
+  in counterexample (printf "%s > %s" (show (toList l)) (show (toList r)))
+       (r <= l)
 
 class PartOrd a where
   (<=) :: a -> a -> Bool
