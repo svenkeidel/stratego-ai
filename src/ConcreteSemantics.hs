@@ -41,8 +41,8 @@ eval senv s = runInterp (eval' senv s)
 
 eval' :: StratEnv -> Strat -> Interp Term Term
 eval' senv s0 = case s0 of
-  S.Fail -> fail
   Id -> id
+  S.Fail -> fail
   Seq s1 s2 -> eval' senv s2 . eval' senv s1
   GuardedChoice s1 s2 s3 -> try (eval' senv s1) (eval' senv s2) (eval' senv s3)
   One s -> lift (one (eval' senv s))

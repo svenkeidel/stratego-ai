@@ -150,6 +150,12 @@ spec = do
       in ceval (Match (Cons "f" ["x","x"])) t' `shouldBe`
            if t1 == t2 then Success (t', M.fromList [("x", t1)]) else Fail
 
+    prop "should handle inconsistent environments" $ do
+      let t1 = C.Cons "f" []
+          t2 = C.Cons "g" []
+      sound 1 (Match "x") M.empty (S.fromList [(t1, M.fromList [("x", t1)]),
+                                               (t2, M.fromList [("y", t2)])])
+
     prop "should be sound" $ do
       i <- choose (0,1)
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
@@ -188,9 +194,9 @@ spec = do
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
              $ sound' i (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
-  describe "unify" $
+  describe "equal" $
     prop "should compare terms" $ \t1 t2 ->
-      runKleisli C.unify (t1,t2) `shouldBe`
+      runKleisli C.equal (t1,t2) `shouldBe`
         if t1 == t2 then Just t1 else Nothing
 
   where

@@ -9,7 +9,9 @@ ppHaskell t = case t of
   Cons "ArrProcedure" [pat,cmd] ->
     text "proc " <> ppHaskell pat <> text " -> " <> ppHaskell cmd
   Cons "OpApp" [l,Cons o [],r] ->
-    ppHaskell l <> space <> text (show o) <> space <> ppHaskell r
+    parens $ ppHaskell l <> space <> text (show o) <> space <> ppHaskell r
+  Cons "AppBin" [f,x@(Cons "AppBin" _)] ->
+    ppHaskell f <> space <> parens (ppHaskell x)
   Cons "AppBin" [f,x] ->
     ppHaskell f <> space <> ppHaskell x
   Cons "Var" [Cons x []] -> text (show x)

@@ -29,11 +29,13 @@ main = do
   caseStudy "pcf" "check_eval_0_0" 4 P.ppPCF
   caseStudy "pcf" "check_0_0" 4 P.ppType
   caseStudy "pcf" "check_num_0_0" 4 P.ppType
+  caseStudy "cca" "norm_0_0" 4 H.ppHaskell
 
 type PPrint = W.Term -> Doc
 
 caseStudy :: String -> String -> Int -> PPrint -> IO ()
 caseStudy name function depth pprint = do
+  printf "------------------ case study: %s ----------------------\n" name
   file <- T.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
   case parseModule =<< parseATerm file of
     Left e -> fail (show e)

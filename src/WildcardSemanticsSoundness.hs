@@ -34,12 +34,12 @@ alphaEnv = fmap alphaTerm
 alphaResult :: Seq (Result (C.Term,C.TermEnv)) -> Seq (Result (W.Term,W.TermEnv))
 alphaResult = (fmap.fmap) (alphaTerm *** alphaEnv)
 
-sound'' :: W.Fuel -> Strat -> Property
+sound'' :: Int -> Strat -> Property
 sound'' i s = property $ do
   (t1,t2) <- C.similar
   return $ sound' i s (S.fromList [t1,t2])
 
-sound' :: W.Fuel -> Strat -> Seq C.Term -> Property
+sound' :: Int -> Strat -> Seq C.Term -> Property
 sound' i s ts = sound i s M.empty (fmap (id &&& const M.empty) ts)
 
 {-         P (C.eval s)
@@ -49,7 +49,7 @@ P (T x E) --------------> P (R (T x E))
    v|        W.eval s       >= v|
  T' x E' --------------> P (R (T' x E'))
 -}
-sound :: W.Fuel -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
+sound :: Int -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
 sound i s senv ts =
   let abs = W.eval i senv s $ alphaDom ts
       con = alphaResult $ C.eval senv s <$> ts
@@ -59,7 +59,7 @@ sound i s senv ts =
 alphaDom :: Seq (C.Term,C.TermEnv) -> (W.Term,W.TermEnv)
 alphaDom = lubs . fmap (alphaTerm *** alphaEnv)
 
-weaklyContinuous :: W.Fuel -> Strat -> Seq (C.Term,C.TermEnv) -> Property
+weaklyContinuous :: Int -> Strat -> Seq (C.Term,C.TermEnv) -> Property
 weaklyContinuous i s ts =
   let l = W.eval i M.empty s (alphaDom ts)
       r = ts >>= \(t,e) -> W.eval i M.empty s (alphaTerm t,alphaEnv e)
@@ -76,7 +76,7 @@ lubs :: (Lattice a,Foldable f) => f a -> a
 lubs = foldl1 lub
 
 instance PartOrd W.TermEnv where
-  e1 <= e2 = M.keys e1 == M.keys e2 && M.foldr (&&) True (M.intersectionWith (<=) e1 e2)
+  e1 <= e2 = M.foldr (&&) True (M.intersectionWith (<=) e1 e2)
 
 instance Lattice W.TermEnv where
   lub = M.intersectionWith lub

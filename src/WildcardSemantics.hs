@@ -70,7 +70,7 @@ dedup' :: (Hashable a,Eq a) => Seq a -> Seq a
 dedup' = foldl' (|>) S.empty
        . foldl' (flip H.insert) H.empty
 
-match :: (ArrowChoice p, ArrowPlus p, Try p, HasTermEnv TermEnv p) => p (TermPattern,Term) Term
+match :: AbsInterp (TermPattern,Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -123,7 +123,7 @@ match = proc (p,t) -> case p of
     Wildcard -> fail <+> success -< NumberLiteral n
     _ -> fail -< ()
 
-equal :: (ArrowPlus p, ArrowChoice p, Try p) => p (Term,Term) Term
+equal :: AbsInterp (Term,Term) Term
 equal = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
     | c == c' && length ts == length ts' -> do
@@ -145,8 +145,8 @@ build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
+      Just t -> returnA -< t
       Nothing -> fail -< ()
-      Just t -> success -< t
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     returnA -< Cons c ts'
@@ -158,8 +158,8 @@ build = proc p -> case p of
         ts'' <- convertFromList -< ts'
         case ts'' of
           Just tl -> success -< Cons (Constructor s) tl
-          Nothing -> fail <+> success -< Wildcard
-      Wildcard -> fail <+> success -< Wildcard
+          Nothing -> fail <+> returnA -< Wildcard
+      Wildcard -> fail <+> returnA -< Wildcard
       _ -> fail -< ()
   S.NumberLiteral n -> returnA -< NumberLiteral n
   S.StringLiteral s -> returnA -< StringLiteral s
@@ -246,7 +246,7 @@ instance Try AbsInterp where
       Fail -> runInterp h a
 
 instance Arrow AbsInterp where
-  arr f = Interp (\(a,e) -> return $ Success (f a, e))
+  arr f = Interp $ \(a,e) -> return $ Success (f a, e)
   first f = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
   second f = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
 
