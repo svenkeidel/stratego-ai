@@ -3,7 +3,7 @@
 let
   hsEnv = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install attoparsec hlint text containers unordered-containers hspec mtl
-    pretty
+    pretty arrows
   ]);
 
   texEnv = (pkgs.texlive.combine {

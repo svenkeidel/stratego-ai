@@ -18,12 +18,14 @@ import           Result
 import           Control.Monad hiding (fail,sequence)
 import           Control.Category
 import           Control.Arrow
+import           Control.Arrow.Operations
 
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Data.String (IsString(..))
 import           Data.Hashable
+import           Data.Semigroup(Semigroup(..))
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -37,7 +39,7 @@ type TermEnv = HashMap TermVar Term
 newtype Interp a b = Interp { runInterp :: (a,TermEnv) -> Result (b,TermEnv) }
 
 eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval senv s = runInterp (eval' senv s)
+eval senv s = runInterp $ eval' senv s
 
 eval' :: StratEnv -> Strat -> Interp Term Term
 eval' senv s0 = case s0 of
@@ -156,22 +158,22 @@ lift p = proc t -> case t of
 
 instance Category Interp where
   id = Interp $ \a -> Success a
-  f . g = Interp $ \a ->
-    case runInterp g a of
-      Success b -> runInterp f b
+  Interp f . Interp g = Interp $ \a ->
+    case g a of
+      Success b -> f b
       Fail -> Fail
 
 instance Try Interp where
   fail = Interp $ \_ -> Fail
-  try f g h = Interp $ \a ->
-    case runInterp f a of
-      Success b -> runInterp g b 
-      Fail -> runInterp h a
+  try (Interp f) (Interp g) (Interp h) = Interp $ \a ->
+    case f a of
+      Success b -> g b 
+      Fail -> h a
 
 instance Arrow Interp where
   arr f = Interp (\(a,e) -> Success (f a, e))
-  first f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
-  second f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
+  first (Interp f) = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f (a,e))
+  second (Interp f) = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (f (b,e))
 
 instance ArrowChoice Interp where
   left f = Interp $ \(a,e) -> case a of
@@ -184,21 +186,26 @@ instance ArrowChoice Interp where
     Left b  -> first Left  <$> runInterp f (b,e)
     Right b -> first Right <$> runInterp g (b,e)
 
-instance ArrowZero Interp where
+instance ArrowAlternative Interp where
   zeroArrow = fail
-
-instance ArrowPlus Interp where
   f <+> g = Interp $ \x -> case (runInterp f x,runInterp g x) of
     (Success y,_) -> Success y
     (_,Success y) -> Success y
     (_,_) -> Fail
 
+instance ArrowState TermEnv Interp where
+  fetch = Interp $ \(_,e) -> Success (e,e)
+  store = Interp $ \(e,_) -> Success ((),e)
+
 instance ArrowApply Interp where
   app = Interp $ \((f,b),e) -> runInterp f (b,e)
 
-instance HasTermEnv TermEnv Interp where
-  getTermEnv = Interp $ \((),e) -> Success (e,e)
-  putTermEnv = Interp $ \(e,_) -> Success ((),e)
+instance Semigroup Term where
+  (<>) = undefined
+
+instance Monoid Term where
+  mempty = undefined
+  mappend = undefined
 
 instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts

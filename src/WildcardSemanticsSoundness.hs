@@ -10,6 +10,7 @@ import Result
 
 import qualified ConcreteSemantics as C
 import qualified WildcardSemantics as W
+import qualified WildcardSemanticsDelayed as W
 
 import Control.Arrow
 

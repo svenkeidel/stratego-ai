@@ -22,11 +22,19 @@ library
                        Interpreter,
                        ConcreteSemantics,
                        WildcardSemantics,
+                       WildcardSemanticsUndelayed,
+                       WildcardSemanticsDelayed,
                        WildcardSemanticsSoundness,
                        PrettyPrint,
                        HaskellPretty,
-                       PCFPretty
+                       PCFPretty,
+                       Data.Functor.Strength,
+                       Control.Arrow.Transformer.Deduplicate,
+                       Control.Arrow.Transformer.Power,
+                       Control.Arrow.Transformer.Result,
+                       Control.Arrow.Transformer.UncertainResult
   build-depends:       base,
+                       arrows,
                        QuickCheck,
                        attoparsec,
                        containers,
@@ -40,6 +48,7 @@ library
 
 Executable case-studies
   Build-Depends:       base,
+                       arrows,
                        QuickCheck,
                        attoparsec,
                        containers,

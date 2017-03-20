@@ -9,6 +9,7 @@ import PrettyPrint
 import qualified HaskellPretty as H
 import qualified PCFPretty as P
 import qualified WildcardSemantics as W
+import qualified WildcardSemanticsDelayed as W
 
 import Paths_system_s
 

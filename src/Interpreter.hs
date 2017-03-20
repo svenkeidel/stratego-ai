@@ -1,7 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE Arrows #-}
 module Interpreter where
 
@@ -9,27 +8,43 @@ import           Prelude hiding (fail,(.),id,sum,zipWith, curry, uncurry, flip)
 
 import           Syntax hiding (Fail)
 
-import           Control.Arrow
-
+import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
+import           Control.Arrow.Operations
+import           Control.Arrow.Transformer.State
 import           Control.Category
 
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Semigroup
 
 import           Text.Printf
 
 class Arrow p => Try p where
   fail :: p t a
-  try :: p a b -> p b c -> p a c ->  p a c
+  try :: Monoid c => p a b -> p b c -> p a c ->  p a c
+
+instance (Monoid s, Try p) => Try (StateArrow s p) where
+  fail = StateArrow (first fail)
+  try (StateArrow f) (StateArrow g) (StateArrow h) = StateArrow (try f g h)
 
 success :: Try p => p a a
 success = id
-              
-class HasTermEnv m p | p -> m where
-  getTermEnv :: p () m
-  putTermEnv :: p m ()
 
-extendTermEnv :: (Arrow p, HasTermEnv (HashMap TermVar t) p) => p (TermVar,t) ()
+class Arrow p => ArrowAlternative p where
+  zeroArrow :: (Monoid b) => p a b
+  (<+>) :: (Monoid b) => p a b -> p a b -> p a b
+
+instance (Monoid s, ArrowAlternative p) => ArrowAlternative (StateArrow s p) where
+  zeroArrow = StateArrow zeroArrow
+  StateArrow f <+> StateArrow g = StateArrow (f <+> g)
+
+getTermEnv :: ArrowState (HashMap TermVar t) p => p () (HashMap TermVar t)
+getTermEnv = fetch
+
+putTermEnv :: ArrowState (HashMap TermVar t) p => p (HashMap TermVar t) ()
+putTermEnv = store
+              
+extendTermEnv :: (ArrowState (HashMap TermVar t) p) => p (TermVar,t) ()
 extendTermEnv = proc (v,t) -> do
   env <- getTermEnv -< ()
   putTermEnv -< M.insert v t env
@@ -40,7 +55,7 @@ class HasStratEnv p where
 
 -- Language Constructs
 
-guardedChoice :: Try p => p a b -> p b c -> p a c -> p a c
+guardedChoice :: (Try p, Monoid c) => p a b -> p b c -> p a c -> p a c
 guardedChoice = try
 {-# INLINE guardedChoice #-}
 
@@ -48,7 +63,7 @@ sequence :: Category p => p a b -> p b c -> p a c
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-one :: (Try p, ArrowPlus p, ArrowChoice p) => p a a -> p (Constructor,[a]) (Constructor,[a])
+one :: (Try p, ArrowAlternative p, ArrowChoice p, Monoid a) => p a a -> p (Constructor,[a]) (Constructor,[a])
 one f = second go
   where
     go = proc l -> case l of
@@ -58,7 +73,7 @@ one f = second go
       [] -> zeroArrow -< ()
 {-# INLINE one #-}
 
-some :: (Try p, ArrowChoice p) => p t t -> p (Constructor,[t]) (Constructor,[t])
+some :: (Try p, ArrowChoice p, Monoid t) => p t t -> p (Constructor,[t]) (Constructor,[t])
 some f = second go
   where
     go = proc l -> case l of
@@ -77,7 +92,7 @@ all :: ArrowChoice p => p a b -> p (Constructor,[a]) (Constructor,[b])
 all f = second (mapA f)
 {-# INLINE all #-}
 
-scope :: (Arrow p, HasTermEnv (HashMap TermVar t) p) => [TermVar] -> p a b -> p a b
+scope :: (ArrowState (HashMap TermVar t) p) => [TermVar] -> p a b -> p a b
 scope vars s = proc t -> do
   env  <- getTermEnv -< ()
   ()   <- putTermEnv -< foldr M.delete env vars
@@ -92,7 +107,7 @@ let_ senv ss body interp =
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
   in interp (M.union (M.fromList ss') senv) body
 
-call :: (Try p, ArrowChoice p, ArrowApply p, HasTermEnv (HashMap TermVar t) p)
+call :: (Try p, ArrowChoice p, ArrowApply p, ArrowState (HashMap TermVar t) p)
      => StratEnv -> StratVar -> [Strat] -> [TermVar] -> (StratEnv -> Strat -> p a b) -> p a b
 call senv f actualStratArgs actualTermArgs interp = proc a ->
   case M.lookup f senv of
@@ -153,3 +168,6 @@ instance Try (Kleisli []) where
                   [] -> runKleisli f a
                   bs -> bs >>= runKleisli s
 
+instance ArrowAlternative (Kleisli []) where
+  zeroArrow = Kleisli $ const mempty
+  Kleisli f <+> Kleisli g = Kleisli $ \a -> f a <> g a

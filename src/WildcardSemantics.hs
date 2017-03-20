@@ -6,27 +6,24 @@
 module WildcardSemantics where
 
 import           Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
+import qualified Prelude as P
 
-import           Result
 import           Syntax hiding (Fail,TermPattern(..))
 import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Interpreter
 
-import           Control.Arrow
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
+import           Control.Arrow hiding ((<+>))
+import           Control.Arrow.Operations
+import           Control.Arrow.Transformer.Deduplicate
 
-import           Data.Semigroup ((<>))
-import           Data.Sequence (Seq,(|>))
-import qualified Data.Sequence as S
-import           Data.HashSet (HashSet)
-import qualified Data.HashSet as H
+import           Data.Semigroup (Semigroup(..))
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Data.Hashable
-import           Data.Foldable (foldl')
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -38,22 +35,16 @@ data Term
     deriving (Eq)
 
 type TermEnv = HashMap TermVar Term
-type Pow = Seq
 
-newtype AbsInterp a b = Interp {runInterp :: (a,TermEnv) -> Pow (Result (b,TermEnv))}
-
-eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
-eval i senv s = runInterp (eval' i senv s)
-
-eval' :: Int -> StratEnv -> Strat -> AbsInterp Term Term
-eval' 0 senv s = proc _ -> do
-  -- approximateTermEnv H.empty s -< ()
+eval' :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p, Deduplicate p, ArrowApply p)
+      => Int -> StratEnv -> Strat -> p Term Term
+eval' 0 _ _ = proc _ ->
   fail <+> success -< Wildcard
 eval' i senv s0 = dedup $ case s0 of
   Id -> id
   S.Fail -> fail
-  Seq s1 s2 -> sequence (eval' i senv s1) (eval' i senv s2)
-  GuardedChoice s1 s2 s3 -> guardedChoice (eval' i senv s1) (eval' i senv s2) (eval' i senv s3)
+  Seq s1 s2 -> eval' i senv s2 . eval' i senv s1 
+  GuardedChoice s1 s2 s3 -> try (eval' i senv s1) (eval' i senv s2) (eval' i senv s3)
   One s -> lift (one (eval' i senv s))
   Some s -> lift (some (eval' i senv s))
   All s -> lift (all (eval' i senv s))
@@ -63,14 +54,7 @@ eval' i senv s0 = dedup $ case s0 of
   Let bnds body -> let_ senv bnds body (eval' i)
   Call f ss ps -> call senv f ss ps (eval' (i-1))
 
-dedup :: (Hashable b,Eq b) => AbsInterp a b -> AbsInterp a b
-dedup f = Interp $ \x -> dedup' $ runInterp f x
-
-dedup' :: (Hashable a,Eq a) => Seq a -> Seq a
-dedup' = foldl' (|>) S.empty
-       . foldl' (flip H.insert) H.empty
-
-match :: AbsInterp (TermPattern,Term) Term
+match :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -123,7 +107,7 @@ match = proc (p,t) -> case p of
     Wildcard -> fail <+> success -< NumberLiteral n
     _ -> fail -< ()
 
-equal :: AbsInterp (Term,Term) Term
+equal :: (ArrowChoice p, ArrowAlternative p, Try p) => p (Term,Term) Term
 equal = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
     | c == c' && length ts == length ts' -> do
@@ -140,7 +124,7 @@ equal = proc (t1,t2) -> case (t1,t2) of
   (t, Wildcard) -> fail <+> success -< t
   (_,_) -> fail -< ()
 
-build :: (ArrowPlus p, ArrowChoice p, Try p, HasTermEnv TermEnv p) => p TermPattern Term
+build :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -179,7 +163,7 @@ convertFromList = proc t -> case t of
   Wildcard -> returnA -< Nothing
   _ -> fail -< ()
 
-lift :: (Try p,ArrowChoice p,ArrowPlus p)
+lift :: (Try p,ArrowChoice p,ArrowAlternative p)
      => p (Constructor,[Term]) (Constructor,[Term])
      -> p Term Term
 lift p = proc t -> case t of
@@ -190,89 +174,24 @@ lift p = proc t -> case t of
   NumberLiteral {} -> returnA -< t
   Wildcard -> fail <+> success -< Wildcard
 
-
--- approximateTermEnv :: HashSet StratVar -> Strat -> Interp () ()
--- approximateTermEnv senv s0 = case s0 of
---   S.Fail -> fail
---   Id -> id
---   GuardedChoice s1 s2 s3 ->
---     guardedChoice (approximateTermEnv senv s1) (approximateTermEnv senv s2) (approximateTermEnv senv s3)
---   Seq s1 s2 ->
---     sequence (approximateTermEnv senv s1) (approximateTermEnv senv s2)
---   One s -> approximateTermEnv senv s <+> fail
---   Some s -> approximateTermEnv senv s <+> fail
---   All s -> approximateTermEnv senv s <+> fail
---   Scope xs s -> scope xs (approximateTermEnv senv s)
---   Build _ -> id
---   Match p -> proc _ -> approximateMatch -< p
---   Let ss body -> let_ ss (approximateTermEnv senv body)
---   Call f ss ps ->
---     if H.member f senv
---     then id
---     else call f ss ps (approximateTermEnv (H.insert f senv))
---   where
---     approximateMatch = proc p -> case p of
---       S.Var "_" -> returnA -< ()
---       S.Var x -> do
---         env <- getTermEnv -< ()
---         putTermEnv -< M.insert x Wildcard env
---         success <+> fail -< ()
---       S.Cons _ ts -> do
---         _ <- mapA approximateMatch -< ts
---         success <+> fail -< ()
---       S.Explode c ts -> do
---         approximateMatch -< c
---         approximateMatch -< ts
---         success <+> fail -< ()
---       _ -> returnA -< ()
-
-
 -- Instances -----------------------------------------------------------------------------------------
 
-instance Category AbsInterp where
-  id = Interp $ \a -> return (Success a)
-  f . g = Interp $ \a -> do
-    b <- runInterp g a
-    case b of
-        Success b' -> runInterp f b'
-        Fail -> return Fail
+instance Semigroup Term where
+  t1 <> t2 = case (t1,t2) of
+    (Cons c ts, Cons c' ts')
+      | c == c' && length ts == length ts' -> Cons c (P.zipWith (<>) ts ts')
+      | otherwise -> Wildcard
+    (StringLiteral s, StringLiteral s')
+      | s == s' -> StringLiteral s
+      | otherwise -> Wildcard
+    (NumberLiteral n, NumberLiteral n')
+      | n == n' -> NumberLiteral n
+      | otherwise -> Wildcard
+    (_, _) -> Wildcard
 
-instance Try AbsInterp where
-  fail = Interp $ \_ -> return Fail
-  try f g h = Interp $ \a -> do
-    b <- runInterp f a
-    case b of
-      Success b' -> runInterp g b'
-      Fail -> runInterp h a
-
-instance Arrow AbsInterp where
-  arr f = Interp $ \(a,e) -> return $ Success (f a, e)
-  first f = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((c,b),e')) (runInterp f (a,e))
-  second f = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
-
-instance ArrowChoice AbsInterp where
-  left f = Interp $ \(a,e) -> case a of
-    Left b -> (fmap.fmap) (first Left) (runInterp f (b,e))
-    Right c -> return $ Success (Right c,e)
-  right f = Interp $ \(a,e) -> case a of
-    Left c -> return $ Success (Left c,e)
-    Right b -> (fmap.fmap) (first Right) (runInterp f (b,e))
-  f +++ g = Interp $ \(a,e) -> case a of
-    Left b  -> (fmap.fmap) (first Left)  (runInterp f (b,e))
-    Right b -> (fmap.fmap) (first Right) (runInterp g (b,e))
-
-instance ArrowZero AbsInterp where
-  zeroArrow = Interp (const mempty)
-
-instance ArrowPlus AbsInterp where
-  f <+> g = Interp $ \x -> runInterp f x <> runInterp g x
-
-instance ArrowApply AbsInterp where
-  app = Interp $ \((f,x),tenv) -> runInterp f (x,tenv)
-
-instance HasTermEnv TermEnv AbsInterp where
-  getTermEnv = Interp $ \((),e) -> return $ Success (e,e)
-  putTermEnv = Interp $ \(e,_) -> return $ Success ((),e)
+instance Monoid Term where
+  mempty = undefined -- Wildcard
+  mappend = undefined --(<>)
 
 instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts

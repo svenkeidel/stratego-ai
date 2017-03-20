@@ -2,6 +2,7 @@ module Result where
 
 import Control.Monad
 import Data.Hashable
+import Data.Semigroup
 
 data Result a = Success a | Fail
   deriving (Eq,Ord,Show)
@@ -19,6 +20,16 @@ instance Monad Result where
   f >>= k = case f of
     Success a -> k a
     Fail -> Fail
+
+instance Semigroup (Result a) where
+  (<>) = undefined
+  -- Success a <> _ = Success a
+  -- Fail <> Success b = Success b
+  -- Fail <> Fail = Fail
+
+instance Monoid (Result a) where
+  mempty = undefined -- Fail
+  mappend = undefined -- (<>)
 
 instance Hashable a => Hashable (Result a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a

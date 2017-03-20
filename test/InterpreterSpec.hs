@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module InterpreterSpec(main, spec) where
 
 import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map)
@@ -8,6 +9,7 @@ import           Interpreter
 import           Result
 import qualified ConcreteSemantics as C
 import qualified WildcardSemantics as W
+import qualified WildcardSemanticsDelayed as W
 import           WildcardSemanticsSoundness
 
 import           Control.Arrow
@@ -18,6 +20,7 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as H
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
+import           Data.Semigroup
 
 import           Text.Printf
 
@@ -237,3 +240,10 @@ spec = do
 
     n :: Int
     n = 1
+
+instance Semigroup Int where
+  (<>) = undefined
+
+instance Monoid Int where
+  mempty = undefined
+  mappend = undefined
