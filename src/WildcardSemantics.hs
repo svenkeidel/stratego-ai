@@ -63,7 +63,7 @@ match = proc (p,t) -> case p of
       Just t' -> equal -< (t,t')
       Nothing -> do
         putTermEnv -< M.insert x t env
-        success -< t
+        fail <+> success -< t
   S.Cons c ts -> case t of
     Cons c' ts'
       | c == c' && length ts == length ts' -> do
@@ -71,8 +71,8 @@ match = proc (p,t) -> case p of
           success -< Cons c ts''
       | otherwise -> fail -< ()
     Wildcard -> do
-      ts'' <- fail <+> zipWith match -< (ts,[Wildcard | _ <- ts])
-      success -< Cons c ts''
+      ts'' <- zipWith match -< (ts,[Wildcard | _ <- ts])
+      fail <+> success -< Cons c ts''
     _ -> fail -< ()
   S.Explode c ts -> case t of
     Cons (Constructor c') ts' -> do
@@ -130,7 +130,7 @@ build = proc p -> case p of
     env <- getTermEnv -< ()
     case M.lookup x env of
       Just t -> returnA -< t
-      Nothing -> fail -< ()
+      Nothing -> fail <+> success -< Wildcard
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     returnA -< Cons c ts'
