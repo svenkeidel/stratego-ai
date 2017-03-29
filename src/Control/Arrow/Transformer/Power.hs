@@ -46,7 +46,7 @@ instance (Try p,ArrowChoice p) => Try (PowerArrow p) where
   try (PowerArrow f) (PowerArrow g) (PowerArrow h) = PowerArrow (try f (mapPow g >>> arr join) h)
 
 instance ArrowChoice p => ArrowAlternative (PowerArrow p) where
-  zeroArrow = PowerArrow (arr (const mempty))
+  -- zeroArrow = PowerArrow (arr (const mempty))
   PowerArrow f <+> PowerArrow g = PowerArrow $ proc a -> do
     (bs,bs') <- f *** g -< (a,a)
     returnA -< bs <> bs'

@@ -56,7 +56,7 @@ instance ArrowChoice Interp where
     Right b -> first Right <$> runInterp g (b,e)
 
 instance ArrowAlternative Interp where
-  zeroArrow = undefined
+  -- zeroArrow = fail
   f <+> g = Interp $ \x -> runInterp f x `mappend` runInterp g x
 
 instance ArrowState TermEnv Interp where

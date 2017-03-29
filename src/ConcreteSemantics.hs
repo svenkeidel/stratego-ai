@@ -187,7 +187,7 @@ instance ArrowChoice Interp where
     Right b -> first Right <$> runInterp g (b,e)
 
 instance ArrowAlternative Interp where
-  zeroArrow = fail
+  -- zeroArrow = fail
   f <+> g = Interp $ \x -> case (runInterp f x,runInterp g x) of
     (Success y,_) -> Success y
     (_,Success y) -> Success y

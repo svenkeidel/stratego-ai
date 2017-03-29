@@ -54,7 +54,7 @@ instance ArrowChoice Interp where
     Right b -> (fmap.fmap) (first Right) (runInterp g (b,e))
 
 instance ArrowAlternative Interp where
-  zeroArrow = Interp (const mempty)
+  -- zeroArrow = Interp (const mempty)
   f <+> g = Interp $ \x -> runInterp f x `union` runInterp g x
 
 instance ArrowApply Interp where

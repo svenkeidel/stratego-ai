@@ -31,11 +31,11 @@ success :: Try p => p a a
 success = id
 
 class Arrow p => ArrowAlternative p where
-  zeroArrow :: (Monoid b) => p a b
+  -- zeroArrow :: (Monoid b) => p a b
   (<+>) :: (Monoid b) => p a b -> p a b -> p a b
 
 instance (Monoid s, ArrowAlternative p) => ArrowAlternative (StateArrow s p) where
-  zeroArrow = StateArrow zeroArrow
+  -- zeroArrow = StateArrow zeroArrow
   StateArrow f <+> StateArrow g = StateArrow (f <+> g)
 
 getTermEnv :: ArrowState (HashMap TermVar t) p => p () (HashMap TermVar t)
@@ -70,7 +70,7 @@ one f = second go
       t:ts -> do
         (t',ts') <- first f <+> second go -< (t,ts)
         returnA -< (t':ts')
-      [] -> zeroArrow -< ()
+      [] -> fail -< ()
 {-# INLINE one #-}
 
 some :: (Try p, ArrowChoice p, Monoid t) => p t t -> p (Constructor,[t]) (Constructor,[t])
@@ -169,5 +169,5 @@ instance Try (Kleisli []) where
                   bs -> bs >>= runKleisli s
 
 instance ArrowAlternative (Kleisli []) where
-  zeroArrow = Kleisli $ const mempty
+  -- zeroArrow = Kleisli $ const mempty
   Kleisli f <+> Kleisli g = Kleisli $ \a -> f a <> g a

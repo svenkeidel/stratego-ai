@@ -47,7 +47,7 @@ instance ArrowChoice p => Try (ResultArrow p) where
       Fail -> h -< a
 
 instance (ArrowAlternative p, ArrowChoice p) => ArrowAlternative (ResultArrow p) where
-  zeroArrow = ResultArrow (arr (const mempty))
+  -- zeroArrow = ResultArrow (arr (const mempty))
   ResultArrow f <+> ResultArrow g = ResultArrow (f <+> g)
     --                                 proc a -> do
     -- (bs,bs') <- f *** g -< (a,a)
