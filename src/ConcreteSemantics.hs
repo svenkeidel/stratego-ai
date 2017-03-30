@@ -186,12 +186,9 @@ instance ArrowChoice Interp where
     Left b  -> first Left  <$> runInterp f (b,e)
     Right b -> first Right <$> runInterp g (b,e)
 
-instance ArrowAlternative Interp where
+instance ArrowAppend Interp where
   -- zeroArrow = fail
-  f <+> g = Interp $ \x -> case (runInterp f x,runInterp g x) of
-    (Success y,_) -> Success y
-    (_,Success y) -> Success y
-    (_,_) -> Fail
+  f <+> g = Interp $ \x -> runInterp f x `mappend` runInterp g x
 
 instance ArrowState TermEnv Interp where
   fetch = Interp $ \(_,e) -> Success (e,e)

@@ -51,7 +51,7 @@ instance ArrowChoice p => Try (UncertainResultArrow p) where
         returnA -< rc `mappend` rc'
       Fail -> h -< a
 
-instance ArrowChoice p => ArrowAlternative (UncertainResultArrow p) where
+instance ArrowChoice p => ArrowAppend (UncertainResultArrow p) where
   -- zeroArrow = UncertainResultArrow (arr (const mempty))
   UncertainResultArrow f <+> UncertainResultArrow g = UncertainResultArrow $ proc a -> do
     (bs,bs') <- f *** g -< (a,a)

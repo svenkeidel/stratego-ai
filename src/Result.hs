@@ -22,14 +22,13 @@ instance Monad Result where
     Fail -> Fail
 
 instance Semigroup (Result a) where
-  (<>) = undefined
-  -- Success a <> _ = Success a
-  -- Fail <> Success b = Success b
-  -- Fail <> Fail = Fail
+  Success a <> _ = Success a
+  Fail <> Success b = Success b
+  Fail <> Fail = Fail
 
 instance Monoid (Result a) where
-  mempty = undefined -- Fail
-  mappend = undefined -- (<>)
+  mempty = Fail
+  mappend = (<>)
 
 instance Hashable a => Hashable (Result a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a

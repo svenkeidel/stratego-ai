@@ -36,7 +36,7 @@ data Term
 
 type TermEnv = HashMap TermVar Term
 
-eval' :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p, Deduplicate p, ArrowApply p)
+eval' :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p, Deduplicate p, ArrowApply p)
       => Int -> StratEnv -> Strat -> p Term Term
 eval' 0 _ _ = proc _ ->
   fail <+> success -< Wildcard
@@ -54,7 +54,7 @@ eval' i senv s0 = dedup $ case s0 of
   Let bnds body -> let_ senv bnds body (eval' i)
   Call f ss ps -> call senv f ss ps (eval' (i-1))
 
-match :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p) => p (TermPattern,Term) Term
+match :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p) => p (TermPattern,Term) Term
 match = proc (p,t) -> case p of
   S.Var "_" -> success -< t
   S.Var x -> do
@@ -107,7 +107,7 @@ match = proc (p,t) -> case p of
     Wildcard -> fail <+> success -< NumberLiteral n
     _ -> fail -< ()
 
-equal :: (ArrowChoice p, ArrowAlternative p, Try p) => p (Term,Term) Term
+equal :: (ArrowChoice p, ArrowAppend p, Try p) => p (Term,Term) Term
 equal = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
     | c == c' && length ts == length ts' -> do
@@ -124,7 +124,7 @@ equal = proc (t1,t2) -> case (t1,t2) of
   (t, Wildcard) -> fail <+> success -< t
   (_,_) -> fail -< ()
 
-build :: (ArrowChoice p, ArrowState TermEnv p, ArrowAlternative p, Try p) => p TermPattern Term
+build :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p) => p TermPattern Term
 build = proc p -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -163,7 +163,7 @@ convertFromList = proc t -> case t of
   Wildcard -> returnA -< Nothing
   _ -> fail -< ()
 
-lift :: (Try p,ArrowChoice p,ArrowAlternative p)
+lift :: (Try p,ArrowChoice p,ArrowAppend p)
      => p (Constructor,[Term]) (Constructor,[Term])
      -> p Term Term
 lift p = proc t -> case t of

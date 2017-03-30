@@ -30,11 +30,11 @@ instance (Monoid s, Try p) => Try (StateArrow s p) where
 success :: Try p => p a a
 success = id
 
-class Arrow p => ArrowAlternative p where
+class Arrow p => ArrowAppend p where
   -- zeroArrow :: (Monoid b) => p a b
   (<+>) :: (Monoid b) => p a b -> p a b -> p a b
 
-instance (Monoid s, ArrowAlternative p) => ArrowAlternative (StateArrow s p) where
+instance (Monoid s, ArrowAppend p) => ArrowAppend (StateArrow s p) where
   -- zeroArrow = StateArrow zeroArrow
   StateArrow f <+> StateArrow g = StateArrow (f <+> g)
 
@@ -63,7 +63,7 @@ sequence :: Category p => p a b -> p b c -> p a c
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-one :: (Try p, ArrowAlternative p, ArrowChoice p, Monoid a) => p a a -> p (Constructor,[a]) (Constructor,[a])
+one :: (Try p, ArrowAppend p, ArrowChoice p, Monoid a) => p a a -> p (Constructor,[a]) (Constructor,[a])
 one f = second go
   where
     go = proc l -> case l of
@@ -168,6 +168,6 @@ instance Try (Kleisli []) where
                   [] -> runKleisli f a
                   bs -> bs >>= runKleisli s
 
-instance ArrowAlternative (Kleisli []) where
+instance ArrowAppend (Kleisli []) where
   -- zeroArrow = Kleisli $ const mempty
   Kleisli f <+> Kleisli g = Kleisli $ \a -> f a <> g a

@@ -55,7 +55,7 @@ instance ArrowChoice Interp where
     Left b  -> first Left  <$> runInterp f (b,e)
     Right b -> first Right <$> runInterp g (b,e)
 
-instance ArrowAlternative Interp where
+instance ArrowAppend Interp where
   -- zeroArrow = fail
   f <+> g = Interp $ \x -> runInterp f x `mappend` runInterp g x
 
