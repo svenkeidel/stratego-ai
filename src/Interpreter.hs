@@ -132,8 +132,10 @@ bindTermArgs = proc (tenv,l) -> case l of
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
 bindStratArgs [] senv = senv
-bindStratArgs ((v,Call v' [] []) : ss) senv
-    | Just s <- M.lookup v' senv = M.insert v s (bindStratArgs ss senv)
+bindStratArgs ((v,Call v' [] []) : ss) senv =
+  case M.lookup v' senv of
+    Just s -> M.insert v s (bindStratArgs ss senv)
+    _ -> error $ "unknown strategy: " ++ show v'
 bindStratArgs ((v,s) : ss) senv =
     M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
 

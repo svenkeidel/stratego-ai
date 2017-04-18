@@ -45,15 +45,19 @@ instance Arrow Interp where
   second f = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (runInterp f (b,e))
 
 instance ArrowChoice Interp where
-  left f = Interp $ \(a,e) -> case a of
-    Left b -> first Left <$> runInterp f (b,e)
+  left (Interp f) = Interp $ \(a,e) -> case a of
+    Left b -> first Left <$> f (b,e)
     Right c -> Success (Right c,e)
-  right f = Interp $ \(a,e) -> case a of
+  right (Interp f) = Interp $ \(a,e) -> case a of
     Left c -> Success (Left c,e)
-    Right b -> first Right <$> runInterp f (b,e)
-  f +++ g = Interp $ \(a,e) -> case a of
-    Left b  -> first Left  <$> runInterp f (b,e)
-    Right b -> first Right <$> runInterp g (b,e)
+    Right b -> first Right <$> f (b,e)
+  Interp f +++ Interp g = Interp $ \(a,e) -> case a of
+    Left b  -> first Left  <$> f (b,e)
+    Right b -> first Right <$> g (b,e)
+  Interp f ||| Interp g = Interp $ \(a,e) -> case a of
+    Left b  -> f (b,e)
+    Right b -> g (b,e)
+
 
 instance ArrowAppend Interp where
   -- zeroArrow = fail

@@ -15,6 +15,7 @@ ppHaskell t = case t of
   Cons "AppBin" [f,x] ->
     ppHaskell f <> space <> ppHaskell x
   Cons "Var" [Cons x []] -> text (show x)
+  Cons "Var" [Wildcard] -> ppWildcard
   Cons "Abs" [args, body] ->
     parens $ char '\\' <> ppSepList space args <> text " -> " <> ppHaskell body
   Cons "Let" [bnds, body] ->

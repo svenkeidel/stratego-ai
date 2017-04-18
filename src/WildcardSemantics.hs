@@ -60,7 +60,10 @@ match = proc (p,t) -> case p of
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
-      Just t' -> equal -< (t,t')
+      Just t' -> do
+        t'' <- equal -< (t,t')
+        putTermEnv -< M.insert x t'' env
+        success -< t''
       Nothing -> do
         putTermEnv -< M.insert x t env
         fail <+> success -< t
@@ -232,3 +235,11 @@ arbitraryTerm h w = do
   c <- arbitrary
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
+
+height :: Term -> Int
+height (Cons _ ts) | null ts = 1 | otherwise = maximum (fmap height ts) + 1
+height _ = 1
+
+size :: Term -> Int
+size (Cons _ ts) = sum (fmap size ts) + 1
+size _ = 1

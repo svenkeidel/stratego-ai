@@ -67,6 +67,9 @@ weaklyContinuous i s ts =
   in counterexample (printf "%s > %s" (show (toList l)) (show (toList r)))
        (r <= l)
 
+isWittness :: W.Term -> Seq W.Term -> Bool
+isWittness t = any (\t' -> t <= t' && t /= t')
+
 class PartOrd a where
   (<=) :: a -> a -> Bool
 

@@ -105,7 +105,7 @@ rules
                         , Abs(
                             [ Tuple(
                                 (<tuple-pat> vars)
-                              , [Var("p")]
+                              , [Var(p)]
                               )
                             ]
                           , (<tuple> all-vars)

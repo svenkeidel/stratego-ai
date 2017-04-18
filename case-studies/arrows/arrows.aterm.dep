@@ -1,0 +1,3 @@
+arrows.aterm: \
+	./haskell.str \
+	./desugar2.str
