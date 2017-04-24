@@ -16,12 +16,14 @@ import Control.Arrow.Operations
 import Control.Arrow.Transformer.Power
 import Control.Arrow.Transformer.Deduplicate
 
+import Data.Hashable
+
 eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
 eval i senv s = runInterp $ eval' i senv s
 
-newtype Interp a b = Interp {runInterp :: (a,TermEnv) -> Pow (Result (b,TermEnv))}
+newtype Interp s a b = Interp {runInterp :: (a,s) -> Pow (Result (b,s))}
 
-instance Category Interp where
+instance Category (Interp s) where
   id = Interp $ \a -> return (Success a)
   Interp f . Interp g = Interp $ \a -> do
     b <- g a
@@ -29,7 +31,7 @@ instance Category Interp where
         Success b' -> f b'
         Fail -> return Fail
 
-instance Try Interp where
+instance Try (Interp s) where
   fail = Interp $ \_ -> return Fail
   try (Interp f) (Interp g) (Interp h) = Interp $ \a -> do
     b <- f a
@@ -37,12 +39,12 @@ instance Try Interp where
       Success b' -> g b'
       Fail -> h a
 
-instance Arrow Interp where
+instance Arrow (Interp s) where
   arr f = Interp $ \(a,e) -> return $ Success (f a, e)
   first (Interp f) = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((c,b),e')) (f (a,e))
   second (Interp f) = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((a,c),e')) (f (b,e))
 
-instance ArrowChoice Interp where
+instance ArrowChoice (Interp s) where
   left (Interp f) = Interp $ \(a,e) -> case a of
     Left b -> (fmap.fmap) (first Left) (f (b,e))
     Right c -> return $ Success (Right c,e)
@@ -53,17 +55,17 @@ instance ArrowChoice Interp where
     Left b  -> (fmap.fmap) (first Left)  (f (b,e))
     Right b -> (fmap.fmap) (first Right) (g (b,e))
 
-instance ArrowAppend Interp where
+instance ArrowAppend (Interp s) where
   --zeroArrow = Interp (const mempty)
   Interp f <+> Interp g = Interp $ \x -> f x `union` g x
 
-instance ArrowApply Interp where
+instance ArrowApply (Interp s) where
   app = Interp $ \((f,x),tenv) -> runInterp f (x,tenv)
         
-instance Deduplicate Interp where
+instance (Eq s,Hashable s) => Deduplicate (Interp s) where
   dedup (Interp f) = Interp $ \a -> dedup' $ f a
 
-instance ArrowState TermEnv Interp where
+instance ArrowState s (Interp s) where
   fetch = Interp $ \(_,e) -> return (return (e,e))
   store = Interp $ \(e,_) -> return (return ((),e))
 

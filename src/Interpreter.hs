@@ -38,10 +38,10 @@ instance (Monoid s, ArrowAppend p) => ArrowAppend (StateArrow s p) where
   -- zeroArrow = StateArrow zeroArrow
   StateArrow f <+> StateArrow g = StateArrow (f <+> g)
 
-getTermEnv :: ArrowState (HashMap TermVar t) p => p () (HashMap TermVar t)
+getTermEnv :: ArrowState s p => p () s
 getTermEnv = fetch
 
-putTermEnv :: ArrowState (HashMap TermVar t) p => p (HashMap TermVar t) ()
+putTermEnv :: ArrowState s p => p s ()
 putTermEnv = store
               
 extendTermEnv :: (ArrowState (HashMap TermVar t) p) => p (TermVar,t) ()

@@ -1,215 +1,200 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
-module GrammarSemantics (Grammar, NonTerminal, (~>), grammar, interp) where
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module GrammarSemantics where
 
-import Prelude hiding (fail,sequence,lookup)
+import           Prelude hiding (fail,all,zipWith,id,(.))
+import           Result
+import           Syntax (Strat(..),Constructor(..),TermVar,StratEnv,TermPattern)
+import qualified Syntax as S
+import           Interpreter
 
-import Term (Constructor)
-import qualified Term as T
-import Syntax
-import Interpreter hiding (Fail,path)
-import qualified Interpreter as I
-import Single (Single)
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text)
+import           Data.Hashable
+import           Data.Maybe
 
-import Control.Monad hiding (fail,sequence)
-import Control.Arrow (first,second)
-import Control.Monad.State hiding (fail,sequence)
+import           Control.Category
+import           Control.Arrow hiding ((<+>))
+import           Control.Arrow.Operations
+import           Control.Arrow.Transformer.Power
+import           Control.Arrow.Transformer.Deduplicate
+import           WildcardSemantics (Term(..))
 
-import Data.Map (Map)
-import qualified Data.Map as M
+newtype TermRef = TermRef Int deriving (Eq,Hashable,Num)
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
+-- All TermEnv (env,store,maxRef) satisfy
+-- * forall x in env, env(x) in store
+-- * maxRef not in store
+newtype TermEnv = TermEnv (HashMap TermVar TermRef, HashMap TermRef Term, TermRef)
 
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as N
+lookup :: (ArrowState TermEnv p, ArrowChoice p, Try p) => p TermVar (Maybe TermRef)
+lookup = proc ref -> do
+  TermEnv (env,_,_) <- getTermEnv -< ()
+  returnA -< M.lookup ref env
 
-import Data.Semigroup
-import Data.Maybe (fromMaybe)
+deref :: (ArrowState TermEnv p, ArrowChoice p, Try p) => p TermRef Term
+deref = proc ref -> do
+  TermEnv (env,store,_) <- getTermEnv -< ()
+  case M.lookup ref store of
+    Just t -> returnA -< t
+    Nothing -> returnA -< error "failed to resolve reference"
 
-import Text.Printf
+storeTerm :: ArrowState TermEnv p => p (TermRef,Term) ()
+storeTerm = proc (ref,t) -> do
+  TermEnv (env,store,maxRef) <- getTermEnv -< ()
+  putTermEnv -< TermEnv (env, M.insert ref t store, maxRef)
 
-newtype NonTerminal = NonTerminal Int
-  deriving (Eq,Ord,Enum)
+newTerm :: ArrowState TermEnv p => p Term TermRef
+newTerm = proc t -> do
+  TermEnv (env,store,maxRef) <- getTermEnv -< ()
+  let newRef = maxRef
+  putTermEnv -< TermEnv (env,M.insert newRef t store, maxRef + 1)
+  returnA -< newRef
 
-toInt :: NonTerminal -> Int
-toInt (NonTerminal i) = i
+eval' :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p, Deduplicate p, ArrowApply p)
+      => Int -> StratEnv -> Strat -> p TermRef TermRef
+eval' 0 _ _ = proc _ ->
+  fail <+> newTerm -< Wildcard
+eval' i senv s0 = dedup $ case s0 of
+  Id -> id
+  S.Fail -> fail
+  Seq s1 s2 -> eval' i senv s2 . eval' i senv s1 
+  GuardedChoice s1 s2 s3 -> try (eval' i senv s1) (eval' i senv s2) (eval' i senv s3)
+  One s -> lift (one (eval' i senv s))
+  Some s -> lift (some (eval' i senv s))
+  All s -> lift (all (eval' i senv s))
+  Scope xs s -> scope xs (eval' i senv s)
+  Match f -> undefined --proc t -> match -< (f,t)
+  Build f -> undefined --proc _ -> build -< f
+  Let bnds body -> let_ senv bnds body (eval' i)
+  Call f ss ps -> call senv f ss ps (eval' (i-1))
 
-instance Show NonTerminal where
-  show (NonTerminal i) = show i
+-- match :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p) => p (TermPattern,Term) Term
+-- match = proc (p,t) -> case p of
+--   S.Var "_" -> success -< t
+--   S.Var x -> do
+--     env <- getTermEnv -< ()
+--     case M.lookup x env of
+--       Just t' -> do
+--         t'' <- equal -< (t,t')
+--         putTermEnv -< M.insert x t'' env
+--         success -< t''
+--       Nothing -> do
+--         putTermEnv -< M.insert x t env
+--         fail <+> success -< t
+--   S.Cons c ts -> case t of
+--     Cons c' ts'
+--       | c == c' && length ts == length ts' -> do
+--           ts'' <- zipWith match -< (ts,ts')
+--           success -< Cons c ts''
+--       | otherwise -> fail -< ()
+--     Wildcard -> do
+--       ts'' <- zipWith match -< (ts,[Wildcard | _ <- ts])
+--       fail <+> success -< Cons c ts''
+--     _ -> fail -< ()
+--   S.Explode c ts -> case t of
+--     Cons (Constructor c') ts' -> do
+--       match -< (c,StringLiteral c')
+--       match -< (ts, convertToList ts')
+--       success -< t
+--     StringLiteral _ -> do
+--       match -< (ts, convertToList [])
+--       success -< t
+--     NumberLiteral _ -> do
+--       match -< (ts, convertToList [])
+--       success -< t
+--     Wildcard ->
+--       (do
+--         match -< (c,  Wildcard)
+--         match -< (ts, Wildcard)
+--         success -< t)
+--       <+>
+--       (do
+--         match -< (ts, convertToList [])
+--         success -< t)
+--   S.StringLiteral s -> case t of
+--     StringLiteral s'
+--       | s == s' -> success -< t
+--       | otherwise -> fail -< ()
+--     Wildcard -> fail <+> success -< StringLiteral s
+--     _ -> fail -< ()
+--   S.NumberLiteral n -> case t of
+--     NumberLiteral n'
+--       | n == n' -> success -< t
+--       | otherwise -> fail -< ()
+--     Wildcard -> fail <+> success -< NumberLiteral n
+--     _ -> fail -< ()
 
-instance Semigroup NonTerminal where
-  (NonTerminal i) <> (NonTerminal j) = succ (NonTerminal (max i j))
+-- equal :: (ArrowChoice p, ArrowAppend p, Try p) => p (Term,Term) Term
+-- equal = proc (t1,t2) -> case (t1,t2) of
+--   (Cons c ts,Cons c' ts')
+--     | c == c' && length ts == length ts' -> do
+--       ts'' <- zipWith equal -< (ts,ts')
+--       returnA -< Cons c ts''
+--     | otherwise -> fail -< ()
+--   (StringLiteral s, StringLiteral s')
+--     | s == s' -> success -< t1
+--     | otherwise -> fail -< ()
+--   (NumberLiteral n, NumberLiteral n')
+--     | n == n' -> success -< t1
+--     | otherwise -> fail -< ()
+--   (Wildcard, t) -> fail <+> success -< t
+--   (t, Wildcard) -> fail <+> success -< t
+--   (_,_) -> fail -< ()
 
-data Term = Cons Constructor [NonTerminal]
-          | Hole
+-- build :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, Try p) => p TermPattern Term
+-- build = proc p -> case p of
+--   S.Var x -> do
+--     env <- getTermEnv -< ()
+--     case M.lookup x env of
+--       Just t -> returnA -< t
+--       Nothing -> fail <+> success -< Wildcard
+--   S.Cons c ts -> do
+--     ts' <- mapA build -< ts
+--     returnA -< Cons c ts'
+--   S.Explode c ts -> do
+--     c' <- build -< c
+--     case c' of
+--       StringLiteral s -> do
+--         ts' <- build -< ts
+--         ts'' <- convertFromList -< ts'
+--         case ts'' of
+--           Just tl -> success -< Cons (Constructor s) tl
+--           Nothing -> fail <+> returnA -< Wildcard
+--       Wildcard -> fail <+> returnA -< Wildcard
+--       _ -> fail -< ()
+--   S.NumberLiteral n -> returnA -< NumberLiteral n
+--   S.StringLiteral s -> returnA -< StringLiteral s
 
-instance Show Term where
-  show (Cons c ts) = show c ++ if null ts then "" else show ts
-  show Hole = "_"
+convertToList :: [Term] -> Term
+convertToList ts = case ts of
+  (x:xs) -> Cons "Cons" [x,convertToList xs]
+  [] -> Cons "Nil" []
 
-newtype Productions = Productions (IntMap (NonEmpty Term))
+convertFromList :: (ArrowChoice p, Try p) => p Term (Maybe [Term])
+convertFromList = proc t -> case t of
+  Cons "Cons" [x,tl] -> do
+    xs <- convertFromList -< tl
+    returnA -< (x:) <$> xs
+  Cons "Nil" [] ->
+    returnA -< Just []
+  Wildcard -> returnA -< Nothing
+  _ -> fail -< ()
 
-instance Semigroup Productions where
-  (<>) = mappend
-
-instance Monoid Productions where
-  mempty = Productions IM.empty
-  mappend (Productions p1) (Productions p2) = Productions (IM.union p1 p2)
-
-data Grammar = Grammar NonTerminal Productions
-
-instance MonadState (NonTerminal,env) f => Semigroup (f Grammar) where
-  g1 <> g2 = do
-    Grammar s1 p1 <- g1
-    Grammar s2 p2 <- g2
-    let g = Grammar s1 (p1 <> p2)
-    newProduction g $ lookup s1 g <> lookup s2 g
-
-(~>) :: NonTerminal -> Term -> (NonTerminal,Term)
-(~>) n t = (n,t)
-
-grammar :: NonTerminal -> [(NonTerminal,Term)] -> Grammar
-grammar s = Grammar s . Productions . IM.fromListWith (<>) . fmap (first toInt . second return)
-
-instance Show Grammar where
-  show (Grammar start (Productions p)) =
-    unlines $ flip fmap (IM.toList p) $ \(v,t) ->
-      flip (printf "%d -> %s") (printAlternatives t) $
-        if start == NonTerminal v then "*" ++ show v else show v
-    where
-     printAlternatives = unwords . N.toList . N.intersperse "|" . fmap show
-
-
--- adjust :: Applicative f => NonTerminal -> Grammar -> (Term NonTerminal -> f (Term NonTerminal)) -> f Grammar
--- adjust n (Grammar s prods) f = Grammar s <$> M.alterF (sequenceA . fmap (sequenceA . fmap f)) n prods
-
--- A* -> f[A,A]
--- path 1 (match f(x,y); build g(x,y))
---
--- A -> f[A,A]
--- B* -> f[C,A]
--- C -> g[A,A]
-
--- A* -> f[A,A] | b
--- path 1 (match f(x,y); build g(x,y))
---
--- Fail or
--- A -> f[A,A] | b
--- B* -> f[C,A]
--- C -> g[A,A]
-
--- A* -> f[A,b] | g[b,A]
--- match f(x,y); build h(x,y)
---
--- Fail or
--- A -> f[A,b] | g[b,A]
--- B* -> h[A,b]
-
--- A* -> f[A,b] | g[b,A]
--- match f(g[x,y],z); build h(x,z)
---
--- Fail or
--- A -> f[A,b] | g[b,A]
--- B* -> h[b,b]
-
-lookup :: NonTerminal -> Grammar -> NonEmpty Term
-lookup (NonTerminal n) (Grammar _ (Productions p)) = p IM.! n
-
-startSymbol :: Grammar -> NonTerminal
-startSymbol (Grammar s _) = s
-
-withStartSymbol :: Grammar -> NonTerminal -> Grammar
-withStartSymbol (Grammar _ ps) s = Grammar s ps
-
-newProduction :: MonadState (NonTerminal,env) f => Grammar -> NonEmpty Term -> f Grammar
-newProduction (Grammar _ (Productions ps)) newProd = do
-  start <- fresh
-  return $ Grammar start (addProduction start newProd)
-  where
-    fresh :: MonadState (NonTerminal,env) f => f NonTerminal
-    fresh = do
-      (n,env) <- get
-      put (succ n,env)
-      return n
-
-    addProduction :: NonTerminal -> NonEmpty Term -> Productions
-    addProduction (NonTerminal n) p = Productions (IM.insert n p ps)
-
-each :: Semigroup (f Grammar) => Grammar -> NonTerminal -> (Term -> f Grammar) -> f Grammar
-each gr nonTerminal f = sconcat $ fmap f (lookup nonTerminal gr)
-  -- grs <- mapM f (lookup nonTerminal gr)
-  -- newProduction (sconcat grs) $ do
-  --   gr' <- grs
-  --   lookup (startSymbol gr') gr'
-
-path :: (CanFail f,MonadState (NonTerminal,env) f,Semigroup (f Grammar)) => (Strat -> Grammar -> f Grammar)
-     -> Int -> Strat -> Grammar -> f Grammar
-path f n s g = each g (startSymbol g) $ \t ->
+lift :: (Try p,ArrowChoice p,ArrowAppend p)
+     => p (Constructor,[Term]) (Constructor,[Term])
+     -> p TermRef TermRef
+lift p = proc r -> do
+  t <- deref -< r
   case t of
-    Cons c ts ->
-      let go 1 (x:xs) = do
-            g' <- f s (g `withStartSymbol` x)
-            return (startSymbol g':xs,g')
-          go i (x:xs) = do
-            (xs',g') <- go (i-1) xs
-            return (x:xs',g')
-          go _ [] = fail
-      in do
-        (ts',g') <- go n ts
-        newProduction g' $ return $ Cons c ts' 
-    Hole -> success g
-
-type TermEnv = Map T.TermVar Grammar
-
-grammarEq :: CanFail f => Grammar -> Grammar -> f Grammar
-grammarEq = undefined
-
-match :: (MonadState (NonTerminal,TermEnv) f,CanFail f,Semigroup (f Grammar)) => T.Term T.TermVar -> Grammar -> f Grammar
-match f g = case f of
-  T.Var x -> do
-    (n,env) <- get
-    case M.lookup x env of
-      Just g' -> grammarEq g' g
-      Nothing -> do
-        put (n,M.insert x g env)
-        success g
-  T.Cons c' ts' -> each g (startSymbol g) $ \t -> case t of
-      Cons c ts | c' /= c || length ts' /= length ts -> fail
-                | otherwise -> do
-                   gs <- zipWithM match ts' (withStartSymbol g <$> ts)
-                   undefined gs
-      Hole -> undefined
-
-
-interp :: Strat -> Grammar -> Interp (NonTerminal,TermEnv) Single Grammar
-interp s0 g = case s0 of
-  Test s -> test interp s g
-  Neg s -> neg interp s g
-  Fail -> fail
-  Id -> success g
-  Seq s1 s2 -> sequence interp s1 s2 g
-  Choice s1 s2 -> leftChoice interp s1 s2 g
-  LeftChoice s1 s2 -> leftChoice interp s1 s2 g
-  Rec {} -> undefined --limit (recur interp x s t) Hole
-  RecVar {} -> undefined --limit (var interp x t) Hole
-  Path i s -> path interp i s g
-  -- Cong c ss -> case t of
-  --   Cons c' ts -> uncurry Cons <$> cong interp c ss c' ts
-  --   Hole -> fail `mplus` interp (Cong c ss) (Cons c [Hole | _ <- ss])
-  -- One s -> case t of
-  --   Cons c ts -> uncurry Cons <$> one interp s c ts
-  --   Hole -> fail `mplus` success Hole
-  -- Some s -> case t of
-  --   Cons c ts -> uncurry Cons <$> some interp s c ts
-  --   Hole -> fail `mplus` success Hole
-  -- All s -> case t of
-  --   Cons c ts -> uncurry Cons <$> all interp s c ts
-  --   Hole -> fail `mplus` success Hole
-  -- Scope xs s -> scope interp xs s t
-  Match f -> match f g
-  -- Build f -> build f
+    Cons c ts -> do
+      (c',ts') <- p -< (c,ts)
+      returnA -< Cons c' ts'
+    StringLiteral {} -> returnA -< t
+    NumberLiteral {} -> returnA -< t
+    Wildcard -> fail <+> success -< Wildcard
 

@@ -218,9 +218,9 @@ instance Hashable Term where
 
 instance Arbitrary Term where
   arbitrary = do
-    height <- choose (0,7)
-    width <- choose (0,4)
-    arbitraryTerm height width
+    he <- choose (0,7)
+    wi <- choose (0,4)
+    arbitraryTerm he wi
 
 arbitraryTerm :: Int -> Int -> Gen Term
 arbitraryTerm 0 _ =
