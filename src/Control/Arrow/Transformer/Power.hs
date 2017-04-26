@@ -67,4 +67,5 @@ mapPow f = proc p -> case viewl p of
 instance ArrowChoice p => Deduplicate (PowerArrow p) where
   dedup (PowerArrow f) = PowerArrow (f >>> arr dedup')
 
+union :: Seq a -> Seq a -> Seq a
 union = (><)

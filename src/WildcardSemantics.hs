@@ -13,6 +13,7 @@ import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Interpreter
 
+import           Control.DeepSeq
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 import           Control.Arrow hiding ((<+>))
@@ -215,6 +216,13 @@ instance Hashable Term where
   hashWithSalt s (StringLiteral t) = s `hashWithSalt` (1::Int) `hashWithSalt` t
   hashWithSalt s (NumberLiteral n) = s `hashWithSalt` (2::Int) `hashWithSalt` n
   hashWithSalt s Wildcard = s `hashWithSalt` (3::Int)
+
+instance NFData Term where
+  rnf t = case t of
+    Cons c ts -> rnf c `seq` rnf ts
+    StringLiteral s -> rnf s
+    NumberLiteral n -> rnf n
+    Wildcard -> ()
 
 instance Arbitrary Term where
   arbitrary = do

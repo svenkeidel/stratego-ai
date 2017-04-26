@@ -7,6 +7,7 @@ import           Prelude hiding (maybe)
 
 import           ATerm
 
+import           Control.DeepSeq
 import           Control.Monad.Except
 
 import           Data.Hashable
@@ -21,7 +22,7 @@ import qualified Data.Set as S
 
 import           Test.QuickCheck hiding (subterms)
 
-newtype Constructor = Constructor Text deriving (Eq,Ord,IsString,Hashable)
+newtype Constructor = Constructor Text deriving (Eq,Ord,IsString,Hashable,NFData)
 newtype TermVar = TermVar Text deriving (Eq,Ord,Hashable)
 newtype StratVar = StratVar Text deriving (Eq,Ord,IsString,Hashable)
 

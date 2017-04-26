@@ -14,10 +14,7 @@ import           WildcardSemanticsSoundness
 
 import           Control.Arrow
 
-import           Data.Foldable (toList)
-import           Data.Hashable
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashSet as H
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
 import           Data.Semigroup
@@ -112,7 +109,7 @@ spec = do
       fmap fst <$> weval 5 (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"])) t
-        `shouldBe''`
+        `shouldBe'`
            S.fromList 
              [ Success $ W.convertToList [1]
              , Success $ W.convertToList [1,1]
@@ -204,15 +201,9 @@ spec = do
 
   where
 
-    shouldBe' :: (Show a, Eq a, Hashable a) => Seq a -> Seq a -> Expectation
-    shouldBe' s1 s2 = H.fromList (toList s1) `shouldBe` H.fromList (toList s2)
+    shouldBe' :: Seq (Result W.Term) -> Seq (Result W.Term) -> Property
+    shouldBe' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) ((s2 <= s1) `shouldBe` True)
     infix 1 `shouldBe'`
-        
-
-    shouldBe'' :: Seq (Result W.Term) -> Seq (Result W.Term) -> Property
-    shouldBe'' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) $ ((s2 <= s1) `shouldBe` True)
-    infix 1 `shouldBe''`
-
 
     map = Strategy ["f"] ["l"] (Scope ["x","xs","x'","xs'"] (
             Build "l" `Seq`
