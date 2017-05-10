@@ -22,8 +22,10 @@ import Control.Monad
 import Control.Arrow.Transformer.Deduplicate
 
 import Data.Monoid
+import Data.Maybe
 import Data.String
 import Data.HashSet (HashSet)
+import Data.Hashable
 import Data.Foldable
 import qualified Data.HashSet as H
 import qualified Data.HashMap.Lazy as M
@@ -59,25 +61,24 @@ main =
       wittnessAnalysis
 
     activate $ caseStudy "pcf" "eval_0_0" 4 $
-      -- prettyPrint P.ppPCF <>
+      prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
       wittnessAnalysis <>
       ruleInvocationsAnalysis pcfEvalGrammar <>
-      classification 4 pcfEvalGrammar
+      classification pcfEvalGrammar 4
 
     activate $ caseStudy "pcf" "check_eval_0_0" 5 $
-      -- prettyPrint P.ppPCF <>
+      prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
       wittnessAnalysis <>
       ruleInvocationsAnalysis pcfCheckEvalGrammar <>
-      classification 4 pcfCheckEvalGrammar
-                    
+      classification pcfCheckEvalGrammar 4
+
   where
     activate :: IO () -> IO ()
     activate cs = cs
-
     deactivate :: IO () -> IO ()
     deactivate _ = return ()
 
@@ -118,23 +119,47 @@ ruleInvocationsAnalysisSetup k =
           hPrintf csv "%s;%s;%d;%s;%d;%s;%d\n" name fun depth (show t) ruleId (show rule) count
         Nothing -> return ()
 
-type Rank = Int
+type Distance = Int
 
-classificationSetup :: ((Rank -> Grammar -> Analysis) -> IO ()) -> IO ()
+-- | Classifies terms as true and false, positive or negatives.
+--
+-- True-Positive: Terms in the analysis result that are part of the output language of the program transformation
+-- False-Positive: Terms in the analysis result that are *not* part of the output language of the program transformation
+-- True-Negative: Terms that occur neither in the output language of the program transformation nor in the analysis result
+-- False-Negative: Terms in output language of the program transformation that do not occur in the analysis result
+classificationSetup :: ((Grammar -> Distance -> Analysis) -> IO ()) -> IO ()
 classificationSetup k =
   withFile "classification.csv" WriteMode $ \csv -> do
-    hPrintf csv "name;fun;depth;rank;term;class\n"
-    k $ \maxRank grammar name fun depth selected -> measure "Classification" $ do
-      let relevant = termsOfRankN maxRank grammar
-      forM_ ([1..maxRank]::[Int]) $ \rank -> do
-        let selectedN = H.filter (\t -> W.height t == rank) selected
-            relevantN = H.filter (\t -> W.height t == rank) relevant
-            truePositive = ("true_positive", relevantN `H.intersection` selectedN)
-            falsePositive = ("false_positive", selectedN `H.difference` relevantN)
-            falseNegative = ("false_negative", relevantN `H.difference` selectedN)
-        forM_ [truePositive, falseNegative, falsePositive] $ \(klass,terms) ->
-          forM_ terms $ \t ->
-            hPrintf csv "%s;%s;%d;%d;%s;%s\n" name fun depth rank (show t) (klass :: String)
+    hPrintf csv "name;fun;depth;sample_distance;term;height;size;distance_sum;class\n"
+    k $ \grammar sampleDistance name fun depth analysis -> measure "Classification" $ do
+      let relevant = termsOfDistance sampleDistance grammar
+          selected = H.delete W.Wildcard analysis
+          (truePositive,falsePositive) = partition (\s -> any (\r -> s `wittnesses` r) relevant) selected
+          (_,           falseNegative) = partition (\r -> any (\s -> s `wittnesses` r) selected) relevant
+      forM_ [("true_positive", truePositive), ("false_positive", falsePositive), ("false_negative", falseNegative)] $ \(klass,terms) ->
+        forM_ terms $ \t ->
+          hPrintf csv "%s;%s;%d;%d;%s;%d;%d;%d;%s\n"
+            name fun depth sampleDistance (show t) (W.height t) (W.size t) (distanceSum grammar t `orElse` 0) (klass :: String)
+  where
+    partition :: (Eq a, Hashable a) => (a -> Bool) -> HashSet a -> (HashSet a, HashSet a)
+    partition predicate = H.foldl' (\(pos,neg) t -> if predicate t then (H.insert t pos,neg) else (pos,H.insert t neg))
+                                   (H.empty,H.empty)
+
+wittnesses :: W.Term -> W.Term -> Bool
+wittnesses W.Wildcard W.Wildcard = True
+wittnesses W.Wildcard (W.Cons _ []) = True
+wittnesses W.Wildcard (W.StringLiteral _) = True
+wittnesses W.Wildcard (W.NumberLiteral _) = True
+wittnesses (W.Cons c ts) (W.Cons c' ts') = c == c' && length ts == length ts' && and (zipWith wittnesses ts ts')
+wittnesses (W.StringLiteral s) (W.StringLiteral s') = s == s'
+wittnesses (W.NumberLiteral n) (W.NumberLiteral n') = n == n'
+wittnesses _ _ = False
+
+for :: Functor f => f a -> (a -> b) -> f b
+for = flip fmap
+
+orElse :: Maybe a -> a -> a
+orElse = flip fromMaybe
 
 measure :: String -> IO () -> IO ()
 measure analysisName action = do

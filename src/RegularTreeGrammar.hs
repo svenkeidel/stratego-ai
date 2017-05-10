@@ -11,6 +11,7 @@ import qualified WildcardSemantics as W
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Sequence (Seq)
+import qualified Data.Sequence as S
 import Data.Text (Text,unpack)
 import Data.HashSet(HashSet)
 import qualified Data.HashSet as H
@@ -49,6 +50,9 @@ summary g = fmap (foldl' (flip (M.adjust (+ 1))) initial) . runTopDown g
 runTopDown :: Grammar -> Term -> Maybe (Seq Rule)
 runTopDown grammar term = execWriterT (runReaderT (topDown (Symbol 0 "") term) grammar)
 
+distanceSum :: Grammar -> Term -> Maybe Int
+distanceSum g t = S.length <$> runTopDown g t
+
 topDown :: (MonadReader Grammar m, MonadWriter (Seq Rule) m, MonadPlus m) => Symbol -> Term -> m ()
 topDown startSymbol term = do
   grammar <- ask
@@ -72,8 +76,8 @@ topDown startSymbol term = do
 
     match _ _ = mzero
 
-termsOfRankN :: Int -> Grammar -> HashSet Term
-termsOfRankN maxDepth grammar = H.fromList $ toList $ go maxDepth (Symbol 0 "")
+termsOfDistance :: Int -> Grammar -> HashSet Term
+termsOfDistance maxDepth grammar = H.fromList $ toList $ go maxDepth (Symbol 0 "")
   where
     go :: Int -> Symbol -> Seq Term
     go depth startSym = foldMap (\(Rule sym term) -> guard (startSym == sym) >> goTerm depth term) grammar
@@ -81,12 +85,12 @@ termsOfRankN maxDepth grammar = H.fromList $ toList $ go maxDepth (Symbol 0 "")
     goTerm :: Int -> GrammarTerm -> Seq Term
     goTerm 0 _ = mempty
     goTerm depth term = case term of
-      Cons c ts -> W.Cons c <$> mapM (goTerm (depth-1)) ts
+      Cons c ts -> W.Cons c <$> mapM (goTerm depth) ts
       AnyString -> return W.Wildcard
       StringLiteral t -> return $ W.StringLiteral t
       AnyNumber -> return W.Wildcard
       NumberLiteral t -> return $ W.NumberLiteral t
-      NonTerminal t -> go depth t
+      NonTerminal t -> go (depth - 1) t
 
 {-
 Start Symbol: NF
@@ -135,10 +139,10 @@ pcfEvalGrammar =
     typ' = NonTerminal typ
 
 {-
-Start Symbol: NF
+Start Symbol: Value
 
-NF -> Num
-NF -> Abs(String,Type,Expr)
+Value -> Num
+Value -> Abs(String,Type,Expr)
 
 Num -> Zero()
 Num -> Pred(Num)
@@ -158,8 +162,8 @@ Type -> Fun(Type,Type)
 pcfCheckEvalGrammar :: Grammar
 pcfCheckEvalGrammar =
   V.fromList [
-    Rule nf num',
-    Rule nf $ Cons "Abs" [AnyString, typ', expr'],
+    Rule value num',
+    Rule value $ Cons "Abs" [AnyString, typ', expr'],
 
     Rule num $ Cons "Zero" [],
     Rule num $ Cons "Succ" [num'],
@@ -177,7 +181,7 @@ pcfCheckEvalGrammar =
     Rule typ $ Cons "Fun" [typ', typ']
   ]
   where
-    nf = Symbol 0 "NF"
+    value = Symbol 0 "Value"
     num = Symbol 1 "Num"
     num' = NonTerminal num
     expr = Symbol 2 "Expr"

@@ -198,7 +198,7 @@ instance Monoid Term where
   mappend = undefined --(<>)
 
 instance Show Term where
-  show (Cons c ts) = show c ++ if null ts then "" else show ts
+  show (Cons c ts) = show c ++ show ts
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
   show Wildcard = "_"

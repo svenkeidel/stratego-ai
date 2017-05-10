@@ -7,111 +7,125 @@ check_eval <- "PCF Check & Evaluation"
 eval <- "PCF Evaluation"
 norm <- "CCA Normalization"
 
-# # Read data from csv file
-# data <- read.csv(file="casestudy.csv", header=TRUE, sep=",") %>%
-#   mutate(wittness = ifelse(wittness=="True", 1, 0)) %>%
-#   # Rename function names
-#   mutate(fun = recode(fun,
-#     "check_0_0" = "check",
-#     "check_eval_0_0" = check_eval,
-#     "check_num_0_0" = "check_num",
-#     "desugar_arrow_0_0" = desugar_arrows,
-#     "eval_0_0" = eval,
-#     "norm_0_0" = norm
-#   )) %>%
-#   # filter relevent experiments
-#   filter(fun %in% c(check_eval,eval,desugar_arrows,norm))
-
-# # reorder experiments
-# data$fun <- factor(data$fun, levels=c(desugar_arrows, norm, eval, check_eval))
-# data$depth <- factor(data$depth)
-# data$depth <- factor(data$depth, levels=rev(levels(factor(data$depth))))
+readData <- function(csvFile) {
+  data <- read.csv(file=csvFile, header=TRUE, sep=";") %>%
+    # Rename function names
+    mutate(fun = recode(fun,
+      "check_0_0" = "check",
+      "check_eval_0_0" = check_eval,
+      "check_num_0_0" = "check_num",
+      "desugar_arrow_0_0" = desugar_arrows,
+      "eval_0_0" = eval,
+      "norm_0_0" = norm
+    )) %>%
+    # filter relevent experiments
+    filter(fun %in% c(check_eval,eval,desugar_arrows,norm))
+  return(data)
+}
 
 # # plot height of terms depending on the recursion depth
-# # tikz(file = "height.tex", standAlone=F,width = 6, height = 3, sanitize=TRUE)
-# ggplot(data, aes(height, fill = factor(depth))) +
-#   geom_histogram(binwidth = 1) +
-#   scale_y_sqrt() +
-#   facet_wrap(~fun,scales="free") +
-#   labs(fill = "depth", x="Term Height", y = element_blank())
-# # dev.off()
+# readData("height.csv") %>%
+#   ggplot(aes(x = factor(height), fill = factor(depth))) +
+#     geom_bar(position = position_dodge(preserve="single")) +
+#     facet_wrap(~fun) +
+#     labs(fill = "Depth", x="Term Height", y = element_blank())
 # ggsave("height.pdf")
 
-# reverseDepth <- function(data) {
-#   dat <- data
-#   dat$depth <- factor(data$depth, levels=rev(levels(factor(data$depth))))
-#   return(dat)
-# }
-
 # # plot size of terms depending on the recursion depth
-# plot <- ggplot(data, aes(size, fill = factor(depth))) +
-#   geom_histogram(data=subset(data, fun==check_eval), binwidth = 1, position="dodge") +
-#   geom_histogram(data=subset(data, fun==eval), binwidth = 1, position="dodge") +
-#   geom_histogram(data=subset(reverseDepth(data), fun==desugar_arrows), binwidth = 10, position="identity") +
-#   geom_histogram(data=subset(reverseDepth(data), fun==norm), binwidth = 10, position="identity") +
-#   facet_wrap(~fun,scales="free") +
-#   # scale_fill_grey(start = 0.2, end=0.75) +
-#   scale_fill_brewer(palette="Blues") +
-#   scale_y_sqrt() +
-#   theme_bw() +
-#   labs(fill = "Recursion\nDepth", x="Term Size", y = "Count")
-# # tikz(file = "size.tex", standAlone=F,width = 6, height = 4, sanitize=TRUE)
-# # print(plot)
-# # dev.off()
-# print(plot)
+# readData("size.csv") %>%
+#   # mutate(depth = factor(depth, levels=rev(levels(factor(depth))))) %>%
+#   ggplot(aes(x = factor(size), fill = factor(depth))) +
+#     geom_bar(width=0.8, position = position_dodge(preserve="single")) +
+#     facet_wrap(~fun) +
+#     labs(fill = "Depth", x="Term Size", y = element_blank())
 # ggsave("size.pdf")
 
-# data <- data %>%
+# # Plot percantages of wittnesses in result set
+# readData("wittness.csv") %>%
 #   group_by(fun,depth) %>%
+#   mutate(wittness = ifelse(wittness=="True", 1, 0)) %>%
 #   summarise(
 #     n = n(),
-#     wittnesses = sum(wittness) / n())
-
-# # Plot percantages of wittnisses in result set
-# plot <- ggplot(data, aes(depth,wittnesses, label=n)) +
-#   geom_bar(stat="identity") +
-#   facet_wrap(~fun, scales="free_x", nrow=1) +
-#   scale_y_continuous(labels = scales::percent(c(0, 0.25, 0.5, 0.75, 1))) +
-#   scale_fill_brewer() +
-#   geom_text(aes(y = 1.05), size=2) +
-#   theme_bw() +
-#   labs(x = "Recursion Depth", y=element_blank())
-# # tikz(file = "wittnesses.tex", standAlone=F, width = 6, height = 2, sanitize=TRUE)
-# # print(plot)
-# # dev.off()
-# print(plot)
-# ggsave("wittnesses.pdf")
+#     wittnesses = sum(wittness) / n()) %>%
+#   ggplot(aes(depth,wittnesses, label=n)) +
+#     geom_bar(stat="identity") +
+#     facet_wrap(~fun, scales="free_x", nrow=1) +
+#     scale_y_continuous(labels = scales::percent(c(0, 0.25, 0.5, 0.75, 1))) +
+#     scale_fill_brewer() +
+#     geom_text(aes(y = 1.05), size=2) +
+#     theme_bw() +
+#     labs(x = "Recursion Depth", y=element_blank())
+# ggsave("wittness.pdf")
 
 
-# Load other data set
-data <- read.csv(file="grammar.csv", header=TRUE, sep=";") %>%
-  mutate(fun = recode(fun,
-    "check_0_0" = "check",
-    "check_eval_0_0" = check_eval,
-    "check_num_0_0" = "check_num",
-    "desugar_arrow_0_0" = desugar_arrows,
-    "eval_0_0" = eval,
-    "norm_0_0" = norm
-  )) %>%
-  # filter relevent experiments
-  filter(fun %in% c(check_eval,eval,desugar_arrows,norm))
+# readData("rule.csv") %>%
+#   mutate(depth = factor(depth, levels=rev(levels(factor(depth))))) %>%
+#   group_by(fun,depth,ruleId,rule) %>%
+#   summarise(invocations = sum(invocation)) %>%
+#   ggplot(aes(reorder(rule,invocations), invocations, fill=factor(depth))) +
+#     geom_col(position="identity") +
+#     facet_grid(fun~. , scales = "free_y") +
+#     coord_flip() +
+#     labs(fill = "Depth", x = "Rule", y = "Number of Rule Invocations")
+# ggsave("rule.pdf")
 
-plot <- ggplot(data, aes(rule, invocation)) +
-  geom_boxplot() +
-  facet_grid(depth~fun, scales="free") +
-  coord_flip() +
-  labs(x = "Rule", y = "Number of Rule Invocations")
-print(plot)
-ggsave("grammar_boxplot.pdf")
+percent <- function(x, digits = 1, format = "f", ...) {
+  paste0(formatC(100 * x, format = format, digits = digits, ...), "%")
+}
 
-data <- data %>%
-  group_by(fun,depth,ruleId,rule) %>%
-  summarise(invocations = sum(invocation))
+classification_plot <- function(data, criterion_name, criterion_label) {
+  data <- data %>%
+    group_by(fun,depth,sample_distance,criterion) %>%
+    summarise(
+      n = n(),
+      true_positive = sum(class == "true_positive"),
+      false_positive = sum(class == "false_positive"),
+      false_negative = sum(class == "false_negative"),
+      precision = true_positive / (true_positive + false_positive),
+      recall = true_positive / (true_positive + false_negative),
+      f1score = 2 * (precision * recall) / (precision + recall)
+    ) %>%
+      filter(true_positive + false_positive > 0, true_positive + false_negative > 0)
+  
+  precision <- data %>% mutate(measure_value = precision) 
+  recall <- data %>% mutate(measure_value = recall)
+  f1score <- data %>% mutate(measure_value = f1score)
+  newdata <- bind_rows("Precision" = precision, "Recall" = recall, "F1 Score" = f1score, .id = "measure") %>%
+    mutate(measure = factor(measure, levels=c("Precision", "Recall", "F1 Score")))
 
-plot <- ggplot(data, aes(reorder(rule,invocations), invocations, fill=depth)) +
-  geom_col() +
-  facet_grid(fun~. , scales = "free_y") +
-  coord_flip() +
-  labs(x = "Rule", y = "Number of Rule Invocations")
-print(plot)
-ggsave("grammar_bar.pdf")
+  newdata %>%
+    ggplot(aes(depth, y = measure_value)) +
+      geom_bar(aes(fill = measure, group=measure), stat="identity", position="dodge") +
+      facet_grid(criterion~fun, scales="free_x", labeller=labeller(criterion = function(crit) sprintf("%s ≤ %s", criterion_label, crit))) +
+      scale_y_continuous(labels = scales::percent(c(0, 0.25, 0.5, 0.75, 1))) +
+      # scale_fill_brewer() +
+      geom_text(aes(y = measure_value / 2, group=measure, label=percent(measure_value)), size=2, position = position_dodge(0.9)) +
+      geom_text(
+        data = data %>% select(fun,depth,sample_distance,criterion,n,true_positive,false_positive, false_negative),
+        aes(y = 1.05, label = sprintf("tp=%d, fp=%d, fn=%d", true_positive, false_positive, false_negative)),
+        size = 2
+      ) +
+      theme_bw() +
+      labs(x = "Recursion Depth", y=criterion_label, fill=element_blank())
+  ggsave(sprintf("precision_recall_%s.pdf", criterion_name), width=8, height=8, device=cairo_pdf)
+}
+
+data <- readData("classification.csv")
+
+dat <- data.frame()
+for(h in 3:5) {
+  dat <- bind_rows(dat, data %>% filter(height <= h) %>% mutate(criterion = h))
+}
+classification <- classification_plot(dat, "height", "Height")
+
+dat <- data.frame()
+for(s in 3:10) {
+  dat <- bind_rows(dat, data %>% filter(size <= s) %>% mutate(criterion = s))
+}
+classification <- classification_plot(dat, "size", "Size")
+
+dat <- data.frame()
+for(s in 3:8) {
+  dat <- bind_rows(dat, data %>% filter(distance_sum <= s) %>% mutate(criterion = s))
+}
+classification <- classification_plot(dat, "distance_sum", "Complexity")

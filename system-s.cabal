@@ -19,6 +19,7 @@ library
   exposed-modules:     ATerm,
                        Syntax,
                        Result,
+                       UncertainResult,
                        Interpreter,
                        ConcreteSemantics,
                        WildcardSemantics,
