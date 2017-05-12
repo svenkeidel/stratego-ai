@@ -19,43 +19,47 @@ import           Data.Semigroup
 
 import           Text.Printf
 
-class Arrow p => Try p where
+class Arrow p => ArrowTry p where
   fail :: p t a
   try :: Monoid c => p a b -> p b c -> p a c ->  p a c
 
-instance (Monoid s, Try p) => Try (StateArrow s p) where
-  fail = StateArrow (first fail)
-  try (StateArrow f) (StateArrow g) (StateArrow h) = StateArrow (try f g h)
-
-success :: Try p => p a a
+success :: ArrowTry p => p a a
 success = id
+{-# INLINE success #-}
 
 class Arrow p => ArrowAppend p where
   -- zeroArrow :: (Monoid b) => p a b
-  (<+>) :: (Monoid b) => p a b -> p a b -> p a b
-
-instance (Monoid s, ArrowAppend p) => ArrowAppend (StateArrow s p) where
-  -- zeroArrow = StateArrow zeroArrow
-  StateArrow f <+> StateArrow g = StateArrow (f <+> g)
+  (<+>) :: Monoid b => p a b -> p a b -> p a b
 
 getTermEnv :: ArrowState s p => p () s
 getTermEnv = fetch
+{-# INLINE getTermEnv #-}
 
 putTermEnv :: ArrowState s p => p s ()
 putTermEnv = store
-              
-extendTermEnv :: (ArrowState (HashMap TermVar t) p) => p (TermVar,t) ()
-extendTermEnv = proc (v,t) -> do
-  env <- getTermEnv -< ()
-  putTermEnv -< M.insert v t env
-  
-class HasStratEnv p where
-  readStratEnv :: p () StratEnv
-  localStratEnv :: p a b -> p (a, StratEnv) b
+{-# INLINE putTermEnv #-}
+
+readSignature :: ArrowReader (Signature,StratEnv) p => p a Signature
+readSignature = proc _ -> do
+  (sig,_) <- readState -< ()
+  returnA -< sig
+{-# INLINE readSignature #-}
+
+readStratEnv :: ArrowReader (Signature,StratEnv) p => p a StratEnv
+readStratEnv = proc _ -> do
+  (_,senv) <- readState -< ()
+  returnA -< senv
+{-# INLINE readStratEnv #-}
+
+localStratEnv :: ArrowReader (Signature,StratEnv) p => p a b -> p (a,StratEnv) b 
+localStratEnv f = proc (a,senv) -> do
+  sig <- readSignature -< ()
+  newReader f -< (a,(sig,senv))
+{-# INLINE localStratEnv #-}
 
 -- Language Constructs
 
-guardedChoice :: (Try p, Monoid c) => p a b -> p b c -> p a c -> p a c
+guardedChoice :: (ArrowTry p, Monoid c) => p a b -> p b c -> p a c -> p a c
 guardedChoice = try
 {-# INLINE guardedChoice #-}
 
@@ -63,7 +67,7 @@ sequence :: Category p => p a b -> p b c -> p a c
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-one :: (Try p, ArrowAppend p, ArrowChoice p, Monoid a) => p a a -> p (Constructor,[a]) (Constructor,[a])
+one :: (ArrowTry p, ArrowAppend p, ArrowChoice p, Monoid a) => p a a -> p (Constructor,[a]) (Constructor,[a])
 one f = second go
   where
     go = proc l -> case l of
@@ -73,7 +77,7 @@ one f = second go
       [] -> fail -< ()
 {-# INLINE one #-}
 
-some :: (Try p, ArrowChoice p, Monoid t) => p t t -> p (Constructor,[t]) (Constructor,[t])
+some :: (ArrowTry p, ArrowChoice p, Monoid t) => p t t -> p (Constructor,[t]) (Constructor,[t])
 some f = second go
   where
     go = proc l -> case l of
@@ -102,33 +106,33 @@ scope vars s = proc t -> do
   returnA -< t'
 {-# INLINE scope #-}
 
-let_ :: StratEnv -> [(StratVar,Strategy)] -> Strat -> (StratEnv -> Strat -> p a b) -> p a b
-let_ senv ss body interp =
+let_ :: ArrowReader (Signature,StratEnv) p => [(StratVar,Strategy)] -> Strat -> (Strat -> p a b) -> p a b
+let_ ss body interp = proc a -> do
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
-  in interp (M.union (M.fromList ss') senv) body
+  senv <- readStratEnv -< ()
+  localStratEnv (interp body) -< (a,M.union (M.fromList ss') senv) 
+{-# INLINE let_ #-}
 
-call :: (Try p, ArrowChoice p, ArrowApply p, ArrowState (HashMap TermVar t) p)
-     => StratEnv -> StratVar -> [Strat] -> [TermVar] -> (StratEnv -> Strat -> p a b) -> p a b
-call senv f actualStratArgs actualTermArgs interp = proc a ->
+call :: (ArrowTry p, ArrowChoice p, ArrowApply p, ArrowState (HashMap TermVar t) p, ArrowReader (Signature,StratEnv) p)
+     => StratVar
+     -> [Strat]
+     -> [TermVar]
+     -> p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
+     -> (Strat -> p a b)
+     -> p a b
+call f actualStratArgs actualTermArgs bindTermArgs interp = proc a -> do
+  senv <- readStratEnv -< ()
   case M.lookup f senv of
     Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
       putTermEnv <<< bindTermArgs -< (tenv,zip actualTermArgs formalTermArgs)
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
-      b <- interp senv'' body -<< a
+      b <- localStratEnv (interp body) -<< (a,senv'')
       tenv' <- getTermEnv -< ()
       putTermEnv -< tenv `M.union` foldr M.delete tenv' formalTermArgs
       returnA -< b
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
-
-bindTermArgs :: (Try p, ArrowChoice p) =>
-    p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
-bindTermArgs = proc (tenv,l) -> case l of
- (actual,formal) : rest -> case M.lookup actual tenv of
-    Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
-    Nothing -> fail -< ()
- [] -> returnA -< tenv
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
 bindStratArgs [] senv = senv
@@ -156,14 +160,14 @@ zipWith f = proc x -> case x of
     returnA -< c:cs
   _ -> returnA -< []
 
-instance Try (Kleisli Maybe) where
+instance ArrowTry (Kleisli Maybe) where
   fail = Kleisli $ const Nothing
   try e s f = Kleisli $ \a ->
                 case runKleisli e a of
                   Just b -> runKleisli s b
                   Nothing -> runKleisli f a
 
-instance Try (Kleisli []) where
+instance ArrowTry (Kleisli []) where
   fail = Kleisli $ const []
   try e s f = Kleisli $ \a ->
                 case runKleisli e a of
@@ -173,3 +177,12 @@ instance Try (Kleisli []) where
 instance ArrowAppend (Kleisli []) where
   -- zeroArrow = Kleisli $ const mempty
   Kleisli f <+> Kleisli g = Kleisli $ \a -> f a <> g a
+
+instance (Monoid s, ArrowAppend p) => ArrowAppend (StateArrow s p) where
+  -- zeroArrow = StateArrow zeroArrow
+  StateArrow f <+> StateArrow g = StateArrow (f <+> g)
+  {-# INLINE (<+>) #-}
+
+instance (Monoid s, ArrowTry p) => ArrowTry (StateArrow s p) where
+  fail = StateArrow (first fail)
+  try (StateArrow f) (StateArrow g) (StateArrow h) = StateArrow (try f g h)

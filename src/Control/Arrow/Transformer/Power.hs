@@ -41,7 +41,7 @@ instance ArrowChoice p => ArrowChoice (PowerArrow p) where
 instance (ArrowApply p,ArrowChoice p) => ArrowApply (PowerArrow p) where
   app = PowerArrow $ proc (PowerArrow p,b) -> p -<< b
 
-instance (Try p,ArrowChoice p) => Try (PowerArrow p) where
+instance (ArrowTry p,ArrowChoice p) => ArrowTry (PowerArrow p) where
   fail = PowerArrow fail
   try (PowerArrow f) (PowerArrow g) (PowerArrow h) = PowerArrow (try f (mapPow g >>> arr join) h)
 

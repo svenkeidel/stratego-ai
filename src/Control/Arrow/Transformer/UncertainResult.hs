@@ -40,7 +40,7 @@ instance ArrowChoice p => ArrowChoice (UncertainResultArrow p) where
 instance (ArrowApply p,ArrowChoice p) => ArrowApply (UncertainResultArrow p) where
   app = UncertainResultArrow $ proc (UncertainResultArrow p,b) -> p -<< b
 
-instance ArrowChoice p => Try (UncertainResultArrow p) where
+instance ArrowChoice p => ArrowTry (UncertainResultArrow p) where
   fail = UncertainResultArrow (arr (const Fail))
   try (UncertainResultArrow f) (UncertainResultArrow g) (UncertainResultArrow h) = UncertainResultArrow $ proc a -> do
     rb <- f -< a

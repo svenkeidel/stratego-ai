@@ -16,56 +16,80 @@ import Control.Arrow.Operations
 import Control.Arrow.Transformer.Power
 import Control.Arrow.Transformer.Deduplicate
 
-import Data.Hashable
+eval :: Int -> Signature -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
+eval i sig senv s = runInterp (eval' i s) (sig,senv)
+{-# INLINE eval #-}
 
-eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
-eval i senv s = runInterp $ eval' i senv s
+newtype Interp a b = Interp {runInterp :: (Signature,StratEnv) -> (a,TermEnv) -> Pow (Result (b,TermEnv))}
 
-newtype Interp s a b = Interp {runInterp :: (a,s) -> Pow (Result (b,s))}
-
-instance Category (Interp s) where
-  id = Interp $ \a -> return (Success a)
-  Interp f . Interp g = Interp $ \a -> do
-    b <- g a
+instance Category Interp where
+  id = Interp $ \_ a -> return (Success a)
+  {-# INLINE id #-}
+  Interp f . Interp g = Interp $ \r a -> do
+    b <- g r a
     case b of
-        Success b' -> f b'
+        Success b' -> f r b'
         Fail -> return Fail
+  {-# INLINE (.) #-}
 
-instance Try (Interp s) where
-  fail = Interp $ \_ -> return Fail
-  try (Interp f) (Interp g) (Interp h) = Interp $ \a -> do
-    b <- f a
+instance ArrowTry Interp where
+  fail = Interp $ \_ _ -> return Fail
+  {-# INLINE fail #-}
+  try (Interp f) (Interp g) (Interp h) = Interp $ \r a -> do
+    b <- f r a
     case b of
-      Success b' -> g b'
-      Fail -> h a
+      Success b' -> g r b'
+      Fail -> h r a
+  {-# INLINE try #-}
 
-instance Arrow (Interp s) where
-  arr f = Interp $ \(a,e) -> return $ Success (f a, e)
-  first (Interp f) = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((c,b),e')) (f (a,e))
-  second (Interp f) = Interp $ \((a,b),e) -> (fmap.fmap) (\(c,e') -> ((a,c),e')) (f (b,e))
+instance Arrow Interp where
+  arr f = Interp $ \_ (a,e) -> return $ Success (f a, e)
+  {-# INLINE arr #-}
+  first (Interp f) = Interp $ \r ((a,b),e) -> (fmap.fmap) (\(c,e') -> ((c,b),e')) (f r (a,e))
+  {-# INLINE first #-}
+  second (Interp f) = Interp $ \r ((a,b),e) -> (fmap.fmap) (\(c,e') -> ((a,c),e')) (f r (b,e))
+  {-# INLINE second #-}
 
-instance ArrowChoice (Interp s) where
-  left (Interp f) = Interp $ \(a,e) -> case a of
-    Left b -> (fmap.fmap) (first Left) (f (b,e))
+instance ArrowChoice Interp where
+  left (Interp f) = Interp $ \r (a,e) -> case a of
+    Left b -> (fmap.fmap) (first Left) (f r (b,e))
     Right c -> return $ Success (Right c,e)
-  right (Interp f) = Interp $ \(a,e) -> case a of
+  {-# INLINE left #-}
+  right (Interp f) = Interp $ \r (a,e) -> case a of
     Left c -> return $ Success (Left c,e)
-    Right b -> (fmap.fmap) (first Right) (f (b,e))
-  (Interp f) +++ (Interp g) = Interp $ \(a,e) -> case a of
-    Left b  -> (fmap.fmap) (first Left)  (f (b,e))
-    Right b -> (fmap.fmap) (first Right) (g (b,e))
+    Right b -> (fmap.fmap) (first Right) (f r (b,e))
+  {-# INLINE right #-}
+  (Interp f) +++ (Interp g) = Interp $ \r (a,e) -> case a of
+    Left b  -> (fmap.fmap) (first Left)  (f r (b,e))
+    Right b -> (fmap.fmap) (first Right) (g r (b,e))
+  {-# INLINE (+++) #-}
+  Interp f ||| Interp g = Interp $ \r (a,e) -> case a of
+    Left b  -> f r (b,e)
+    Right b -> g r (b,e)
+  {-# INLINE (|||) #-}
 
-instance ArrowAppend (Interp s) where
+instance ArrowAppend Interp where
   --zeroArrow = Interp (const mempty)
-  Interp f <+> Interp g = Interp $ \x -> f x `union` g x
+  Interp f <+> Interp g = Interp $ \r x -> f r x `union` g r x
+  {-# INLINE (<+>) #-}
 
-instance ArrowApply (Interp s) where
-  app = Interp $ \((f,x),tenv) -> runInterp f (x,tenv)
+instance ArrowApply Interp where
+  app = Interp $ \r ((f,x),tenv) -> runInterp f r (x,tenv)
+  {-# INLINE app #-}
         
-instance (Eq s,Hashable s) => Deduplicate (Interp s) where
-  dedup (Interp f) = Interp $ \a -> dedup' $ f a
+instance Deduplicate Interp where
+  dedup (Interp f) = Interp $ \r a -> dedup' $ f r a
+  {-# INLINE dedup #-}
 
-instance ArrowState s (Interp s) where
-  fetch = Interp $ \(_,e) -> return (return (e,e))
-  store = Interp $ \(e,_) -> return (return ((),e))
+instance ArrowState TermEnv Interp where
+  fetch = Interp $ \_ (_,e) -> return (return (e,e))
+  {-# INLINE fetch #-}
+  store = Interp $ \_ (e,_) -> return (return ((),e))
+  {-# INLINE store #-}
 
+
+instance ArrowReader (Signature,StratEnv) Interp where
+  readState = Interp $ \r (_,e) -> return $ Success (r,e)
+  {-# INLINE readState #-}
+  newReader (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
+  {-# INLINE newReader #-}

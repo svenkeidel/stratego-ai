@@ -11,8 +11,9 @@ extra-source-files:  ChangeLog.md, README
 cabal-version:       >=1.20
 
 data-files:          case-studies/arrows/arrows.aterm,
-                     case-studies/pcf/pcf.aterm
-                     case-studies/cca/cca.aterm
+                     case-studies/pcf/pcf.aterm,
+                     case-studies/cca/cca.aterm,
+                     case-studies/go2js/go2js.aterm
 
 library
   ghc-options:         -Wall
@@ -29,6 +30,7 @@ library
                        RegularTreeGrammar,
                        PrettyPrint,
                        HaskellPretty,
+                       JSPretty,
                        PCFPretty,
                        Data.Functor.Strength,
                        Control.Arrow.Transformer.Deduplicate,

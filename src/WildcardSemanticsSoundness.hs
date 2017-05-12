@@ -5,7 +5,7 @@ module WildcardSemanticsSoundness where
 
 import Prelude hiding (Ord(..),abs)
 
-import Syntax(Strat,StratEnv)
+import Syntax(Strat,StratEnv,Signature)
 import Result
 
 import qualified ConcreteSemantics as C
@@ -36,13 +36,13 @@ alphaEnv = fmap alphaTerm
 alphaResult :: Seq (Result (C.Term,C.TermEnv)) -> Seq (Result (W.Term,W.TermEnv))
 alphaResult = (fmap.fmap) (alphaTerm *** alphaEnv)
 
-sound'' :: Int -> Strat -> Property
-sound'' i s = property $ do
+sound'' :: Int -> Signature -> Strat -> Property
+sound'' i sig s = property $ do
   (t1,t2) <- C.similar
-  return $ sound' i s (S.fromList [t1,t2])
+  return $ sound' i sig s (S.fromList [t1,t2])
 
-sound' :: Int -> Strat -> Seq C.Term -> Property
-sound' i s ts = sound i s M.empty (fmap (id &&& const M.empty) ts)
+sound' :: Int -> Signature -> Strat -> Seq C.Term -> Property
+sound' i sig s ts = sound i sig M.empty s (fmap (id &&& const M.empty) ts)
 
 {-         P (C.eval s)
 P (T x E) --------------> P (R (T x E))
@@ -51,22 +51,15 @@ P (T x E) --------------> P (R (T x E))
    v|        W.eval s       >= v|
  T' x E' --------------> P (R (T' x E'))
 -}
-sound :: Int -> Strat -> StratEnv -> Seq (C.Term,C.TermEnv) -> Property
-sound i s senv ts =
-  let abs = W.eval i senv s $ alphaDom ts
-      con = alphaResult $ C.eval senv s <$> ts
+sound :: Int -> Signature -> StratEnv -> Strat -> Seq (C.Term,C.TermEnv) -> Property
+sound i sig senv s ts =
+  let abs = W.eval i sig senv s $ alphaDom ts
+      con = alphaResult $ C.eval sig senv s <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)
 
 alphaDom :: Seq (C.Term,C.TermEnv) -> (W.Term,W.TermEnv)
 alphaDom = lubs . fmap (alphaTerm *** alphaEnv)
-
-weaklyContinuous :: Int -> Strat -> Seq (C.Term,C.TermEnv) -> Property
-weaklyContinuous i s ts =
-  let l = W.eval i M.empty s (alphaDom ts)
-      r = ts >>= \(t,e) -> W.eval i M.empty s (alphaTerm t,alphaEnv e)
-  in counterexample (printf "%s > %s" (show (toList l)) (show (toList r)))
-       (r <= l)
 
 isWittness :: W.Term -> HashSet W.Term -> Bool
 isWittness t = any (\t' -> t <= t' && t /= t')

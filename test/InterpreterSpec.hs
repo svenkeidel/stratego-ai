@@ -82,16 +82,16 @@ spec = do
   describe "scope" $ do
     it "should hide declare variables" $ do
       let tenv = M.fromList [("x", term1)]
-      C.eval M.empty (Scope ["x"] (Build "x")) (term2,tenv)
+      C.eval M.empty M.empty (Scope ["x"] (Build "x")) (term2,tenv)
         `shouldBe` Fail
-      C.eval M.empty (Scope ["x"] (Match "x")) (term2,tenv)
+      C.eval M.empty M.empty (Scope ["x"] (Match "x")) (term2,tenv)
         `shouldBe` Success (term2,tenv)
 
     it "should make non-declared variables available" $ do
       let tenv = M.fromList [("x", term1)]
-      C.eval M.empty (Scope ["y"] (Build "x")) (term2,tenv) `shouldBe`
+      C.eval M.empty M.empty (Scope ["y"] (Build "x")) (term2,tenv) `shouldBe`
         Success (term1,tenv)
-      C.eval M.empty (Scope ["y"] (Match "z")) (term2,tenv) `shouldBe`
+      C.eval M.empty M.empty (Scope ["y"] (Match "z")) (term2,tenv) `shouldBe`
         Success (term2,M.fromList [("x", term1), ("z", term2)])
 
   describe "let" $ do
@@ -122,7 +122,7 @@ spec = do
     it "should support recursion" $ do
       let senv = M.fromList [("map", Closure map M.empty)]
       let t = C.convertToList [2, 3, 4]
-      C.eval senv (Match "x" `Seq` Call "map" [Build (NumberLiteral 1)] ["x"]) (t, M.empty)
+      C.eval M.empty senv (Match "x" `Seq` Call "map" [Build (NumberLiteral 1)] ["x"]) (t, M.empty)
         `shouldBe`
            Success (C.convertToList [1, 1, 1], M.fromList [("x",t)])
 
@@ -135,7 +135,7 @@ spec = do
       let t2 = C.convertToList l2
       return $ counterexample (printf "t: %s\n"
                                       (show (lub (alphaTerm t1) (alphaTerm t2))))
-             $ sound' 12 (Let [("map", map)]
+             $ sound' 12 M.empty (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"]))
                  (S.fromList [t1,t2])
@@ -153,8 +153,8 @@ spec = do
     prop "should handle inconsistent environments" $ do
       let t1 = C.Cons "f" []
           t2 = C.Cons "g" []
-      sound 1 (Match "x") M.empty (S.fromList [(t1, M.fromList [("x", t1)]),
-                                               (t2, M.fromList [("y", t2)])])
+      sound 1 M.empty M.empty (Match "x") (S.fromList [(t1, M.fromList [("x", t1)]),
+                                                       (t2, M.fromList [("y", t2)])])
 
     prop "should be sound" $ do
       i <- choose (0,1)
@@ -164,17 +164,7 @@ spec = do
                  (printf "i: %d\npattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     i (show matchPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' i (Match matchPattern) (S.fromList [t2,t3])
-
-    prop "should be weakly continuous" $ do
-      i <- choose (0,1)
-      [t1,t2,t3] <- C.similarTerms 3 7 2 10
-      matchPattern <- C.similarTermPattern t1 3
-      return $ counterexample
-                 (printf "i: %d\npattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
-                    i (show matchPattern) (show t2) (show t3)
-                    (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ weaklyContinuous i (Match matchPattern) (S.fromList [(t2,M.empty),(t3,M.empty)])
+             $ sound' i M.empty (Match matchPattern) (S.fromList [t2,t3])
 
     it "should succeed when exploding literals" $
       ceval (Match (Explode "_" "x")) 1 `shouldBe`
@@ -192,7 +182,7 @@ spec = do
                  (printf "match pattern: %s\nbuild pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     (show matchPattern) (show buildPattern) (show t2) (show t3)
                     (show (lub (alphaTerm t2) (alphaTerm t3))))
-             $ sound' i (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
+             $ sound' i M.empty (Match matchPattern `Seq` Build buildPattern) (S.fromList [t2,t3])
 
   describe "equal" $
     prop "should compare terms" $ \t1 t2 ->
@@ -221,10 +211,10 @@ spec = do
     term2 = C.NumberLiteral 2
 
     ceval :: Strat -> C.Term -> Result (C.Term,C.TermEnv)
-    ceval s t = C.eval M.empty s (t,M.empty)
+    ceval s t = C.eval M.empty M.empty s (t,M.empty)
 
     weval :: Int -> Strat -> W.Term -> Seq (Result (W.Term,W.TermEnv))
-    weval i s t = W.eval i M.empty s (t,M.empty)
+    weval i s t = W.eval i M.empty M.empty s (t,M.empty)
 
     succ :: Arrow p => p Int Int
     succ = arr (+ 1)

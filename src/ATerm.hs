@@ -54,10 +54,20 @@ list = do
   return $ List ts
 
 string :: Parser ATerm
-string = do
-  _ <- char '"'
-  s <- manyTill anyChar (char '"')
-  return $ String (T.pack s)
+string = String <$> (char '"' *> concatMany (normalString <|> quotedChar) <* char '"')
+  where
+    quotedChar :: Parser Text
+    quotedChar = do
+      e <- char '\\'
+      c <- anyChar
+      return $ T.pack [e,c]
+    
+    normalString :: Parser Text
+    normalString = takeWhile1 (\c -> c /= '"' && c /= '\\')
+
+
+concatMany :: (Alternative f, Monoid a) => f a -> f a
+concatMany p = mconcat <$> many p
 
 number :: Parser ATerm
 number = Number <$> decimal

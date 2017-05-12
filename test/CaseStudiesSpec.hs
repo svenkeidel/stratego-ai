@@ -27,13 +27,13 @@ spec =
       let l1 = C.convertToList [1,2,3,4]
           l2 = C.convertToList [2,4]
           t = tup l1 l2
-      C.eval (stratEnv module_) (Call "union_0_0" [] []) (t,M.empty)
+      C.eval (signature module_) (stratEnv module_) (Call "union_0_0" [] []) (t,M.empty)
         `shouldBe`
            Success (C.convertToList [1,3,2,4], M.empty)
 
     it "concat should work" $ \module_ ->
       let l = C.convertToList (fmap C.convertToList [[1,2,3],[4,5],[],[6]])
-      in C.eval (stratEnv module_) (Call "concat_0_0" [] []) (l,M.empty)
+      in C.eval (signature module_) (stratEnv module_) (Call "concat_0_0" [] []) (l,M.empty)
         `shouldBe`
            Success (C.convertToList [1,2,3,4,5,6], M.empty)
 
@@ -42,7 +42,7 @@ spec =
           tuple x y = C.Cons "Tuple" [x,C.convertToList y]
           t = tuple (tuple (var "a") [var "b"])
                     [tuple (var "c") [var "a"]]
-      in C.eval (stratEnv module_) (Call "free_pat_vars_0_0" [] []) (t,M.empty)
+      in C.eval (signature module_) (stratEnv module_) (Call "free_pat_vars_0_0" [] []) (t,M.empty)
           `shouldBe`
              Success (C.convertToList [var "b", var "c", var "a"], M.empty)
 

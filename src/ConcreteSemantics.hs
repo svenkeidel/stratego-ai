@@ -22,10 +22,11 @@ import           Control.Arrow.Operations
 
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.Text (Text)
 import           Data.String (IsString(..))
 import           Data.Hashable
 import           Data.Semigroup(Semigroup(..))
+import           Data.Text (Text)
+import qualified Data.Text as T
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -36,28 +37,43 @@ data Term
   deriving (Eq)
 
 type TermEnv = HashMap TermVar Term
-newtype Interp a b = Interp { runInterp :: (a,TermEnv) -> Result (b,TermEnv) }
+newtype Interp a b = Interp { runInterp :: (Signature, StratEnv) -> (a,TermEnv) -> Result (b,TermEnv) }
 
-eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval senv s = runInterp $ eval' senv s
+eval :: Signature -> StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
+eval sig senv s = runInterp (eval' s) (sig,senv)
 
-eval' :: StratEnv -> Strat -> Interp Term Term
-eval' senv s0 = case s0 of
+eval' :: Strat -> Interp Term Term
+eval' s0 = case s0 of
   Id -> id
   S.Fail -> fail
-  Seq s1 s2 -> eval' senv s2 . eval' senv s1
-  GuardedChoice s1 s2 s3 -> try (eval' senv s1) (eval' senv s2) (eval' senv s3)
-  One s -> lift (one (eval' senv s))
-  Some s -> lift (some (eval' senv s))
-  All s -> lift (all (eval' senv s))
-  Scope xs s -> scope xs (eval' senv s)
+  Seq s1 s2 -> eval' s2 . eval' s1
+  GuardedChoice s1 s2 s3 -> try (eval' s1) (eval' s2) (eval' s3)
+  One s -> lift (one (eval' s))
+  Some s -> lift (some (eval' s))
+  All s -> lift (all (eval' s))
+  Scope xs s -> scope xs (eval' s)
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
-  Let bnds body -> let_ senv bnds body eval'
-  Call f ss ps -> call senv f ss ps eval'
+  Let bnds body -> let_ bnds body eval'
+  Call f ss ps -> call f ss ps bindTermArgs eval'
+  Prim f _ ps -> proc _ -> case f of
+    "strcat" -> do
+      tenv <- getTermEnv -< ()
+      case mapM (`M.lookup` tenv) ps of
+        Just [StringLiteral t1, StringLiteral t2] -> success -< StringLiteral (t1 `T.append` t2)
+        _ -> fail -< ()
+    "SSL_newname" -> do
+      tenv <- getTermEnv -< ()
+      case mapM (`M.lookup` tenv) ps of
+        Just [StringLiteral _] -> undefined -< ()
+        _ -> fail -< ()
+    _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
 match :: Interp (TermPattern, Term) Term
 match = proc (p,t) -> case p of
+  S.As v p2 -> do
+    t' <- match -< (S.Var v,t)
+    match -< (p2,t')
   S.Var "_" -> success -< t
   S.Var x -> do
     env <- getTermEnv -< ()
@@ -95,7 +111,7 @@ match = proc (p,t) -> case p of
       | otherwise -> fail -< ()
     _ -> fail -< ()
 
-equal :: (ArrowChoice p, Try p) => p (Term,Term) Term
+equal :: (ArrowChoice p, ArrowTry p) => p (Term,Term) Term
 equal = proc (t1,t2) -> case (t1,t2) of
   (Cons c ts,Cons c' ts')
     | c == c' && length ts == length ts' -> do
@@ -113,6 +129,7 @@ equal = proc (t1,t2) -> case (t1,t2) of
 
 build :: Interp TermPattern Term
 build = proc p -> case p of
+  S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
@@ -137,7 +154,7 @@ convertToList ts = case ts of
   (x:xs) -> Cons "Cons" [x,convertToList xs]
   [] -> Cons "Nil" []
 
-convertFromList :: (ArrowChoice p, Try p) => p Term [Term]
+convertFromList :: (ArrowChoice p, ArrowTry p) => p Term [Term]
 convertFromList = proc t -> case t of
   Cons "Cons" [x,tl] -> do
     xs <- convertFromList -< tl
@@ -154,48 +171,86 @@ lift p = proc t -> case t of
   StringLiteral {} -> returnA -< t
   NumberLiteral {} -> returnA -< t
 
+bindTermArgs :: (ArrowTry p, ArrowChoice p) =>
+    p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
+bindTermArgs = proc (tenv,l) -> case l of
+ (actual,formal) : rest -> case M.lookup actual tenv of
+    Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
+    Nothing -> fail -< ()
+ [] -> returnA -< tenv
+
 -- Instances -----------------------------------------------------------------------------------------
 
 instance Category Interp where
-  id = Interp $ \a -> Success a
-  Interp f . Interp g = Interp $ \a ->
-    case g a of
-      Success b -> f b
+  id = Interp $ \_ a -> Success a
+  {-# INLINE id #-}
+  Interp f . Interp g = Interp $ \r a ->
+    case g r a of
+      Success b -> f r b
       Fail -> Fail
+  {-# INLINE (.) #-}
 
-instance Try Interp where
-  fail = Interp $ \_ -> Fail
-  try (Interp f) (Interp g) (Interp h) = Interp $ \a ->
-    case f a of
-      Success b -> g b 
-      Fail -> h a
+instance ArrowTry Interp where
+  fail = Interp $ \_ _ -> Fail
+  {-# INLINE fail #-}
+  try (Interp f) (Interp g) (Interp h) = Interp $ \e a ->
+    case f e a of
+      Success b -> g e b 
+      Fail -> h e a
+  {-# INLINE try #-}
 
 instance Arrow Interp where
-  arr f = Interp (\(a,e) -> Success (f a, e))
-  first (Interp f) = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f (a,e))
-  second (Interp f) = Interp $ \((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (f (b,e))
+  arr f = Interp (\_ (a,e) -> Success (f a, e))
+  {-# INLINE arr #-}
+  first (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f r (a,e))
+  {-# INLINE first #-}
+  second (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (f r (b,e))
+  {-# INLINE second #-}
+  Interp f *** Interp g = Interp $ \r ((a,b),e) -> do
+    (c,e')  <- f r (a,e)
+    (d,e'') <- g r (b,e')
+    Success ((c,d),e'')
+  {-# INLINE (***) #-}
+  Interp f &&& Interp g = Interp $ \r (a,e) -> do
+    (b,e')  <- f r (a,e)
+    (c,e'') <- g r (a,e')
+    Success ((b,c),e'')
+  {-# INLINE (&&&) #-}
 
 instance ArrowChoice Interp where
-  left f = Interp $ \(a,e) -> case a of
-    Left b -> first Left <$> runInterp f (b,e)
+  left (Interp f) = Interp $ \r (a,e) -> case a of
+    Left b -> first Left <$> f r (b,e)
     Right c -> Success (Right c,e)
-  right f = Interp $ \(a,e) -> case a of
+  {-# INLINE left #-}
+  right (Interp f) = Interp $ \r (a,e) -> case a of
     Left c -> Success (Left c,e)
-    Right b -> first Right <$> runInterp f (b,e)
-  f +++ g = Interp $ \(a,e) -> case a of
-    Left b  -> first Left  <$> runInterp f (b,e)
-    Right b -> first Right <$> runInterp g (b,e)
+    Right b -> first Right <$> f r (b,e)
+  {-# INLINE right #-}
+  Interp f +++ Interp g = Interp $ \r (a,e) -> case a of
+    Left b -> first Left  <$> f r (b,e)
+    Right b -> first Right <$> g r (b,e)
+  {-# INLINE (+++) #-}
 
 instance ArrowAppend Interp where
   -- zeroArrow = fail
-  f <+> g = Interp $ \x -> runInterp f x `mappend` runInterp g x
+  Interp f <+> Interp g = Interp $ \x -> f x `mappend` g x
+  {-# INLINE (<+>) #-}
 
 instance ArrowState TermEnv Interp where
-  fetch = Interp $ \(_,e) -> Success (e,e)
-  store = Interp $ \(e,_) -> Success ((),e)
+  fetch = Interp $ \_ (_,e) -> Success (e,e)
+  {-# INLINE fetch #-}
+  store = Interp $ \_ (e,_) -> Success ((),e)
+  {-# INLINE store #-}
+
+instance ArrowReader (Signature,StratEnv) Interp where
+  readState = Interp $ \r (_,e) -> Success (r,e)
+  {-# INLINE readState #-}
+  newReader (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
+  {-# INLINE newReader #-}
 
 instance ArrowApply Interp where
-  app = Interp $ \((f,b),e) -> runInterp f (b,e)
+  app = Interp $ \r ((f,b),e) -> runInterp f r (b,e)
+  {-# INLINE app #-}
 
 instance Semigroup Term where
   (<>) = undefined

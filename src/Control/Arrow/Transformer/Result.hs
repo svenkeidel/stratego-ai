@@ -38,7 +38,7 @@ instance ArrowChoice p => ArrowChoice (ResultArrow p) where
 instance (ArrowApply p,ArrowChoice p) => ArrowApply (ResultArrow p) where
   app = ResultArrow $ proc (ResultArrow p,b) -> p -<< b
 
-instance ArrowChoice p => Try (ResultArrow p) where
+instance ArrowChoice p => ArrowTry (ResultArrow p) where
   fail = ResultArrow (arr (const Fail))
   try (ResultArrow f) (ResultArrow g) (ResultArrow h) = ResultArrow $ proc a -> do
     rb <- f -< a

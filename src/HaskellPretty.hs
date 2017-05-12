@@ -3,18 +3,19 @@ module HaskellPretty where
 
 import WildcardSemantics
 import Text.PrettyPrint hiding (sep)
+import qualified Data.Text as T
 
 ppHaskell :: Term -> Doc
 ppHaskell t = case t of
   Cons "ArrProcedure" [pat,cmd] ->
     text "proc " <> ppHaskell pat <> text " -> " <> ppHaskell cmd
-  Cons "OpApp" [l,Cons o [],r] ->
-    parens $ ppHaskell l <> space <> text (show o) <> space <> ppHaskell r
+  Cons "OpApp" [l,StringLiteral o,r] ->
+    parens $ ppHaskell l <> space <> text (T.unpack o) <> space <> ppHaskell r
   Cons "AppBin" [f,x@(Cons "AppBin" _)] ->
     ppHaskell f <> space <> parens (ppHaskell x)
   Cons "AppBin" [f,x] ->
     ppHaskell f <> space <> ppHaskell x
-  Cons "Var" [Cons x []] -> text (show x)
+  Cons "Var" [StringLiteral x] -> text (T.unpack x)
   Cons "Var" [Wildcard] -> ppWildcard
   Cons "Abs" [args, body] ->
     parens $ char '\\' <> ppSepList space args <> text " -> " <> ppHaskell body
@@ -25,13 +26,12 @@ ppHaskell t = case t of
     text "if " <> ppHaskell e1 <>
     text " then " <> ppHaskell e2 <>
     text " else " <> ppHaskell e3
-  Cons "Constr" [Cons t' []]
-    | t' == "Unit" -> text "()"
-    | otherwise    -> text (show t')
+  Cons "Constr" [Cons "Unit" []] -> "()"
+  Cons "Constr" [StringLiteral t'] -> text (T.unpack t')
   Cons "Product" [t'] -> parens (ppSepList comma t')
   Cons "Tuple" [t1,t2] -> parens (ppHaskell t1 <> comma <> space <> ppSepList (comma <> space) t2)
   Wildcard -> ppWildcard
-  _ -> error $ "unexpected term: " ++ show t
+  _ -> error $ "unexpected haskell expression: " ++ show t
 
 ppLetBindings :: Term -> Doc
 ppLetBindings t = case t of

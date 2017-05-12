@@ -10,6 +10,7 @@ import PrettyPrint
 import RegularTreeGrammar
 import qualified HaskellPretty as H
 import qualified PCFPretty as P
+import qualified JSPretty as J
 import qualified WildcardSemantics as W
 import qualified WildcardSemanticsDelayed as W
 import qualified WildcardSemanticsSoundness as W
@@ -19,7 +20,6 @@ import Paths_system_s
 import qualified Criterion.Types as CT
 import qualified Criterion.Measurement as CM
 import Control.Monad
-import Control.Arrow.Transformer.Deduplicate
 
 import Data.Monoid
 import Data.Maybe
@@ -30,7 +30,6 @@ import Data.Foldable
 import qualified Data.HashSet as H
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text.IO as T
-import Data.Sequence (Seq)
 import qualified Data.Sequence as S
 
 import System.IO
@@ -60,7 +59,7 @@ main =
       heightAnalysis <>
       wittnessAnalysis
 
-    activate $ caseStudy "pcf" "eval_0_0" 4 $
+    deactivate $ caseStudy "pcf" "eval_0_0" 4 $
       prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
@@ -68,13 +67,19 @@ main =
       ruleInvocationsAnalysis pcfEvalGrammar <>
       classification pcfEvalGrammar 4
 
-    activate $ caseStudy "pcf" "check_eval_0_0" 5 $
+    deactivate $ caseStudy "pcf" "check_eval_0_0" 5 $
       prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
       wittnessAnalysis <>
       ruleInvocationsAnalysis pcfCheckEvalGrammar <>
       classification pcfCheckEvalGrammar 4
+
+    activate $ caseStudy "go2js" "generate_js_ast_0_0" 5 $
+      prettyPrint J.tryPPJS <>
+      sizeAnalysis <>
+      heightAnalysis <>
+      wittnessAnalysis
 
   where
     activate :: IO () -> IO ()
@@ -178,7 +183,7 @@ caseStudy name function maxDepth analysis = do
       forM_ ([1..maxDepth]::[Int]) $ \depth -> do
 
         let res = H.fromList $ toList $ filterResults
-                $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
+                $ W.eval depth (signature module_) (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
 
         (m,_) <- CM.measure (CT.nfIO (return res)) 1
         printf "function: %s, recursion depth: %d, results: %d, time: %s\n" function depth (H.size res) (CM.secs (CT.measCpuTime m))

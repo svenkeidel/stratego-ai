@@ -20,6 +20,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Set (Set)
 import qualified Data.Set as S
 
+import           Text.Read (readMaybe)
 import           Test.QuickCheck hiding (subterms)
 
 newtype Constructor = Constructor Text deriving (Eq,Ord,IsString,Hashable,NFData)
@@ -27,7 +28,8 @@ newtype TermVar = TermVar Text deriving (Eq,Ord,Hashable)
 newtype StratVar = StratVar Text deriving (Eq,Ord,IsString,Hashable)
 
 data TermPattern
-  = Cons Constructor [TermPattern]
+  = As TermVar TermPattern
+  | Cons Constructor [TermPattern]
   | Explode TermPattern TermPattern
   | Var TermVar
   | StringLiteral Text
@@ -54,8 +56,9 @@ data Strat
   | Match TermPattern
   | Build TermPattern
   | Scope [TermVar] Strat
-  | Call StratVar [Strat] [TermVar]
   | Let [(StratVar,Strategy)] Strat
+  | Call StratVar [Strat] [TermVar]
+  | Prim StratVar [Strat] [TermVar]
   deriving (Eq)
 
 leftChoice :: Strat -> Strat -> Strat
@@ -63,6 +66,9 @@ leftChoice f = GuardedChoice f Id
 
 stratEnv :: Module -> StratEnv
 stratEnv (Module _ senv) = fmap (`Closure` M.empty) senv
+
+signature :: Module -> Signature
+signature (Module sig _) = sig
 
 patternVars :: TermPattern -> Set TermVar
 patternVars t = case t of
@@ -94,6 +100,9 @@ parseConstructor t = case t of
   ATerm "OpDecl" [String con, body] -> do
     typ <- parseFunType body
     return (Constructor con,typ)
+  ATerm "OpDeclInj" [ty] -> do
+    typ <- parseFunType ty
+    return (Constructor "",typ)
   _ -> throwError $ "unexpected input while parsing constructor from aterm: " ++ show t  
 
 parseFunType :: MonadError String m => ATerm -> m FunType
@@ -156,23 +165,34 @@ parseStrat t = case t of
   ATerm "Match" [tp] -> Match <$> parseTermPattern tp
   ATerm "Build" [tp] -> Build <$> parseTermPattern tp
   ATerm "Scope" [List vars, e] -> Scope <$> parseTermVars vars <*> parseStrat e
-  ATerm "CallT" [ATerm "SVar" [String svar], List stratArgs, List termArgs] ->
-    Call (StratVar svar) <$> traverse parseStrat stratArgs <*> parseTermVars termArgs
   ATerm "Let" [List strats, body] ->
     Let <$> traverse parseStrategy strats <*> parseStrat body
+  ATerm "CallT" [ATerm "SVar" [String svar], List stratArgs, List termArgs] ->
+    Call (StratVar svar) <$> traverse parseStrat stratArgs <*> parseTermVars termArgs
+  ATerm "PrimT" [String svar, List stratArgs, List termArgs] ->
+    Prim (StratVar svar) <$> traverse parseStrat stratArgs <*> parseTermVars termArgs
   _ -> throwError $ "unexpected input while parsing strategy from aterm: " ++ show t
 
 parseTermPattern :: MonadError String m => ATerm -> m TermPattern
 parseTermPattern p = case p of
   ATerm "Anno" [p1,_] -> parseTermPattern p1 -- Ignore annotations
+  ATerm "As" [v@(ATerm "Var" _), p1] -> As <$> parseTermVar v <*> parseTermPattern p1
   ATerm "Op" [String con, List subterms] ->
     Cons (Constructor con) <$> traverse parseTermPattern subterms
-  ATerm "Str" [String con] -> return $ Cons (Constructor con) []
+  ATerm "Str" [String str] -> return $ StringLiteral str
   ATerm "Var" _ -> Var <$> parseTermVar p
   ATerm "Wld" _ -> Var <$> parseTermVar p
   ATerm "Explode" [p1,p2] -> Explode <$> parseTermPattern p1 <*> parseTermPattern p2
+  ATerm "Int" [i] -> NumberLiteral <$> parseInt i
   _ -> throwError $ "unexpected input while parsing term pattern from aterm: " ++ show p
 
+
+parseInt :: MonadError String m => ATerm -> m Int
+parseInt s = case s of
+  String t -> case readMaybe (T.unpack t) of
+    Just i -> return i
+    Nothing -> throwError $ "could not parse integer literal from text: " ++ show t
+  _ -> throwError $ "unexpected input while parsing integer literal from aterm: " ++ show s
 
 instance Show Constructor where
   show (Constructor c) = unpack c
@@ -191,13 +211,15 @@ instance IsString TermPattern where
 
 instance Hashable TermPattern where
   hashWithSalt s x = case x of
-    Cons c ts -> s `hashWithSalt` (0::Int) `hashWithSalt` c `hashWithSalt` ts
-    Explode t1 t2 -> s `hashWithSalt` (1::Int) `hashWithSalt` t1 `hashWithSalt` t2
-    Var tv -> s `hashWithSalt` (2::Int) `hashWithSalt` tv
-    StringLiteral l -> s `hashWithSalt` (3::Int) `hashWithSalt` l
+    As v t -> s `hashWithSalt` (0::Int) `hashWithSalt` v `hashWithSalt` t
+    Cons c ts -> s `hashWithSalt` (1::Int) `hashWithSalt` c `hashWithSalt` ts
+    Explode t1 t2 -> s `hashWithSalt` (2::Int) `hashWithSalt` t1 `hashWithSalt` t2
+    Var tv -> s `hashWithSalt` (3::Int) `hashWithSalt` tv
+    StringLiteral l -> s `hashWithSalt` (4::Int) `hashWithSalt` l
     NumberLiteral l -> s `hashWithSalt` (5::Int) `hashWithSalt` l
 
 instance Show TermPattern where
+  show (As v t) = show v ++ "@(" ++ show t ++ ")"
   show (Cons c ts) = show c ++ if null ts then "" else show ts
   show (Var x) = show x
   show (Explode f xs) = show f ++ "#(" ++ show xs ++ ")"
@@ -221,6 +243,7 @@ instance Hashable Strat where
     Scope tv e -> s `hashWithSalt` (9::Int) `hashWithSalt` tv `hashWithSalt` e
     Call sv ss tv -> s `hashWithSalt` (10::Int) `hashWithSalt` sv `hashWithSalt` ss `hashWithSalt` tv
     Let bnds body -> s `hashWithSalt` (11::Int) `hashWithSalt` bnds `hashWithSalt` body
+    Prim sv ss tv -> s `hashWithSalt` (12::Int) `hashWithSalt` sv `hashWithSalt` ss `hashWithSalt` tv
 
 instance Show Strat where
   showsPrec d s0 = case s0 of
@@ -265,6 +288,13 @@ instance Show Strat where
       . shows s
       . showString " }"
     Call (StratVar f) ss ts ->
+     showString (unpack f)
+     . showString "("
+     . showString (intercalate "," (map show ss))
+     . showString "|"
+     . showString (intercalate "," (map show ts))
+     . showString ")"
+    Prim (StratVar f) ss ts ->
      showString (unpack f)
      . showString "("
      . showString (intercalate "," (map show ss))
