@@ -2,6 +2,10 @@ module test
 
 imports libstrategolib
 
+signature
+  constructors
+    Foo : ID -> List(a)
+
 strategies
 
-  main = io-wrap( ?x#([x]); !x#([x,x]) )
+  main = io-wrap( ( ?x; ?x@Foo(_) ) )
