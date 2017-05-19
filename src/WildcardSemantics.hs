@@ -12,20 +12,22 @@ import           Syntax hiding (Fail,TermPattern(..))
 import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Interpreter
+import           Utils
 
 import           Control.DeepSeq
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 import           Control.Arrow hiding ((<+>))
-import           Control.Arrow.Operations
-import           Control.Arrow.Transformer.Deduplicate
 
+import           Data.Term (HasTerm(..),TermF,cons,numberLiteral,stringLiteral,wildcard)
+import qualified Data.Term as T
+import           Data.Constructor
+import           Data.Powerset
 import           Data.Semigroup (Semigroup(..))
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
-import           Data.Text (Text)
-import qualified Data.Text as T
+import           Data.Text (Text,append)
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -38,7 +40,7 @@ data Term
 
 type TermEnv = HashMap TermVar Term
 
-eval' :: (ArrowChoice p, ArrowReader (Signature,StratEnv) p, ArrowState TermEnv p, ArrowAppend p, ArrowTry p, Deduplicate p, ArrowApply p)
+eval' :: (ArrowChoice p, ArrowAppend p, ArrowTry p, Deduplicate p, ArrowApply p, HasStratEnv p, HasTermEnv Term p)
       => Int -> Strat -> p Term Term
 eval' 0 _ = proc _ ->
   fail <+> success -< Wildcard
@@ -59,7 +61,7 @@ eval' i s0 = dedup $ case s0 of
     "strcat" -> do
       tenv <- getTermEnv -< ()
       case mapM (`M.lookup` tenv) ps of
-        Just [StringLiteral t1, StringLiteral t2] -> success -< StringLiteral (t1 `T.append` t2)
+        Just [StringLiteral t1, StringLiteral t2] -> success -< StringLiteral (t1 `append` t2)
         Just [Wildcard, _] -> success -< Wildcard
         Just [_, Wildcard] -> success -< Wildcard
         Just _ -> fail -< ()
@@ -74,7 +76,8 @@ eval' i s0 = dedup $ case s0 of
     _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
 
-match :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, ArrowTry p) => p (TermPattern,Term) Term
+match :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTermEnv t p, Monoid t)
+      => p (TermPattern,t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
     t' <- match -< (S.Var v,t)
@@ -90,118 +93,94 @@ match = proc (p,t) -> case p of
       Nothing -> do
         putTermEnv -< M.insert x t env
         fail <+> success -< t
-  S.Cons c ts -> case t of
-    Cons c' ts'
-      | c == c' && length ts == length ts' -> do
-          ts'' <- zipWith match -< (ts,ts')
-          success -< Cons c ts''
-      | otherwise -> fail -< ()
-    Wildcard -> do
-      ts'' <- zipWith match -< (ts,[Wildcard | _ <- ts])
-      fail <+> success -< Cons c ts''
-    _ -> fail -< ()
-  S.Explode c ts -> case t of
-    Cons (Constructor c') ts' -> do
-      match -< (c,StringLiteral c')
-      match -< (ts, convertToList ts')
-      success -< t
-    StringLiteral _ -> do
-      match -< (ts, convertToList [])
-      success -< t
-    NumberLiteral _ -> do
-      match -< (ts, convertToList [])
-      success -< t
-    Wildcard ->
-      (do
-        match -< (c,  Wildcard)
-        match -< (ts, Wildcard)
-        success -< t)
-      <+>
-      (do
-        match -< (ts, convertToList [])
-        success -< t)
-  S.StringLiteral s -> case t of
-    StringLiteral s'
-      | s == s' -> success -< t
-      | otherwise -> fail -< ()
-    Wildcard -> fail <+> success -< StringLiteral s
-    _ -> fail -< ()
-  S.NumberLiteral n -> case t of
-    NumberLiteral n'
-      | n == n' -> success -< t
-      | otherwise -> fail -< ()
-    Wildcard -> fail <+> success -< NumberLiteral n
-    _ -> fail -< ()
+  S.Cons c ts -> do
+    m <- matchTerm -< t
+    case m of
+      T.Cons c' ts'
+        | c == c' && length ts == length ts' -> do
+            ts'' <- zipWithA match -< (ts,ts')
+            T.cons -< (c,ts'')
+        | otherwise -> fail -< ()
+      T.Wildcard -> do
+        l <- mapA wildcard -< [() | _ <- ts]
+        ts'' <- zipWithA match -< (ts,l)
+        fail <+> cons -< (c,ts'')
+      _ -> fail -< ()
+  S.Explode c ts -> do
+    m <- matchTerm -< t
+    case m of
+      T.Cons (Constructor c') ts' -> do
+        s <- stringLiteral -< c'
+        match -< (c,s)
+        l <- convertToList -< ts'
+        match -< (ts, l)
+        success -< t
+      T.StringLiteral _ -> do
+        l <- convertToList -< []
+        match -< (ts, l)
+        success -< t
+      T.NumberLiteral _ -> do
+        l <- convertToList -< []
+        match -< (ts, l)
+        success -< t
+      T.Wildcard ->
+        (do
+          w <- wildcard -< ()
+          match -< (c,  w)
+          w' <- wildcard -< ()
+          match -< (ts, w')
+          success -< t)
+        <+>
+        (do
+          l <- convertToList -< []
+          match -< (ts, l)
+          success -< t)
+      _ -> fail -< ()
+  S.StringLiteral s -> do
+    m <- matchTerm -< t
+    case m of
+      T.StringLiteral s'
+        | s == s' -> success -< t
+        | otherwise -> fail -< ()
+      T.Wildcard -> fail <+> stringLiteral -< s
+      _ -> fail -< ()
+  S.NumberLiteral n -> do
+    m <- matchTerm -< t
+    case m of
+      T.NumberLiteral n'
+        | n == n' -> success -< t
+        | otherwise -> fail -< ()
+      T.Wildcard -> fail <+> numberLiteral -< n
+      _ -> fail -< ()
 
-equal :: (ArrowChoice p, ArrowAppend p, ArrowTry p) => p (Term,Term) Term
-equal = proc (t1,t2) -> case (t1,t2) of
-  (Cons c ts,Cons c' ts')
-    | c == c' && length ts == length ts' -> do
-      ts'' <- zipWith equal -< (ts,ts')
-      returnA -< Cons c ts''
-    | otherwise -> fail -< ()
-  (StringLiteral s, StringLiteral s')
-    | s == s' -> success -< t1
-    | otherwise -> fail -< ()
-  (NumberLiteral n, NumberLiteral n')
-    | n == n' -> success -< t1
-    | otherwise -> fail -< ()
-  (Wildcard, t) -> fail <+> success -< t
-  (t, Wildcard) -> fail <+> success -< t
-  (_,_) -> fail -< ()
-
-build :: (ArrowChoice p, ArrowState TermEnv p, ArrowAppend p, ArrowTry p) => p TermPattern Term
+build :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTermEnv t p, Monoid t)
+      => p TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
     env <- getTermEnv -< ()
     case M.lookup x env of
       Just t -> returnA -< t
-      Nothing -> fail <+> success -< Wildcard
+      Nothing -> fail <+> wildcard -< ()
   S.Cons c ts -> do
     ts' <- mapA build -< ts
-    returnA -< Cons c ts'
+    cons -< (c,ts')
   S.Explode c ts -> do
-    c' <- build -< c
-    case c' of
-      StringLiteral s -> do
+    m <- matchTerm <<< build -< c
+    case m of
+      T.StringLiteral s -> do
         ts' <- build -< ts
         ts'' <- convertFromList -< ts'
         case ts'' of
-          Just tl -> success -< Cons (Constructor s) tl
-          Nothing -> fail <+> returnA -< Wildcard
-      Wildcard -> fail <+> returnA -< Wildcard
+          Just tl -> cons -< (Constructor s,tl)
+          Nothing -> fail <+> wildcard -< ()
+      T.Wildcard -> fail <+> wildcard -< ()
       _ -> fail -< ()
-  S.NumberLiteral n -> returnA -< NumberLiteral n
-  S.StringLiteral s -> returnA -< StringLiteral s
+  S.NumberLiteral n -> numberLiteral -< n
+  S.StringLiteral s -> stringLiteral -< s
 
-convertToList :: [Term] -> Term
-convertToList ts = case ts of
-  (x:xs) -> Cons "Cons" [x,convertToList xs]
-  [] -> Cons "Nil" []
-
-convertFromList :: (ArrowChoice p, ArrowTry p) => p Term (Maybe [Term])
-convertFromList = proc t -> case t of
-  Cons "Cons" [x,tl] -> do
-    xs <- convertFromList -< tl
-    returnA -< (x:) <$> xs
-  Cons "Nil" [] ->
-    returnA -< Just []
-  Wildcard -> returnA -< Nothing
-  _ -> fail -< ()
-
-lift :: (ArrowTry p,ArrowChoice p,ArrowAppend p)
-     => p (Constructor,[Term]) (Constructor,[Term])
-     -> p Term Term
-lift p = proc t -> case t of
-  Cons c ts -> do
-    (c',ts') <- p -< (c,ts)
-    returnA -< Cons c' ts'
-  StringLiteral {} -> returnA -< t
-  NumberLiteral {} -> returnA -< t
-  Wildcard -> fail <+> success -< Wildcard
-
-bindTermArgs :: (ArrowTry p, ArrowChoice p, ArrowAppend p) => p (TermEnv, [(TermVar,TermVar)]) TermEnv
+bindTermArgs :: (ArrowTry p, ArrowChoice p, ArrowAppend p)
+             => p (TermEnv, [(TermVar,TermVar)]) TermEnv
 bindTermArgs = proc (tenv,l) -> case l of
  (actual,formal) : rest -> case M.lookup actual tenv of
     Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
@@ -209,6 +188,29 @@ bindTermArgs = proc (tenv,l) -> case l of
  [] -> returnA -< tenv
 
 -- Instances -----------------------------------------------------------------------------------------
+
+matchTermDefault :: Term -> TermF Term
+matchTermDefault t = case t of
+  Cons c ts -> T.Cons c ts
+  StringLiteral s -> T.StringLiteral s
+  NumberLiteral n -> T.NumberLiteral n
+  Wildcard -> T.Wildcard
+{-# INLINE matchTermDefault #-}
+
+termDefault :: TermF Term -> Term
+termDefault t = case t of
+  T.Cons c ts -> Cons c ts
+  T.NumberLiteral n -> NumberLiteral n
+  T.StringLiteral s -> StringLiteral s
+  T.Wildcard -> Wildcard
+  _ -> error "cannot construct term"
+{-# INLINE termDefault #-}
+
+instance HasTerm Term (->) where
+  matchTerm = arr matchTermDefault
+  {-# INLINE matchTerm #-}
+  term = arr termDefault
+  {-# INLINE term #-}
 
 instance Semigroup Term where
   t1 <> t2 = case (t1,t2) of
@@ -222,6 +224,7 @@ instance Semigroup Term where
       | n == n' -> NumberLiteral n
       | otherwise -> Wildcard
     (_, _) -> Wildcard
+  {-# INLINE (<>) #-}
 
 instance Monoid Term where
   mempty = undefined -- Wildcard

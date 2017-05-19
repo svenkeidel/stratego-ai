@@ -1,10 +1,13 @@
-module cca
+module arrows
 
-signature
+imports
+  haskell
+
+signature 
   constructors
-    Nil              : List(a)
-    Cons             : a * List(a) -> List(a)
-    Conc             : List(a) * List(a) -> List(a)
+      Nil            : List(a)
+      Cons           : a * List(a) -> List(a)
+      Conc           : List(a) * List(a) -> List(a)
                      : ()
                      : a -> (a)
                      : a * b -> (a, b)
@@ -339,152 +342,337 @@ signature
 
 rules
 
-  step :
-    OpApp(
-      AppBin(Var("arr"), f)
-    , ">>>"
-    , AppBin(Var("arr"), g)
-    ) -> AppBin(
-           Var("arr")
-         , OpApp(g, ".", f)
-         )
+  desugar-arrow :
+    ArrProcedure(pat, cmd) -> OpApp(
+                                AppBin(
+                                  Var("arr")
+                                , Abs(
+                                    [pat]
+                                  , (<tuple> pat-vars)
+                                  )
+                                )
+                              , ">>>"
+                              , (<desugar-arrow'(|pat-vars)> cmd)
+                              )
+    where <free-pat-vars> pat => pat-vars
 
-  step :
-    OpApp(
-      AppBin(Var("arr"), f)
-    , ">>>"
-    , AppBin(
-        AppBin(Var("loopD"), i)
-      , g
-      )
-    ) -> AppBin(
-           AppBin(Var("loopD"), i)
-         , OpApp(
-             g
-           , "."
-           , OpApp(f, "***", Var("id"))
-           )
-         )
+  desugar-arrow'(|vars):
+    ArrFirst(f, e) -> OpApp(
+                        AppBin(
+                          Var("arr")
+                        , Abs(
+                            [(<tuple-pat> vars)]
+                          , e
+                          )
+                        )
+                      , ">>>"
+                      , f
+                      )
 
-  step :
-    OpApp(
-      AppBin(
-        AppBin(Var("loopD"), i)
-      , f
-      )
-    , ">>>"
-    , AppBin(Var("arr"), g)
-    ) -> AppBin(
-           AppBin(Var("loopD"), i)
-         , OpApp(
-             OpApp(g, "***", Var("id"))
-           , "."
-           , f
-           )
-         )
+  desugar-arrow'(|vars):
+    ArrHigher(f, e) -> OpApp(
+                         AppBin(
+                           Var("arr")
+                         , Abs(
+                             [(<tuple-pat> vars)]
+                           , Product(ECons(f, [e]))
+                           )
+                         )
+                       , ">>>"
+                       , Var("app")
+                       )
 
-  step :
-    OpApp(
-      AppBin(
-        AppBin(Var("loopD"), i)
-      , f
-      )
-    , ">>>"
-    , AppBin(
-        AppBin(Var("loopD"), j)
-      , g
-      )
-    ) -> AppBin(
+  desugar-arrow'(|vars):
+    ArrIf(e, c1, c2) -> OpApp(
+                          AppBin(
+                            Var("arr")
+                          , Abs(
+                              [(<tuple-pat> vars)]
+                            , If(
+                                e
+                              , AppBin(
+                                  Constr("Left")
+                                , (<tuple> vars)
+                                )
+                              , AppBin(
+                                  Constr("Right")
+                                , (<tuple> vars)
+                                )
+                              )
+                            )
+                          )
+                        , ">>>"
+                        , OpApp(
+                            (<desugar-arrow'(|vars)> c1)
+                          , "|||"
+                          , (<desugar-arrow'(|vars)> c2)
+                          )
+                        )
+
+  desugar-arrow'(|vars):
+    ArrLet(decls, c) -> OpApp(
+                          AppBin(
+                            Var("arr")
+                          , Abs(
+                              [(<tuple-pat> vars)]
+                            , Let(decls, (<tuple> all-vars))
+                            )
+                          )
+                        , ">>>"
+                        , (<desugar-arrow'(|all-vars)> c)
+                        )
+    where <free-decls-vars> decls => decls-vars
+          ; <conc> (vars, decls-vars) => all-vars
+
+  desugar-arrow'(|vars):
+    ArrAbs([p], c) -> OpApp(
+                        AppBin(
+                          Var("arr")
+                        , Abs(
+                            [ Tuple(
+                                (<tuple-pat> vars)
+                              , [Var(p)]
+                              )
+                            ]
+                          , (<tuple> all-vars)
+                          )
+                        )
+                      , ">>>"
+                      , (<desugar-arrow'(|all-vars)> c)
+                      )
+    where <free-pat-vars> p => pat-vars
+          ; <conc> (vars, pat-vars) => all-vars
+
+  desugar-arrow'(|vars):
+    ArrAppBin(c, e) -> OpApp(
+                         AppBin(
+                           Var("arr")
+                         , Abs(
+                             [(<tuple-pat> vars)]
+                           , Product(
+                               ECons(
+                                 (<tuple> vars)
+                               , [e]
+                               )
+                             )
+                           )
+                         )
+                       , ">>>"
+                       , (<desugar-arrow'(|vars)> c)
+                       )
+
+  desugar-arrow'(|vars):
+    ArrForm(e, cs) -> <apply-all(|k)> ( e
+                                      , <map(desugar-arrow'(|vars))> cs
+                                      )
+    where k := Abs(
+                 [(<tuple-pat> vars)]
+               , (<tuple> vars)
+               )
+
+  desugar-arrow'(|vars):
+    ArrOpApp(c1, op, c2) -> <desugar-arrow'(|vars)> ArrForm(
+                                                      BinCon(op)
+                                                    , [c1, c2]
+                                                    )
+
+  desugar-arrow'(|vars):
+    ArrDo(ArrStmtList(ArrCmdStmt(c))) -> <desugar-arrow'(|vars)> c
+
+  desugar-arrow'(|vars):
+    ArrDo(
+      ArrStmtList(ArrStmtSeq(ArrLetStmt(decls), cs))
+    ) -> OpApp(
            AppBin(
-             Var("loopD")
-           , Product(ECons(i, [j]))
+             Var("arr")
+           , Abs(
+               [(<tuple-pat> vars)]
+             , Let(decls, (<tuple> all-vars))
+             )
            )
-         , AppBin(
-             Var("assoc'")
+         , ">>>"
+         , ( <desugar-arrow'(|all-vars)> ArrDo(ArrStmtList(cs))
+           )
+         )
+    where <free-decls-vars> decls => decls-vars
+          ; <conc> (vars, decls-vars) => all-vars
+
+  desugar-arrow'(|vars):
+    ArrDo(
+      ArrStmtList(ArrStmtSeq(ArrCmdStmt(c), cs))
+    ) -> OpApp(
+           AppBin(
+             Var("arr")
+           , Abs(
+               [(<tuple-pat> vars)]
+             , Product(
+                 ECons(
+                   (<tuple> vars)
+                 , [(<tuple> vars)]
+                 )
+               )
+             )
+           )
+         , ">>>"
+         , OpApp(
+             AppBin(
+               Var("first")
+             , (<desugar-arrow'(|vars)> c)
+             )
+           , ">>>"
            , OpApp(
                AppBin(
-                 Var("juggle'")
-               , OpApp(g, "***", Var("id"))
+                 Var("arr")
+               , Var("snd")
                )
-             , "."
-             , OpApp(f, "***", Var("id"))
+             , ">>>"
+             , ( <desugar-arrow'(|vars)> ArrDo(ArrStmtList(cs))
+               )
              )
            )
          )
 
-  step :
-    AppBin(
-      Var("first")
-    , AppBin(
-        AppBin(Var("loopD"), i)
-      , f
+  desugar-arrow'(|vars):
+    ArrDo(
+      ArrStmtList(
+        ArrStmtSeq(ArrBindStmt(p, c), cs)
       )
-    ) -> AppBin(
-           AppBin(Var("loopD"), i)
-         , AppBin(
-             Var("juggle'")
+    ) -> OpApp(
+           AppBin(
+             Var("arr")
+           , Abs(
+               [(<tuple-pat> vars)]
+             , Product(
+                 ECons(
+                   (<tuple> vars)
+                 , [(<tuple> vars)]
+                 )
+               )
+             )
+           )
+         , ">>>"
+         , OpApp(
+             AppBin(
+               Var("first")
+             , (<desugar-arrow'(|vars)> c)
+             )
+           , ">>>"
            , OpApp(
-               Var("f")
-             , "***"
-             , Var("id")
+               AppBin(
+                 Var("arr")
+               , Abs(
+                   [ Tuple(
+                       p
+                     , [(<tuple-pat> vars)]
+                     )
+                   ]
+                 , (<tuple> all-vars)
+                 )
+               )
+             , ">>>"
+             , ( <desugar-arrow'(|all-vars)> ArrDo(ArrStmtList(cs))
+               )
              )
            )
          )
+    where <free-pat-vars> p => pat-vars
+          ; <conc> (pat-vars, vars) => all-vars
 
-  step :
-    AppBin(
-      Var("loop")
-    , AppBin(Var("arr"), f)
-    ) -> AppBin(
-           Var("arr")
-         , AppBin(Var("trace"), f)
-         )
 
-  step :
-    AppBin(
-      Var("loop")
-    , AppBin(
-        AppBin(Var("loopD"), i)
-      , f
-      )
-    ) -> AppBin(
-           AppBin(Var("loopD"), i)
-         , AppBin(
-             Var("trace")
-           , AppBin(
-               Var("juggle'")
-             , Var("f")
-             )
-           )
-         )
+rules
 
-  norm :
-    AppBin(Var("arr"), f) -> AppBin(Var("arr"), f)
+  tuple-pat :
+    [] -> Constr(Unit())
 
-  norm :
-    AppBin(
-      AppBin(Var("loopD"), i)
-    , f
-    ) -> AppBin(
-           AppBin(Var("loopD"), i)
-         , f
-         )
+  tuple-pat :
+    [p] -> p
 
-  norm :
-    AppBin(Var("init"), i) -> AppBin(
-                                AppBin(Var("loopD"), i)
-                              , Var("swap")
-                              )
+  tuple-pat :
+    [p|ps] -> Tuple(p, ps)
 
-  norm :
-    OpApp(e1, ">>>", e2) -> <step> OpApp(n1, ">>>", n2)
-    where <norm> e1 => n1
-          ; <norm> e2 => n2
+  tuple :
+    [] -> Constr(Unit())
 
-  norm :
-    AppBin(Var("first"), f) -> <step> AppBin(Var("first"), nf)
-    where <norm> f => nf
+  tuple :
+    [e] -> e
 
-  norm :
-    AppBin(Var("loop"), f) -> <step> AppBin(Var("loop"), nf)
-    where <norm> f => nf
+  tuple :
+    [e|es] -> Product(ECons(e, es))
+
+  free-pat-vars =
+    collect-all(?Var(_))
+
+  free-decls-vars =
+    collect-all(
+      ?Var(_)
+    , union
+    , \ VarFunLHS(v, _) -> v \
+    )
+
+  apply-all(|k):
+    (e, []) -> e
+
+  apply-all(|k):
+    (e, [c|cs]) -> <apply-all(|k)> ( AppBin(
+                                       e
+                                     , OpApp(
+                                         AppBin(Var("arr"), k)
+                                       , ">>>"
+                                       , c
+                                       )
+                                     )
+                                   , cs
+                                   )
+
+  map(s) = 
+    rec x([] + [s | x]) 
+
+  collect-all(s) =
+    collect-all(s, union)
+
+  collect-all(s,un) =
+    rec x(
+      ![<s> | <crush(![], un, x)>]
+      <+ crush(![], un, x)
+    )
+
+  collect-all(s, un, reduce) =
+    rec x(
+       ![<s> | <crush(![],un,x)>]
+    <+ reduce; x
+    <+ crush(![],un,x)
+    )
+
+  crush(nul, sum, s) : _#(xs) -> <foldr(nul, sum, s)> xs
+
+  foldr(s1, s2, f)  = []; s1 + \ [y|ys] -> <s2> (<f> y, <foldr(s1, s2, f)> ys) \
+
+  conc =
+    \ (l1, l2) -> <at-end(!l2)> l1 \
+    <+ \ "" # (xs) -> <concat> xs \
+
+  at-end(s) = 
+    rec x([id | x] + []; s)
+
+  concat =
+    rec x([] + \ [l | ls] -> <at-end(<x> ls)> l\ )
+
+  union : (l1, l2) -> <rec x(
+       ([]; !l2)
+       <+ (HdMember(!l2); x)
+       <+ [id | x]
+    )> l1
+
+  HdMember(mklst) : 
+     [x | xs] -> xs 
+     where mklst; fetch(\y -> <eq> (x, y)\)
+
+  fetch(s) = 
+    rec x([s | id] <+ [id | x])
+
+  eq = ?(x, x)
+
+  oncetd(s) = rec x(s <+ one(x))
+
+strategies
+  main = oncetd(desugar-arrow)

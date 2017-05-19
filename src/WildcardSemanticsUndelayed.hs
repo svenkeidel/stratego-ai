@@ -4,22 +4,30 @@
 module WildcardSemanticsUndelayed where
 
 import Prelude hiding (fail)
+
+import Interpreter
+import Syntax hiding (Fail,TermPattern(..))
+import Utils
 import WildcardSemantics 
 
-import Syntax hiding (Fail)
-import Interpreter
-import UncertainResult
-
-import Control.Category
 import Control.Arrow hiding ((<+>))
-import Control.Arrow.Operations
-import Control.Arrow.Transformer.Deduplicate
+import Control.Category
 
-newtype Interp a b = Interp { runInterp :: (Signature,StratEnv) -> (a,TermEnv) -> UncertainResult (b,TermEnv) }
+import Data.Powerset
+import Data.Term(HasTerm(..))
+import Data.UncertainResult
 
-eval :: Int -> Signature -> StratEnv -> Strat -> (Term,TermEnv) -> UncertainResult (Term,TermEnv)
-eval i sig senv s = runInterp (eval' i s) (sig,senv)
+eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> UncertainResult (Term,TermEnv)
+eval i senv s = runInterp (eval' i s) senv
 {-# INLINE eval #-}
+
+newtype Interp a b = Interp { runInterp :: StratEnv -> (a,TermEnv) -> UncertainResult (b,TermEnv) }
+
+instance HasTerm Term Interp where
+  matchTerm = arr matchTermDefault
+  {-# INLINE matchTerm #-}
+  term = arr termDefault
+  {-# INLINE term #-}
 
 instance Category Interp where
   id = Interp $ \_ a -> Success a
@@ -75,17 +83,17 @@ instance ArrowAppend Interp where
   -- zeroArrow = fail
   f <+> g = Interp $ \x -> runInterp f x `mappend` runInterp g x
 
-instance ArrowState TermEnv Interp where
-  fetch = Interp $ \_ (_,e) -> Success (e,e)
-  {-# INLINE fetch #-}
-  store = Interp $ \_ (e,_) -> Success ((),e)
-  {-# INLINE store #-}
+instance HasTermEnv Term Interp where
+  getTermEnv = Interp $ \_ (_,e) -> Success (e,e)
+  {-# INLINE getTermEnv #-}
+  putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
+  {-# INLINE putTermEnv #-}
 
-instance ArrowReader (Signature,StratEnv) Interp where
-  readState = Interp $ \r (_,e) -> Success (r,e)
-  {-# INLINE readState #-}
-  newReader (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
-  {-# INLINE newReader #-}
+instance HasStratEnv Interp where
+  readStratEnv = Interp $ \r (_,e) -> Success (r,e)
+  {-# INLINE readStratEnv #-}
+  localStratEnv (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
+  {-# INLINE localStratEnv #-}
 
 instance ArrowApply Interp where
   app = Interp $ \r ((f,b),e) -> runInterp f r (b,e)

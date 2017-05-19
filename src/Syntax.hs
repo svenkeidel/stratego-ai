@@ -5,25 +5,26 @@ module Syntax where
 
 import           Prelude hiding (maybe)
 
-import           ATerm
+import           Signature (Signature,Sort,SortId,Fun)
+import qualified Signature as I
 
-import           Control.DeepSeq
 import           Control.Monad.Except
 
-import           Data.Hashable
-import           Data.Text (Text,pack,unpack)
-import qualified Data.Text as T
-import           Data.List (intercalate)
-import           Data.String (IsString(..))
+import           Data.ATerm
+import           Data.Constructor
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Hashable
+import           Data.List (intercalate)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.String (IsString(..))
+import           Data.Text (Text,pack,unpack)
+import qualified Data.Text as T
 
 import           Text.Read (readMaybe)
 import           Test.QuickCheck hiding (subterms)
 
-newtype Constructor = Constructor Text deriving (Eq,Ord,IsString,Hashable,NFData)
 newtype TermVar = TermVar Text deriving (Eq,Ord,Hashable)
 newtype StratVar = StratVar Text deriving (Eq,Ord,IsString,Hashable)
 
@@ -37,9 +38,6 @@ data TermPattern
   deriving (Eq)
 
 data Module = Module Signature Strategies deriving (Show,Eq)
-type Signature = HashMap Constructor FunType
-data Sort = Sort Text [Sort] | SortVar Text deriving (Show,Eq)
-data FunType = FunType [Sort] Sort deriving (Show,Eq)
 
 type Strategies = HashMap StratVar Strategy
 data Strategy = Strategy [StratVar] [TermVar] Strat deriving (Show,Eq)
@@ -82,42 +80,63 @@ patternVars' = S.toList . patternVars
 
 parseModule :: MonadError String m => ATerm -> m Module
 parseModule t = case t of
-  ATerm "Specification" [List [ATerm "Signature" [List sig], ATerm "Strategies" [List strats]]] ->
+  ATerm "Specification" [List [sig, ATerm "Strategies" [List strats]]] ->
     Module <$> parseSignature sig <*> (M.fromList <$> traverse parseStrategy strats)
   _ -> throwError $ "unexpected input while parsing module from aterm: " ++ show t
 
-parseSignature :: MonadError String m => [ATerm] -> m Signature
-parseSignature t = case t of
-  ATerm "Constructors" [List constrs]:rest -> do
-    sig <- M.fromList <$> traverse parseConstructor constrs
-    sig' <- parseSignature rest
-    return $ M.union sig sig'
-  [] -> return M.empty
-  _ -> throwError $ "unexpected input while parsing signature from aterm: " ++ show t
+parseSignature :: MonadError String m => ATerm -> m Signature
+parseSignature s = case s of
+  ATerm "Signature" [List sig] -> parseConstructors sig I.empty
+  _ -> throwError $ "unexpected input while parsing signature from aterm: " ++ show s
+  where
+    parseConstructors :: MonadError String m => [ATerm] -> Signature -> m Signature
+    parseConstructors ts sig = case ts of
+      ATerm "Constructors" [List constrs]:rest -> do
+        sig' <- foldM parseDeclaration sig constrs
+        parseConstructors rest sig'
+      [] -> return sig
+      _ -> throwError $ "unexpected input while parsing signature from aterm: " ++ show ts
 
-parseConstructor :: MonadError String m => ATerm -> m (Constructor,FunType)
-parseConstructor t = case t of
-  ATerm "OpDecl" [String con, body] -> do
-    typ <- parseFunType body
-    return (Constructor con,typ)
-  ATerm "OpDeclInj" [ty] -> do
-    typ <- parseFunType ty
-    return (Constructor "",typ)
-  _ -> throwError $ "unexpected input while parsing constructor from aterm: " ++ show t  
+parseDeclaration :: MonadError String m => Signature -> ATerm -> m Signature
+parseDeclaration sig t
+  | containsSortVar t = return sig
+  | otherwise = case t of
+      ATerm "OpDecl" [String con, body] -> do
+        typ <- parseFun body
+        return $ I.insertType (Constructor con) typ sig
+      ATerm "OpDeclInj" [f@(ATerm "FunType" [_, ATerm "ConstType" [ATerm "SortTuple" _]])] ->
+        parseDeclaration sig $ ATerm "OpDecl" [String "", f]
+      ATerm "OpDeclInj" [ATerm "FunType" [List[ty1], ty2]] ->
+        I.insertSubtype <$> parseSortId ty1 <*> parseSortId ty2 <*> pure sig
+      ATerm "OpDeclInj" [ATerm "ConstType" _] ->
+        return sig
+      _ -> throwError $ "unexpected input while parsing declaration from aterm: " ++ show t  
+  where
+    containsSortVar :: ATerm -> Bool
+    containsSortVar (ATerm "SortVar" _) = True
+    containsSortVar (ATerm _ ts) = any containsSortVar ts
+    containsSortVar _ = False
 
-parseFunType :: MonadError String m => ATerm -> m FunType
-parseFunType t = case t of
-  ATerm "FunType" [List args,res] -> FunType <$> traverse parseSort args <*> parseSort res
-  ATerm "ConstType" _ -> FunType <$> pure [] <*> parseSort t
-  _ -> throwError $ "unexpected input while parsing funtype from aterm: " ++ show t
+parseFun :: MonadError String m => ATerm -> m Fun
+parseFun t = case t of
+  ATerm "ConstType" [res] -> I.Fun [] <$> parseSort res
+  ATerm "FunType" [List args,res] -> I.Fun <$> traverse parseSort args <*> parseSort res
+  _ -> throwError $ "unexpected input while parsing function type from aterm: " ++ show t
+
+parseSortId :: MonadError String m => ATerm -> m SortId
+parseSortId t = case t of
+  ATerm "ConstType" [res] -> parseSortId res
+  ATerm "SortNoArgs" [String sortName] -> return $ I.SortId sortName
+  _ -> throwError $ "unexpected input while parsing sort id from aterm: " ++ show t
 
 parseSort :: MonadError String m => ATerm -> m Sort
 parseSort t = case t of
-  ATerm "ConstType" [t'] -> parseSort t'
-  ATerm "Sort" [String sortName, List params] ->
-    Sort sortName <$> traverse parseSort params
-  ATerm "SortVar" [String v] ->
-    return $ SortVar v
+  ATerm "ConstType" [res] -> parseSort res
+  ATerm "SortNoArgs" [String sortName] -> return $ I.Sort (I.SortId sortName)
+  ATerm "Sort" [String sortName, List []] ->
+    return $ I.Sort (I.SortId sortName)
+  ATerm "SortTuple" [List args] ->
+    I.Tuple <$> traverse parseSort args
   _ -> throwError $ "unexpected input while parsing sort from aterm: " ++ show t
 
 parseStrategy :: MonadError String m => ATerm -> m (StratVar,Strategy)
@@ -193,9 +212,6 @@ parseInt s = case s of
     Just i -> return i
     Nothing -> throwError $ "could not parse integer literal from text: " ++ show t
   _ -> throwError $ "unexpected input while parsing integer literal from aterm: " ++ show s
-
-instance Show Constructor where
-  show (Constructor c) = unpack c
 
 instance Arbitrary TermVar where
   arbitrary = TermVar . T.singleton <$> choose ('a','z')
@@ -320,12 +336,6 @@ instance Show Closure where
 
 instance Show StratVar where
   show (StratVar x) = unpack x
-
-instance Arbitrary Constructor where
-  arbitrary = Constructor <$> arbitraryLetter
-
-arbitraryLetter :: Gen Text
-arbitraryLetter = T.singleton <$> choose ('A','Z')
 
 instance Num TermPattern where
   t1 + t2 = Cons "Add" [t1,t2]

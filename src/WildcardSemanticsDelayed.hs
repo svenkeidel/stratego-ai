@@ -4,23 +4,30 @@
 module WildcardSemanticsDelayed where
 
 import Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
+
+import Interpreter
+import Syntax hiding (Fail,TermPattern(..))
+import Utils
 import WildcardSemantics
 
-import Result
-import Syntax hiding (Fail)
-import Interpreter
+import Data.Powerset
+import Data.Result
+import Data.Term(HasTerm(..))
 
-import Control.Category
 import Control.Arrow hiding ((<+>))
-import Control.Arrow.Operations
-import Control.Arrow.Transformer.Power
-import Control.Arrow.Transformer.Deduplicate
+import Control.Category
 
-eval :: Int -> Signature -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
-eval i sig senv s = runInterp (eval' i s) (sig,senv)
+eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
+eval i senv s = runInterp (eval' i s) senv
 {-# INLINE eval #-}
 
-newtype Interp a b = Interp {runInterp :: (Signature,StratEnv) -> (a,TermEnv) -> Pow (Result (b,TermEnv))}
+newtype Interp a b = Interp {runInterp :: StratEnv -> (a,TermEnv) -> Pow (Result (b,TermEnv))}
+
+instance HasTerm Term Interp where
+  matchTerm = arr matchTermDefault
+  {-# INLINE matchTerm #-}
+  term = arr termDefault
+  {-# INLINE term #-}
 
 instance Category Interp where
   id = Interp $ \_ a -> return (Success a)
@@ -81,15 +88,14 @@ instance Deduplicate Interp where
   dedup (Interp f) = Interp $ \r a -> dedup' $ f r a
   {-# INLINE dedup #-}
 
-instance ArrowState TermEnv Interp where
-  fetch = Interp $ \_ (_,e) -> return (return (e,e))
-  {-# INLINE fetch #-}
-  store = Interp $ \_ (e,_) -> return (return ((),e))
-  {-# INLINE store #-}
+instance HasTermEnv Term Interp where
+  getTermEnv = Interp $ \_ (_,e) -> return (return (e,e))
+  {-# INLINE getTermEnv #-}
+  putTermEnv = Interp $ \_ (e,_) -> return (return ((),e))
+  {-# INLINE putTermEnv #-}
 
-
-instance ArrowReader (Signature,StratEnv) Interp where
-  readState = Interp $ \r (_,e) -> return $ Success (r,e)
-  {-# INLINE readState #-}
-  newReader (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
-  {-# INLINE newReader #-}
+instance HasStratEnv Interp where
+  readStratEnv = Interp $ \r (_,e) -> return $ Success (r,e)
+  {-# INLINE readStratEnv #-}
+  localStratEnv (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
+  {-# INLINE localStratEnv #-}

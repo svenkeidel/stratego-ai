@@ -282,7 +282,7 @@ rules
           where
             packageName := <package-name> packageClause;
             jsdecl := <map(gen-js-ast)> topLevelDecls;
-            js := <concat> [[ varDecl("routine", Call(Identifier("require"), [String("\"\"../js/goroutine.js\"\"")])), varDecl("__GO_ARRAYLIB__", Call(Identifier("require"), [String("\"\"../js/go-array.js\"\"")])), varDecl("__GO_POINTERLIB__", Call(Identifier("require"), [String("\"\"../js/go-pointer.js\"\"")])), varDecl("__GO_STRUCTLIB__", Call(Identifier("require"), [String("\"\"../js/go-struct.js\"\"")])) ], jsdecl, [expStmt(Call(Identifier("main"), []))]]
+            js := <concat> [IMPORTLIST, jsdecl, [expStmt(Call(Identifier("main"), []))]]
 
 	gen-js-ast : FunctionDecl(
           FunctionName(name),
@@ -361,12 +361,12 @@ rules
 	  ]
           where
             deferstackname := <newname> "___deferstack___";
-            deferStackDecl := varDecl(deferstackname, Call(Property(Identifier("routine"), "newDeferList"), []));
-            deferStackSetRet := expStmt(Call(Property(Identifier(deferstackname), "setCallback"), [Identifier(callbackname)]));
+            deferStackDecl := varDecl(deferstackname, Call(Property(Identifier(GOROUTINE_LIBNAME), GODEFER_NEWDEFERMETHOD), []));
+            deferStackSetRet := expStmt(Call(Property(Identifier(deferstackname), GODEFER_SETRETMETHOD), [Identifier(callbackname)]));
             statements := <statements-from-list> statementList;
             executeDeferred := <get-deferstmt(|deferstackname)> [];
             statementsWithAddedJs := <conc> (statements,
-              [AddedJsStmt(expStmt(Call(Property(Identifier(deferstackname), "ret"),[])))]);
+              [AddedJsStmt(expStmt(Call(Property(Identifier(deferstackname), GODEFER_RETURNMETHOD),[])))]);
             statementsJs := <stmt-iter(|deferstackname)> statementsWithAddedJs
 
         gen-js-ast : Block(statementList) -> js
@@ -479,22 +479,22 @@ rules
             stmts := <stmts> tuple
 
 	stmt-to-js(|defername): GoStmt(exp) ->
-          ([expStmt(Call(Property(Identifier("routine"), "go"),
+          ([expStmt(Call(Property(Identifier(GOROUTINE_LIBNAME), GOROURTINE_GOMETHOD),
                          [AnonFunction([], [expStmt(<exp> tuple)])]))], <stmts> tuple)
           where
             tuple := <go-exp-to-js> exp
 
 	stmt-to-js(|defername): ReturnStmt(None()) ->
-          ([expStmt(Call(Property(Identifier(defername), "ret"), [])), return(Undefined())], [])
+          ([expStmt(Call(Property(Identifier(defername), GODEFER_RETURNMETHOD), [])), return(Undefined())], [])
 
 	stmt-to-js(|defername): ReturnStmt(Some(ExpressionList([exp]))) ->
-          ([expStmt(Call(Property(Identifier(defername), "ret"), [<exp> expJs])), return(Undefined())],
+          ([expStmt(Call(Property(Identifier(defername), GODEFER_RETURNMETHOD), [<exp> expJs])), return(Undefined())],
           <stmts> expJs)
           where
             expJs := <gen-js-ast> exp
 
 	stmt-to-js(|defername): ReturnStmt(Some(expList)) ->
-          ([expStmt(Call(Property(Identifier(defername), "ret"), [<exp> arrayJs])), return(Undefined())], <stmts> arrayJs)
+          ([expStmt(Call(Property(Identifier(defername), GODEFER_RETURNMETHOD), [<exp> arrayJs])), return(Undefined())], <stmts> arrayJs)
           where
             arrayJs := <exps-list-to-js-array> expList
 
@@ -529,7 +529,7 @@ rules
 
 	to-js-equals-assign:
           (UnaryExpr(UnaryExpr("*", operand)), rhs) ->
-            (expStmt(Call(Property(operandJs, "set"), [<exp> rhJs])), <stmts> rhJs)
+            (expStmt(Call(Property(operandJs, POINTERLIB_SET), [<exp> rhJs])), <stmts> rhJs)
           where
             rhJs := <gen-js-ast> rhs;
             operandJs := <gen-js-ast; exp> operand
@@ -541,7 +541,7 @@ rules
 
 	gen-js-ast-indexed-assign(|tmpIdentifier):
           (index, UnaryExpr(UnaryExpr("*", operand))) ->
-            expStmt(Call(Property(operandJs, "set"), [array]))
+            expStmt(Call(Property(operandJs, POINTERLIB_SET), [array]))
           where
             operandJs := <gen-js-ast; exp> operand;
             array := Array(Identifier(tmpIdentifier), IntegerLiteral(<int-dec> index))
@@ -579,13 +579,13 @@ rules
           where
             <equal>(name, "")
 
-        get-deferstmt(|defername): x -> expStmt(Call(Property(Identifier(defername), "cleanUp"), []))
+        get-deferstmt(|defername): x -> expStmt(Call(Property(Identifier(defername), GODEFER_EXECECUTEMETHOD), []))
 
         funcname: Call(Property(ident, p), params) -> Property(ident, p)
         funcname: Call(x, params) -> Identifier(x)
 
 	params: Call(funcname, params) -> params
-	gen-addparamstmt(|defername): x -> expStmt(Call(Property(Identifier(defername), "addParam"), [x]))
+	gen-addparamstmt(|defername): x -> expStmt(Call(Property(Identifier(defername), GODEFER_ADDPARAMMETHOD), [x]))
 
 
         // ---- expressions.str ----
@@ -604,7 +604,7 @@ rules
           PrimaryExprArguments(
             Operand(OperandName("make")),
             TypeArgWithList(Channel(_), args)
-          ) -> (Call(Property(Identifier("routine"), "newChannel"), <exp> argsJs),
+          ) -> (Call(Property(Identifier(GOROUTINE_LIBNAME), GOROUTINE_MAKECHANNELMETHOD), <exp> argsJs),
                 <stmts> argsJs)
         where
           argsJs := <gen-js-ast> Arguments(Some(args))
@@ -613,7 +613,7 @@ rules
           PrimaryExprArguments(
             Operand(OperandName("make")),
             TypeArg(Channel(_))
-          ) -> (Call(Property(Identifier("routine"), "newChannel"), [IntegerLiteral(0)]),
+          ) -> (Call(Property(Identifier(GOROUTINE_LIBNAME), GOROUTINE_MAKECHANNELMETHOD), [IntegerLiteral(0)]),
                 [])
 
         gen-js-ast:
@@ -637,19 +637,19 @@ rules
 
 	gen-js-ast:
           PrimaryExprIndex(idExp, Index(indexExp)) ->
-            (Array(Call(Property(<exp> idExpJs, "getVal"), [<exp> indexExpJs]), addition),
+            (Array(Call(Property(<exp> idExpJs, ARRAYLIB_LOOKUPMETHOD), [<exp> indexExpJs]), addition),
              allStmts)
           where
             idExpJs := <gen-js-ast> idExp;
             indexExpJs := <gen-js-ast> indexExp;
-            addition := Addition(<exp> indexExpJs, Call(Property(<exp> idExpJs, "getStartPos"), [<exp> indexExpJs]));
+            addition := Addition(<exp> indexExpJs, Call(Property(<exp> idExpJs, ARRAYLIB_GETSTARTPOSTMETHOD), [<exp> indexExpJs]));
             allStmts := <conc> (<stmts> idExpJs, <stmts> indexExpJs)
 
         gen-js-ast:
           PrimaryExprSlice(
             idExp,
             slice
-          ) -> (Call(Property(<exp> idExpJs, "getSlice"), <exp> sliceJs),
+          ) -> (Call(Property(<exp> idExpJs, ARRAYLIB_CREATESLICEMETHOD), <exp> sliceJs),
                 allStmts)
           where
             idExpJs := <gen-js-ast> idExp;
@@ -680,7 +680,7 @@ rules
 
         gen-js-ast:
           UnaryExpr("*", exp) ->
-            (Call(Property(<exp> expJs, "get"), []), <stmts> expJs)
+            (Call(Property(<exp> expJs, POINTERLIB_GET), []), <stmts> expJs)
           where
             expJs := <gen-js-ast> exp
 
@@ -693,7 +693,7 @@ rules
             stmt := ReceiveStmt(Operand(OperandName(subVarName)), <exp> innerExpTuple)
 
         gen-js-ast:
-          UnaryExpr("&", exp) -> (Call(Property(Identifier("__GO_POINTERLIB__"), "newPointer"), [set, get]), <stmts> expJs)
+          UnaryExpr("&", exp) -> (Call(Property(Identifier(POINTERLIB_NAME), POINTERLIB_NEWPOINTER), [set, get]), <stmts> expJs)
           where
             expJs := <gen-js-ast> exp;
             expJsExp := <exp> expJs;
@@ -758,7 +758,7 @@ rules
 
 	gen-js-ast:
           CompositeLit(ArrayType(sizeExp, type), arrayLit) ->
-            ( Call(Property(Identifier("__GO_ARRAYLIB__"), "newArray"),
+            ( Call(Property(Identifier(ARRAYLIB_NAME), ARRAYLIB_NEWARRAYMETHOD),
                   [ <exp> arrayLitJs,
                     <exp> sizeExpJs,
                     String(typeJs)
@@ -774,7 +774,7 @@ rules
 	gen-js-ast:
           CompositeLit(typename, list) ->
             ( Call(
-                Property(Identifier(typename), "getNew"),
+                Property(Identifier(typename), STRUCTLIB_GETNEWMETHOD),
                 [<exp> tuple]
               ),
               <stmts> tuple
@@ -941,7 +941,7 @@ rules
 	gen-js-ast: TypeDecl(TypeSpec(identif, type)) -> varDecl(
           identif,
           Call(
-            Property("__GO_STRUCTLIB__", "defStruct"),
+            Property(STRUCTLIB_NAME, STRUCTLIB_DEFSTRUCTMETHOD),
             [ArrayLiteral(<gen-js-ast> type)]
           )
         )

@@ -2,18 +2,12 @@
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
 
-\usepackage{natbib}
+\usepackage{multicol}
 
 \usepackage[]{stix}
 \usepackage{amsmath,amsfonts}
-
-\usepackage{amsthm}
-\newtheorem{theorem}{Theorem}
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{corollary}[theorem]{Corollary}
-\newtheorem{definition}[theorem]{Definition}
-\newtheorem{example}[theorem]{Example}
 
 \usepackage{listings}
 \lstset{mathescape=true}
@@ -39,23 +33,13 @@
 \begin{document}
 \bibliographystyle{abbrvnat}
 
-\section{Operational Semantics of System S}
+\section{Operational Semantics of Stratego}
 
-\infrule[Test]
-  {\transform{t}{\rho}{s}{t'}{\rho'}}
-  {\transform{t}{\rho}{\test{s}}{t}{\rho'}}
+\infax[Id]
+  {\transform{t}{\rho}{\id}{t}{\rho}}
 
-\infrule[Test-Fail]
-  {\transformfail{t}{\rho}{s}}
-  {\transformfail{t}{\rho}{\test{s}}}
-
-\infrule[Neg]
-  {\transformfail{t}{\rho}{s}}
-  {\transform{t}{\rho}{\negate{s}}{t}{\rho}}
-
-\infrule[Neg-Fail]
-  {\transform{t}{\rho}{s}{t'}{\rho'}}
-  {\transformfail{t}{\rho}{\negate{s}}}
+\infax[Fail]
+  {\transformfail{t}{\rho}{\fail}}
 
 \infrule[Seq]
   {\transform{t}{\rho}{s_1}{t'}{\rho'} \andalso \transform{t'}{\rho'}{s_2}{t''}{\rho''}}
@@ -69,18 +53,6 @@
   {\transform{t}{\rho}{s_1}{t'}{\rho'} \andalso \transformfail{t'}{\rho'}{s_2}}
   {\transformfail{t}{\rho}{\seq{s_1}{s_2}}}
 
-\infrule[Choice-1]
-  {\transform{t}{\rho}{s_1}{t'}{\rho'}}
-  {\transform{t}{\rho}{\choice{s_1}{s_2}}{t'}{\rho'}}
-
-\infrule[Choice-2]
-  {\transform{t}{\rho}{s_2}{t'}{\rho'}}
-  {\transform{t}{\rho}{\choice{s_1}{s_2}}{t'}{\rho'}}
-
-\infrule[Choice-Fail]
-  {\transformfail{t}{\rho}{s_1} \andalso \transformfail{t}{\rho}{s_2}}
-  {\transformfail{t}{\rho}{\choice{s_1}{s_2}}}
-
 \infrule[Left-Choice-1]
   {\transform{t}{\rho}{s_1}{t'}{\rho'}}
   {\transform{t}{\rho}{\leftchoice{s_1}{s_2}}{t'}{\rho'}}
@@ -91,43 +63,7 @@
 
 \infrule[Left-Choice-Fail]
   {\transformfail{t}{\rho}{s_1} \andalso \transformfail{t}{\rho}{s_2}}
-  {\transformfail{t}{\rho}{\choice{s_1}{s_2}}}
-
-\infrule[Rec]
-  {\transform{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{t'}{\rho'}}
-  {\transform{t}{\rho}{\fix{x}{s}}{t'}{\rho'}}
-
-\infrule[Rec-Fail]
-  {\transformfail{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}}
-  {\transformfail{t}{\rho}{\fix{x}{s}}}
-
-\infrule[Path]
-  {\transform{t_i}{\rho}{s}{t_i'}{\rho'}}
-  {\transform{f(\ldots,t_i,\ldots)}{\rho}{\path{i}{s}}{f(\ldots,t_i',\ldots)}{\rho'}}
-
-\infrule[Path-Fail]
-  {\transformfail{t_i}{\rho}{s}}
-  {\transformfail{f(\ldots,t_i,\ldots)}{\rho}{\path{i}{s}}}
-
-\infrule[Path-Fail-Bounds]
-  {i > n}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\path{i}{s}}}
-
-\infrule[Cong]
-  {\transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i \leq n}
-  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\congr{f,s_1,\ldots,s_n}}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
-
-\infrule[Cong-Fail]
-  {\transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i < k \andalso \transformfail{t_k}{\rho_k}{s_k} \andalso k \leq n}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho_1}{\congr{f,s_1,\ldots,s_n}}}
-
-\infrule[Cong-Con-Fail]
-  {f \neq g}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\congr{g,t_1',\ldots,t_n'}}}
-
-\infrule[Cong-Arity-Fail]
-  {n \neq n'}
-  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\congr{g,t_1',\ldots,t_{n'}'}}}
+  {\transformfail{t}{\rho}{\leftchoice{s_1}{s_2}}}
 
 \infrule[One]
   {\transform{t_i}{\rho}{s}{t_i'}{\rho'}}
@@ -189,13 +125,157 @@
   {\vars{t'} \nsubseteq \dom{\rho}}
   {\transformfail{t}{\rho}{\build{t'}}}
 
-\infrule[Where]
-  {\transform{t}{\rho}{s}{\rho(t')}{\rho'}}
-  {\transform{t}{\rho}{\where{s}}{t}{\rho'}}
+\infrule[Scope]
+  {\transform{t}{\rho \setminus \mathbf{x}}{s}{t'}{\rho'}}
+  {\transform{t}{\rho}{\scope{\mathbf{x}}{s}}{t'}{(\rho' \setminus \mathbf{x}) \cup (\rho | \mathbf{x})}}
 
-\infrule[Where-Fail]
-  {\transformfail{t}{\rho}{s}}
-  {\transformfail{t}{\rho}{\where{s}}}
+\infrule[Scope-Fail]
+  {\transformfail{t}{\rho \setminus \mathbf{x}}{s}}
+  {\transformfail{t}{\rho}{\scope{\mathbf{x}}{s}}}
+
+\section{Well-Sorted Terms}
+
+\begin{align*}
+  c &\in \text{Constructor} \\
+  s &\in \text{Sort} \\
+  X &\subseteq \text{Type Variables} \\
+  n &\in \mathbb{N} \\
+e & \Coloneq c \alt c(e, \ldots e) \alt \text{``\ldots''} \alt n \\
+\tau & \Coloneq s(\tau, \ldots \tau) \alt \forall X. \tau \alt (\tau \times \ldots \times \tau \rightarrow \tau) \alt \String \alt \Number
+\end{align*}
+
+\subsection*{Typing Relation}
+\begin{multicols}{2}
+\infrule[T-Con] {c:\tau \in \Gamma} {\ty{\Gamma}{c}{\tau}}
+
+\infrule[T-Con-App]
+ { \ty{\Gamma}{c}{ \tau_1 \times \ldots \times \tau_n \rightarrow \tau_r } \\
+   \ty{\Gamma}{e_1}{\tau_1}\ \cdots\ \ty{\Gamma}{e_n}{\tau_n} }
+ {\ty{\Gamma}{c(e_1,\ldots,e_n)}{\tau_r}}
+
+\infrule[T-Ty-App]
+ { \ty{\Gamma}{e}{\tau[x_1 / \tau_1 \ldots x_n / \tau_n] }  }
+ { \ty{\Gamma}{e\ [\tau_1 \ldots \tau_n] }{\forall x_1 \ldots x_n. \tau} }
+
+\infrule[T-Sub]
+ { \ty{\Gamma}{e}{\tau'} \andalso \tau' \subtype \tau }
+ { \ty{\Gamma}{e}{\tau} }
+
+\infax[T-Str] {\ty{\Gamma}{\text{``\ldots''}}{\String}}
+
+\infax[T-Num] {\ty{\Gamma}{n}{\Number}}
+\end{multicols}
+
+\subsection*{Algorithmic Checking of Well-Sorted Terms}
+
+\begin{multicols}{2}
+\infrule[T-Con]
+  {c:\tau \in \Gamma}
+  {\ty{\Gamma}{c}{\tau}}
+
+\infrule[T-Con-App]
+ { \ty{\Gamma}{c}{ \forall X.\ \tau_1 \times \ldots \times \tau_n \rightarrow \tau_r } \\
+   \ty{\Gamma}{e_1}{\forall Y_1. \tau_1'} \quad \cdots \quad \ty{\Gamma}{e_n}{\forall Y_n. \tau_n'} \\
+   \exists \sigma, \sigma'.\ \sigma'(\tau_1') \subtype \sigma(\tau_1) \quad \cdots \quad \sigma'(\tau_n') \subtype \sigma(\tau_n) 
+ }
+ {\ty{\Gamma}{c(e_1,\ldots,e_n)}{\sigma(\tau_r)}}
+
+\infax[T-Str] {\ty{\Gamma}{\text{``\ldots''}}{\String}}
+
+\infax[T-Num] {\ty{\Gamma}{n}{\Number}}
+\end{multicols}
+
+\subsection{Operational Semantics of dynamically-typed Stratego}
+
+\infax[Id]
+  {\transformT{\Gamma}{t}{\tau}{\rho}{\id}{t}{\tau}{\rho}}
+
+\infax[Fail]
+  {\transformfailT{\Gamma}{t}{\tau}{\rho}{\fail}}
+
+\infrule[Seq]
+  {\transformT{\Gamma}{t_1}{\tau_1}{\rho}{s_1}{t'}{\rho'} \andalso \transform{t'}{\rho'}{s_2}{t''}{\rho''}}
+  {\transformT{\Gamma}{t_1}{\tau_1}{\rho}{\seq{s_1}{s_2}}{t_2}{\tau_3}{\rho_3}}
+
+\infrule[Seq-Fail-1]
+  {\transformfail{t}{\rho}{s_1}}
+  {\transformfail{t}{\rho}{\seq{s_1}{s_2}}}
+
+\infrule[Seq-Fail-2]
+  {\transform{t}{\rho}{s_1}{t'}{\rho'} \andalso \transformfail{t'}{\rho'}{s_2}}
+  {\transformfail{t}{\rho}{\seq{s_1}{s_2}}}
+
+\infrule[Left-Choice-1]
+  {\transform{t}{\rho}{s_1}{t'}{\rho'}}
+  {\transform{t}{\rho}{\leftchoice{s_1}{s_2}}{t'}{\rho'}}
+
+\infrule[Left-Choice-2]
+  {\transformfail{t}{\rho}{s_1} \andalso \transform{t}{\rho}{s_2}{t'}{\rho'}}
+  {\transform{t}{\rho}{\leftchoice{s_1}{s_2}}{t'}{\rho'}}
+
+\infrule[Left-Choice-Fail]
+  {\transformfail{t}{\rho}{s_1} \andalso \transformfail{t}{\rho}{s_2}}
+  {\transformfail{t}{\rho}{\leftchoice{s_1}{s_2}}}
+
+\infrule[One]
+  {\transform{t_i}{\rho}{s}{t_i'}{\rho'}}
+  {\transform{f(\ldots,t_i,\ldots)}{\rho}{\one{s}}{f(\ldots,t_i',\ldots)}{\rho'}}
+
+\infrule[One-Fail]
+  {\transformfail{t_i}{\rho}{s} \text{ for all } 1 \leq i \leq n}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\one{s}}}
+
+\infrule[All]
+  {\transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i \leq n}
+  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\all{s}}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
+
+\infrule[All-Fail]
+  {\transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}} \text{ for all } 1 \leq i < k \andalso \transformfail{t_k}{\rho_k}{s_k} \andalso k \leq n}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho_1}{\all{s}}}
+
+\infrule[Some]
+  {\transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}} \text{ for all } i \in M \\
+   \transformfail{t_j}{\rho_j}{s} \land\ \rho_{j+1} = \rho_j \land t_j' = t_j \text{ for all } j \in \overline{M} \\
+   M \subseteq \lbrace 1 \ldots n \rbrace}
+  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\some{s}}{f(t_1',\ldots,t_n')}{\rho_{n+1}}}
+
+\infrule[Some-Fail]
+  {\transformfail{t_i}{\rho}{s} \text{ for all } 1 \leq i \leq n}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\some{s}}}
+
+\infrule[Match-Not-In-Dom]
+  {x \notin \dom(\rho)}
+  {\transform{t}{\rho}{\match{x}}{t}{\rho[x \mapsto t]}}
+
+\infrule[Match-In-Dom]
+  {\rho(x) = t}
+  {\transform{t}{\rho}{\match{x}}{t}{\rho}}
+
+\infrule[Match-In-Dom-Fail]
+  {\rho(x) \neq t}
+  {\transformfail{t}{\rho}{\match{x}}}
+
+\infrule[Match-Sub]
+  {\transform{t_i}{\rho_i}{\match{t_i'}}{t_i}{\rho_{i+1}} \text{ for all } 1 \leq i \leq n}
+  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\match{f(t_1',\ldots,t_n')}}{f(t_1,\ldots,t_n)}{\rho_n}}
+
+\infrule[Match-Sub-Fail]
+  {\transform{t_i}{\rho_i}{\match{t_i'}}{t_i}{\rho_{i+1}} \text{ for all } 1 \leq i < k \\
+   \transformfail{t_k}{\rho_k}{\match{t_k'}} \\
+   k \leq n}
+  {\transform{f(t_1,\ldots,t_n)}{\rho_1}{\match{f(t_1',\ldots,t_n')}}{f(t_1,\ldots,t_n)}{\rho_n}}
+
+\infrule[Match-Con-Fail]
+  {f \neq g}
+  {\transformfail{f(t_1,\ldots,t_n)}{\rho}{\match{g(t_1',\ldots,t_n')}}}
+
+\infrule[Build]
+  {\vars{t'} \subseteq \dom(\rho)}
+  {\transform{t}{\rho}{\build{t'}}{\rho(t')}{\rho}}
+
+\infrule[Build-Fail]
+  {\vars{t'} \nsubseteq \dom{\rho}}
+  {\transformfail{t}{\rho}{\build{t'}}}
 
 \infrule[Scope]
   {\transform{t}{\rho \setminus \mathbf{x}}{s}{t'}{\rho'}}
@@ -205,524 +285,5 @@
   {\transformfail{t}{\rho \setminus \mathbf{x}}{s}}
   {\transformfail{t}{\rho}{\scope{\mathbf{x}}{s}}}
 
-\clearpage
-
-\section{Compositional Framework for Abstract Interpretation}
-
-We use a compositional framework \citep{steffen1992compositional} for abstract interpretation, that is based on category theory. To introduce the reader to the notions of category theory that are used in this work, we proceed by repeating the text book definitions \citep{awodey2010category} of categories and functors.
-
-\begin{definition}[Category] \normalfont
-  In short, a \emph{category} is an algebra for functions over sets. It consists of
-  \begin{itemize}
-  \item a collection of objects, denoted by capital letters \[A,B,C,\ldots,\]
-  \item a collection of arrows between objects, denoted by lower case letters \[f,g,h,\ldots : A \rightarrow B\]
-  \item for each object $A$, an \emph{identity} arrow $\id_A$,
-  \item for all arrows $f:A \rightarrow B,\ g:B \rightarrow C$, a \emph{composition} operation $g \comp f : A \rightarrow C$, s.t.
-  \item identity is the left and right unit of composition, that is, for each $f: A \rightarrow B$, \[ \id_B \comp f = f = f \comp \id_A \]
-  \item and composition is associative, i.e. for all $f: A \rightarrow B,\ g: B \rightarrow C,\ h:C \rightarrow D$, \[ (h \comp g) \comp f = h \comp (g \comp f). \]
-  \end{itemize}
-  We denote the set of all arrows between the objects $A,B$ in $\Cat{C}$ by $\Hom{\Cat{C}}(A,B)$.
-\end{definition}
-
-In this framework, we represent the meaning of programs (denotational semantics) within categories. Objects represent properties of execution state and arrows represent properties of execution state transitions. The composition operation in a category can be used to describe the meaning of a compound program by the meaning of its parts. For instance the meaning of the lambda term $\lambda x.\ 2 * x - 1$ can be decomposed into the meaning of $2*\smwhtsquare$ and $\smwhtsquare - 1$, where $\smwhtsquare$ represents the current execution state. We illustrate the example with a diagram in $\Set$, the category of sets and functions, where program inputs are elements of the set $\{1,2,3,4\}$.
-\[
-\begin{tikzcd}[column sep=2cm,row sep=2cm]
-  \{1,2,3,4\} \arrow{rr}[description]{\ontopof{\sem{\lambda x.\ 2* x -1}}{g(x)\ =\ 2x - 1}} \arrow{dr}[description]{\ontopof{\sem{2 * \smwhtsquare}}{h(x)\ =\ 2x}} & & \{1,3,5,7\} \\
-  & \{2,4,6,8\} \arrow{ur}[description]{\ontopof{\sem{\smwhtsquare - 1}}{k(x)\ =\ x - 1}} &
-\end{tikzcd}
-\]
-The semantics for System S is defined in the category of sets and binary relations. The following diagram shows the decomposition of the semantics of a System S program.
-\[
-\begin{tikzcd}[column sep=2cm,row sep=2cm]
-  |[alias=A]| \{t_1,t_2,t_3\} \ar[rr,"\ontopof{\sem{!t_1;\ t_1 \rightarrow t_2}}{\sendto{t_1,t_2,t_3}{t_2}}"description] & & |[alias=B]| \{t_2\} \\
-  & \{t_1\} \ar[from=A,"\ontopof{\sem{!t_1}}{\sendto{t_1,t_2,t_3}{t_1}}"description] \ar[to=B,"\ontopof{\sem{t_1 \rightarrow t_2}}{\sendto{t_1}{t_2}}"description] &
-\end{tikzcd}
-\]
-Another important operation to further decompose the semantics of System S programs is the union and intersection of relations. These operations are needed to decompose the semantics of the choice operation $+$ and other language constructs in System S.
-\[
-\begin{tikzcd}[column sep=2cm,row sep=2cm]
-  |[alias=A]| \{t_1,t_2,t_3\} \ar[rr,"\ontopof{\sem{!t_1 + !t_3;\ (t_1 \rightarrow t_2) + (t_3 \rightarrow t_2)}}{\sendto{t_1,t_2,t_3}{t_2}}"description] & & |[alias=B]| \{t_2\} \\
-  & \{t_1,t_3\} \ar[from=A,"\ontopof{\sem{!t_1 + !t_3}}{\sendto{t_1,t_2,t_3}{t_1} \cup \sendto{t_1,t_2,t_3}{t_3}}"description] \ar[to=B,"\ontopof{\sem{(t_1 \rightarrow t_2) + (t_3 \rightarrow t_2)}}{\sendto{t_1}{t_2} \cup \sendto{t_3}{t_2}}"description] &
-\end{tikzcd}
-\]
-
-\subsection{Connection between semantic domains}
-
-The concrete semantics of a given program within a category contains all information a programmer could be interested in. Unfortunately, computing the denotations for programs is in general not possible since denotations could be infinite. The goal of abstract interpretation is to abstract, simplify and reduce the complexity of the concrete denotational semantics and to focus only on certain classes of program behavior that is computable. The technique to reduce the amount of information at cost of precision is called \emph{overapproximation}. In particular, a property $P$ of a program overapproximates another property $Q$, if $Q$ implies $P$. We will represent overapproximation of program properties as an ordering on the arrows of a category.
-
-\begin{definition}[Ordered Category] \normalfont
-  An ordered category is a category equipped with a partial order $\leq_{A, B}$ on $\Hom{\Cat{C}}(A,B)$ for each pair of objects $A,B$ in $\Cat{C}$. We require that functors between ordered categories preserve the order (are monotone)\footnote{An alternative definition of ordered categories is categories enriched over partial orders and functors between partial orders necessarily preserve ordering.}.
-\end{definition}
-
-Meanings of programs in categories can be transferred with functors to other categories. We require that these functors preserve the \emph{structure} of categories, i.e. identities, composition and ordering.
-
-\begin{definition}[Functor] \normalfont
-  A \emph{functor} $F: \Cat{C} \rightarrow \Cat{D}$ is an mapping between categories that preserves identities and composition. It consists of
-  \begin{itemize}
-    \item a mapping from objects $A$ in $\Cat{C}$ to objects $F(A)$ in $\Cat{D}$,
-    \item a mapping from arrows $f:A \rightarrow B$ in $\Cat{C}$ to arrows $F(f):F(A) \rightarrow F(B)$ in $\Cat{D}$, s.t.
-    \item for each object $A$ in $\Cat{C}$ the identity on $A$ is preserved \[ F(\id_A) = \id_{F(A)}, \]
-    \item and for all $f:A \rightarrow B,\ g: B \rightarrow C$ in $\Cat{C}$ the composition of $f$ and $g$ is preserved \[ F(g \comp f) = F(g) \comp F(f). \]
-  \end{itemize}
-\end{definition}
-
-\subsection{The Space of Abstract Domains}
-
-The following diagram gives an overview of the compositional framework \citep{steffen1992compositional} that we use and the space of abstract domains that can be explored.
-\[
-\begin{tikzcd}[row sep=3cm,column sep=1.1cm]
- \Strat \arrow{2-1}[description]{\sem{\cdot}} \arrow{2-2}[description]{\sem{\cdot}_{\Cat{A}}} \arrow{2-3}[description]{\sem{\cdot}_{\Cat{B}}} \arrow{2-4}[description]{\sem{\cdot}_{\Cat{C}}} & & & \\
- \Rel(\State) \arrow{r}{\alpha_{\Cat{A}}} \ar[rr,bend right,"\alpha_{\Cat{B}}"] \ar[rrr,bend right,"\alpha_{\Cat{C}}"] & \Cat{A} & \Cat{B} & \Cat{C} \quad \ldots
-\end{tikzcd}
-\]
-where $\Strat$ is the category with System S programs as arrows, $\Rel(\State)$ is the category of binary relations over System S program states and $\Cat{A},\Cat{B}$ are abstract domains (ordered categories). The concrete semantics of System S programs is assigned via a functor \[\sem{\cdot}: \Strat \rightarrow \Rel(\State)\] and the abstract semantics for an abstract domain $\Cat{A}$ via a functor \[\sem{\cdot}_{\Cat{A}} : \Strat \rightarrow \Cat{A}. \] To ensure that the abstract semantics is sound and coincides with the concrete semantics, we require abstraction functors \[\alpha_{\Cat{A}} : \Rel(\State) \rightarrow \Cat{A} \] and that the diagram commutes up to overapproximation, that is, for all programs $s$, \[ \alpha_{\Cat{A}}(\sem{s}) \leq \sem{s}_{\Cat{A}}. \] In other words, the abstract semantics $\sem{\cdot}_A$ overapproximates a certain behavior $\alpha_A$ of the concrete semantics $\sem{\cdot}$.
-
-In the following, we describe in more detail the individual components of this diagram. We begin by defining the program state space of System S programs.
-
-\begin{definition}[System S Program State] \normalfont
-The state of a System S program consists of a term together with a term environment or a symbol that represents the failure of a strategy \[\State \eqdef \Term \times (\Env) \cup \{ \fail \}.\]  
-\end{definition}
-
-\begin{definition}[Category $\Strat$] \normalfont
-  Next we define $\Strat$, the category all System S programs, where
-  \begin{itemize}
-  \item objects are subsets of $\State$ \[A, B, C \subseteq \State\]
-  \item and for all System S programs $s$ and objects $A,B$, an arrow \[\begin{tikzcd} A \ar[r,"s"] & B, \end{tikzcd}\] if $B$ is the strongest post condition after the execution of $s$ under the precondition $A$.
-  \end{itemize}
-\end{definition}
-
-\begin{definition}[$\Rel(\mathcal{U})$ Category] \normalfont
-  In the following we describe the category of binary relations:
-  \begin{itemize}
-  \item The objects $A,B,C,\ldots$ in $\Rel(\mathcal{U})$ are subsets of a universe $\mathcal{U}$,
-  \item arrows $R: A \rightarrow B$ are binary relations $R \subseteq A \times B$,
-  \item the identity for an object $A$ is the identity relation \[\id_A \eqdef \setbuild{ (x,x) }{ x \in A },\]
-  \item composition of is defined as \[R \circ S \eqdef \setbuild{(x,z)}{ \exists y. (x,y) \in S \land (y,z) \in R }.\]
-  \item arrows of this category are ordered by subset inclusion $R \subseteq S$.
-  \end{itemize}
-  As an example how this category looks like, consider the following diagram in $\Rel(\Nat)$ with 3 sets and 5 relations:
-  \[
-  \begin{tikzcd}[column sep=3cm]
-    \{1,2,3\} \arrow[bend left=50,start anchor=north east,end anchor=north west]{r}[name=X,description]{\{\}} \arrow{r}[name=Y,description]{\{(2,4),(3,5)\}} \arrow[bend right=50,start anchor=south east,end anchor=south west]{r}[name=Z,description]{\{ (1,4),(2,4),(3,5) \}} \ar[from=X,to=Y,phantom,"\subseteq"{sloped,rotate=180}] \ar[from=Y,to=Z,phantom,"\subseteq"{sloped}] & \{4,5\} \arrow[bend left=50,start anchor=north east,end anchor=north west]{r}[name=XX,description]{\{(4,6)\}} \arrow{r}[name=YY,description]{\{(4,6),(5,6)\}} \arrow[bend right=50,start anchor=south east,end anchor=south west]{r}[name=ZZ,description]{\{(5,6)\}} \ar[from=XX,to=YY,phantom,"\subseteq"{sloped}] \ar[from=ZZ,to=YY,phantom,"\supseteq"{sloped,rotate=180}] & \{6,7\}
-  \end{tikzcd}
-  \]
-  The composition of the two top most, middle and bottom arrows of the previous diagram is depicted in the following diagram:
-  \[
-  \begin{tikzcd}[column sep=1.5cm]
-    \{1,2,3\} \arrow[bend left=50,start anchor=north east,end anchor=north west]{rr}[name=X,description]{\{\}} \arrow{rr}[name=Y,description]{\{(2,6),(3,6)\}} \arrow[bend right=50,start anchor=south east,end anchor=south west]{rr}[name=Z,description]{\{ (3,6) \}} \ar[from=X,to=Y,phantom,"\subseteq"{sloped}] \ar[from=Z,to=Y,phantom,"\supseteq"{sloped,rotate=180}] & & \{6,7\}
-  \end{tikzcd}
-  \]
-  The composition distributes over union and intersection of relations, i.e. for all relations $P,Q,R,$ in $\Rel(\mathcal{U}),$ \[(P \cup Q) \comp R = P \comp R \cup Q \comp R\]
-  \begin{align*}
-    (P \cup Q) \comp R &= \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land (y,z) \in (P \cup Q) } \\
-                       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land ((y,z) \in P \lor (y,z) \in Q) } \\
-                       &= \setbuild{ (x,z) }{ \exists y. ((x,y) \in R \land (y,z) \in P) \lor ((x,y) \in R \land (y,z) \in Q)) } \\
-                       &= \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land (y,z) \in P } \cup  \setbuild{ (x,z) }{ \exists y. (x,y) \in R \land (y,z) \in Q } \\
-                       &= P \comp R \cup Q \comp R
-  \end{align*}
-  Analogously,
-  \begin{align*}
-    R \comp (P \cup Q) &= R \comp P \cup R \comp Q \\
-    (P \cap Q) \comp R &= P \comp R \cap Q \comp R \\
-    R \comp (P \cap Q) &= R \comp P \cap R \comp Q
-  \end{align*}
-\end{definition}
-
-\begin{definition}[Concrete Denotational Semantics of System S] \normalfont
-  We define the concrete denotational semantics of System S programs as a functor \[\sem{\cdot} : \Strat \rightarrow \Rel(\State) \] defined for all objects $A$ and arrows $s:A \rightarrow B$ in $\Strat$ by
-  \begin{align*}
-    \sem{A} &\eqdef A \\
-    \sem{s} &\eqdef \setbuild{(x,y) \in A \times B}{\transformxy{x}{s}{y}}.
-  \end{align*}
-\end{definition}
-
-\begin{grammar}
-  <con> ::= <constructor> | `?'
-
-  <ari> ::= <number> | `?'
-
-  <term> ::= <con> `/' ? `[' <subterm> `]'
-
-  <subterm> ::= `one(' [<term>] `)' \alt `some(' [<term>] `)' \alt `all(' [<term>] `)' \alt [<path>]
-
-  <path> ::= <term>_<number>
-\end{grammar}
-
-\begin{align*}
-  &\semn{\match{f(t_1 \ldots t_n)} : A \rightarrow B} \eqdef \\
-  &\qquad
-    \begin{rcases}
-      (f/n(1(\phi_1'),\ldots n(\phi_n')),\rho_{n+1}) \in \semn{B}
-        & (f/n[\phi_1,\ldots \phi_n],\rho_1) \in \semn{A} \\
-        & \quad \bigwedge_{1 \leq i \leq n} ((\phi_i,\rho_i),(\phi_i',\rho_{i+1})) \in \semn{\match{t_i}: \gamma(\phi_i,\rho_i) \rightarrow \State\setminus \{\fail\} } \\
-      \fail \in \semn{B}
-        & (f/n[\phi_1,\ldots \phi_n],\rho_1) \in \semn{A} \\
-        & \quad \exists k. \bigwedge_{1 \leq i < k} ((\phi_i,\rho_i),(\phi_i',\rho_{i+1}),) \in \semn{\match{t_i}: \gamma(\phi_i,\rho_i) \rightarrow \State\setminus \{\fail\} } \\
-        & \quad\quad ((\phi_k,\rho_k),\fail) \in \semn{\match{t_i}: \gamma(\phi_k,\rho_k) \rightarrow \{\fail\} } \\
-      (f/n(1(\phi_1'),\ldots n(\phi_n')),\rho_{n+1}) \in \semn{B} & (f/n[\all{\phi}],\rho) \in \semn{A} \\
-        & \lor\ x = (f/n[\one{\phi}],\rho) \\
-        & \lor\ x = (f/n[\some{\phi}],\rho) \\
-        & \bigwedge_{1 \leq i \leq n} (\phi_i',\rho_{i+1}) \in \semn{\match{t_1}}(?/?(),\rho_i) \\
-      \fail & x = (?/\mu[\phi],\rho) \\
-      y & x = (?/\mu[\phi],\rho) \land y \in \semn{\match{f(t_1 \ldots t_n)}}(f/\mu[\phi],\rho) \\
-      \{ \fail \}, & x = (g/\mu[\phi],\rho) \land g \neq f \\
-      y,\ \fail, & x = (\eta/?[\phi],\rho) \land y \in \semn{\match{f(t_1 \ldots t_n)}}(\eta/n[\phi],\rho) \\
-      \{ \fail \}, & x = (\eta/m[\phi],\rho) \land m \neq n \\
-    \end{rcases} \\
-\end{align*}
-
-\subsection{Intermediate language to reduce proof work}
-
-We reduce the proof work, by introducing an intermediate language $\SAlg$ with fewer language constructs than $\Strat$. We show that $\Strat$ can be translated to $\SAlg$ while preserving the semantics as indicated in the following commuting diagram.
-
-\[
-\begin{tikzcd}[row sep=2cm,column sep=1.1cm]
- \Strat \arrow{dr}[description]{T} \arrow{dd}[description]{\sem{\cdot}} & & & \\
- & \SAlg \arrow{3-1}[description]{\sem{\cdot}_{\SAlg}} \arrow{3-2}[description]{\sem{\cdot}_{\Cat{A}}} \arrow{3-3}[description]{\sem{\cdot}_{\Cat{B}}} \arrow{3-4}[description]{\sem{\cdot}_{\Cat{C}}} & & \\
- \Rel(\State) \arrow{r}{\alpha_{\Cat{A}}} \ar[rr,bend right,"\alpha_{\Cat{B}}"] \ar[rrr,bend right,"\alpha_{\Cat{C}}"] & \Cat{A} & \Cat{B} & \Cat{C} \quad \ldots
-\end{tikzcd}
-\]
-
-The functor $T$ translates $\Strat$ programs to $\SAlg$ programs and $\sem{\cdot}_\SAlg$ assigns the semantic to $\SAlg$ programs in the same category as $\sem{\cdot}$. That the translation $T$ is faithful with respect to the semantics follows from \[\sem{s} = \sem{T(s)}_\SAlg.\] What is left to proof soundness for an abstract semantics $\sem{\cdot}_{\Cat{A}}$, is to show that the abstract semantics overapproximates the semantics of $\SAlg$, \[ \alpha_{\Cat{A}}(\sem{s}_\SAlg) \leq \sem{s}_{\Cat{A}}. \] The abstract semantics $\Cat{A}$ for $\Strat$ then is given by the composition \[ \sem{T(\cdot)}_{\Cat{A}}. \]
-
-\begin{definition}[Category $\SAlg$] \normalfont
-  We continue by defining the category $\SAlg$ that characterizes the behavior of $\Strat$. Objects of the category are subsets of $\State$ but algebra consists of
-  \begin{itemize}
-    \item for all object $A,B$, operations for the least upper bound \begin{align*} \sqcup : A \times B \rightarrow A \cup B \end{align*} and the greatest lower bound \[ \sqcap : A \times B \rightarrow A \cap B, \]
-    \item for all objects $A,B$, an operation \[ \eq{A} : B \rightarrow C \] that represents the equality relation on $A$,
-    \item an operation to failure \[\lfail : A \rightarrow B \] of a strategy,
-    \item an operation to represent an recursive call of a strategy \[\lfix : \Cat{C} \rightarrow \Cat{C}\]
-  \end{itemize}
-  \begin{align*}
-    \alpha(f \sqcup g) &\Rightarrow \alpha(f) \sqcup \alpha(g) \\
-    \alpha(f \sqcap g) &\Rightarrow \alpha(f) \sqcap \alpha(g) \\
-    \alpha(\domain(f)) &\Rightarrow \domain(\alpha(f)) \\
-    \alpha(\lsucc(A)) &\Rightarrow \lsucc(\alpha(A)) \\
-    \alpha(\lfail(A)) &\Rightarrow \lfail({\alpha(A)}) \\
-  \end{align*}
-\end{definition}
-
-Currently, the definition of functors that we introduced before is to strict for this use case. We need to relax the definition of functors to allow composition to be preserved only up to inequality.
-
-\begin{definition}[Lax Functor] \normalfont
-  A \emph{lax} functor $F: \Cat{C} \rightarrow \Cat{D}$ is mapping between categories that preserves identities and composition only up inequality. It consists of
-  \begin{itemize}
-    \item a mapping from objects $A$ in $\Cat{C}$ to objects $F(A)$ in $\Cat{D}$,
-    \item a mapping from arrows $f:A \rightarrow B$ in $\Cat{C}$ to arrows $F(f):F(A) \rightarrow F(B)$ in $\Cat{D}$, s.t.
-    \item for each object $A$ in $\Cat{C}$ the identity on $A$ is preserved \[ F(\id_A) \leq \id_{F(A)}, \]
-    \item and for all $f:A \rightarrow B,\ g: B \rightarrow C$ in $\Cat{C}$ the composition of $f$ and $g$ is preserved \[ F(g \comp f) \leq F(g) \comp F(f). \]
-  \end{itemize}
-  Note that this makes the strict version of functor a special case of a lax functor.
-\end{definition}
-
-\begin{definition}[Semantics for $\SAlgebra$ in $\Rel(\State)$] \normalfont
-  We define the the semantics of $\SAlgebra$ with the functor $\semsalg{\cdot}$,
-  \begin{align*}
-    \semsalg{\cdot} &: \Strat \rightarrow \Rel(\State) \\
-    \semsalg{\dom(f)} &\eqdef \setbuild{(x,x)}{ \forall (x,y) \in \semsalg{f} } \\
-    \semsalg{\lsucc} &\eqdef \setbuild{((t,\rho),(t,\rho))}{ \forall (t,\rho) \in A } \\
-    \semsalg{\lfail} &\eqdef \setbuild{(a,\fail)}{\forall a \in A} \\
-  \end{align*}
-\end{definition}
-
-\begin{definition}[Translation from $\Strat$ to $\SAlg$] \normalfont
-  We define the translation functor \[T : \Strat \rightarrow \SAlg\] and proof that the translation is sound, that is, for all programs $s$, \[ \sem{s} = \semsalg{T(s)}. \] We proceed by fix-point induction on $s$.
-
-\begin{align*}
-  \sem{\test{s}}
-    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\test{s}}{x}} \\
-     &= \setbuild{((t,\rho),(t,\rho))}{\transform{t}{\rho}{s}{t'}{\rho'}} \\
-     &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s}} \\
-     &= \setbuild{ (x,x) }{ (x,y) \in \setbuildc{((t,\rho),(t,\rho))} \comp \setbuild{((t,\rho),y')}{\transformx{t}{\rho}{s}{y'}}} \\
-     &\quad \cup \setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{y}} \\
-     &= \semsalg{\domain(\lsucc \comp T(s)) \sqcup \lfail \comp T(s)} \\
-     &\eqdef \semsalg{T(\test{S})}
-\end{align*}
-
-\begin{align*}
-  \sem{\negate{s}}
-    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\negate{s}}{x}} \\
-    &= \setbuild{((t,\rho),(t,\rho))}{\transformfail{t}{\rho}{s}} \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s}{t'}{\rho'}} \\
-    &= \setbuild{ ((t,\rho),(t,\rho)) }{ ((t,\rho),\fail) \in \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}} } \\
-    &\quad \cup \setbuildc{\forall (x,\fail)} \comp \setbuild{ ((t,\rho),(t,\rho)) }{ ((t,\rho),(t',\rho')) \in \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}} \\
-    &= \semsalg{\domain(\lfail \comp T(s)) \sqcup \Fail \comp \domain(\lsucc \comp T(s))} \\
-    &\eqdef \semsalg{T(\negate{s})}
-\end{align*}
-
-\begin{align*}
-  \sem{\seq{s_1}{s_2}}
-    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\seq{s_1}{s_2}}{x}} \\
-    &= \setbuild{((t,\rho),(t'',\rho''))}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transform{t'}{\rho'}{s_2}{t''}{\rho''}}\\
-    &\quad \cup \setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1}} \\
-    &\quad \cup \setbuild{((t,\rho),\fail)}{\transform{t}{\rho}{s_1}{t'}{\rho'} \land \transformfail{t'}{\rho'}{s_2}} \\
-    &= \setbuildc{ ((t,\rho),(t,\rho)) } \comp \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_2}{x}} \\
-    &\qquad \comp \setbuildc{ ((t,\rho),(t,\rho)) } \comp \setbuild{((t,\rho),x)}{\transformx{t'}{\rho'}{s_1}{x}} \\
-    &\quad \cup \setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}} \\
-    &\quad \cup \setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}} \\
-    &\qquad \comp \setbuildc{(t,\rho),(t,\rho))} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}} \\
-    &= \lsucc \comp \sem{s_2} \comp \lsucc \comp \sem{s_1} \\
-    &\quad \sqcup \lfail \comp \sem{s_1} \\
-    &\quad \sqcup \lfail \comp \sem{s_2} \comp \lsucc \comp \sem{s_1} \\
-    &= \lsucc \comp \sem{s_2} \comp \sem{s_1} \sqcup \lfail \comp \sem{s_1} \sqcup \lfail \comp \sem{s_2} \comp \sem{s_1} \\
-    &= \left(\lsucc \comp \sem{s_2} \sqcup \lfail \sqcup \lfail \comp \sem{s_2}\right) \comp \sem{s_1} \\
-    &= \left(\left(\lsucc \sqcup \lfail\right) \comp \sem{s_2} \sqcup \lfail \right) \comp \sem{s_1} \\
-    &= \left(\sem{s_2} \sqcup \lfail \right) \comp \sem{s_1} \\
-\end{align*}
-
-\begin{align*}
-  \sem{\choice{s_1}{s_2}}
-     &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\choice{s_1}{s_2}}{x}} \\
-     &= \setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}} \\
-     &\quad \cup {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_2}{t'}{\rho'}}} \\
-     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t}{\rho}{s_2}}} \\
-     &= \setbuildc{((t,\rho),(t,\rho))} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
-     &\quad \cup \setbuildc{((t,\rho),(t,\rho))} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \\
-     &\quad \cup \left(\setbuildc{(\fail,\fail)} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \right. \\
-     &\qquad\quad \left. \cap \setbuildc{(\fail,\fail)} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \right) \\
-     &= \lsucc \comp \sem{s_1} \\
-     &\quad \sqcup \lsucc \comp \sem{s_2} \\
-     &\quad \sqcup \left(\lfail \comp \sem{s_1} \sqcap \lfail \comp \sem{s_2}) \right) \\
-     &= \lsucc \comp (\sem{s_1} \sqcup \sem{s_2}) \sqcup \lfail \comp (\sem{s_1} \sqcap \sem{s_2})
-\end{align*}
-
-\begin{align*}
-  \sem{\leftchoice{s_1}{s_2}}
-     &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\leftchoice{s_1}{s_2}}{x}}} \\
-     &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
-     &\quad \cup {\setbuild{((t,\rho),(t',\rho'))}{\transformfail{t}{\rho}{s_1} \land \transform{t}{\rho}{s_2}{t'}{\rho'}}} \\
-     &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{s_1} \land \transformfail{t'}{\rho'}{s_2}}} \\
-     &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{s_1}{t'}{\rho'}}} \\
-     &\quad \cup {\setbuild{((t,\rho),x)}{\transformfail{t}{\rho}{s_1} \land \transformx{t}{\rho}{s_2}{x}}} \\
-     &= {\setbuildc{((t,\rho),(t,\rho))}} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}}} \\
-     & \quad \cup {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_2}{x}}} \\
-     &\qquad \comp \setbuild{ (x,x) } { (x,y) \in \setbuildc{(\fail,\fail)} \comp \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s_1}{x}} } \\
-     &= \lsucc \comp \sem{s_1} \sqcup \sem{s_2} \comp \domain (\lfail \comp \sem{s_1})
-\end{align*}
-
-\begin{align*}
-  \sem{\fix{x}{s}}
-    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\fix{x}{s}}{y}}} \\
-    &= {\setbuild{((t,\rho),(t',\rho'))}{\transform{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{t'}{\rho'}}} \\
-    &\quad \cup {\setbuild{((t,\rho),\fail)}{\transformfail{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}}} \\
-    &= {\setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\subst{s}{x}{\fix{x}{s}}}{y}}} \\
-    &= \sem{\subst{s}{x}{\fix{x}{s}}} \\
-    &= \lfix(\sem{\subst{s}{x}{\fix{x}{s}}})
-\end{align*}
-
-\begin{align*}
-  \sem{\path{i}{s}}
-    &= \setbuild{((t,\rho),y)}{\transformx{t}{\rho}{\path{i}{s}}{y}} \\
-    &= \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}} \\
-    &\quad \cup {\setbuild{((f(\ldots t_i \ldots),\rho),\fail)}{\transformfail{t_i}{\rho}{s}}} \\
-    &\quad \cup {\setbuild{((f(\ldots t_n),\rho),\fail)}{ n < i }} \\
-    &= \setbuild{ ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \\
-    &\quad \cup \setbuildc{ (\fail,\fail)} \comp {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{s}{x}}} \comp {\setbuildc{((f(\ldots t_i \ldots),\rho),(t_i,\rho))}} \\
-    &\quad \cup \setbuildc{((t,\rho),\fail)} \comp \setbuild{((f(\ldots t_n),\rho),(f(\ldots t_n),\rho))}{ n < i } \\
-    &= \map(i,\sem{s}) \sqcup \lfail \comp \sem{s} \comp \get(i) \sqcup \lfail \comp \aritylt(i) \\
-    &= \map(i,\sem{s}) \sqcup \lfail \comp (\sem{s} \comp \get(i) \sqcup \aritylt(i))
-\end{align*}
-
-\begin{align*}
-  \sem{\congr{f,s_1,\ldots,s_n}}
-    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\congr{f,s_1,\ldots,s_n}}{x}} \\
-    &= \setbuild{((f(t_1\ldots t_n),\rho_1),(f(t_1'\ldots t_n'),\rho_{n+1}))}{ \forall 1 \leq i \leq n.\ \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}} \\
-    &\quad \cup \setbuild{((f(t_1\ldots t_n),\rho_1),\fail)}{ \exists k \leq n.\, (\forall 1 \leq i \leq k.\ \transform{t_i}{\rho_i}{s_i}{t_i'}{\rho_{i+1}}) \land \transformfail{t_k}{\rho_k}{s_k}} \\
-    &\quad \cup \setbuild{((f(t_1\ldots t_n'),\rho),\fail)}{ n' \neq n } \\
-    &\quad \cup \setbuild{((g(\ldots),\rho),\fail)}{ g \neq f } \\
-    &= \Comp_{1\leq i \leq n} \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ \transform{t_i}{\rho}{s_i}{t_i'}{\rho'} } \\
-    &\quad \cup \bigcup_{k \leq n} \left( \setbuild{ ((f(\ldots t_k \ldots),\rho),\fail) }{ \transformx{t_k}{\rho}{s_k}{\fail} } \right. \\
-    &\qquad\qquad \left. \comp \mathop{\bigcirc}_{1\leq i < k} \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ \transform{t_i}{\rho}{s_i}{t_i'}{\rho'} } \right) \\
-    &\quad \cup \setbuildc{ \forall (x,\fail) } \comp \setbuild{((f(t_1\ldots t_n'),\rho),f(t_1\ldots t_n'))}{ n' \neq n } \\
-    &\quad \cup \setbuildc{ \forall (x,\fail) } \comp \setbuild{((g(\ldots),\rho),(g(\ldots),\rho))}{ g \neq f } \\
-    &= \Comp_{1\leq i \leq n} \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x) }{ \transform{t_i}{\rho}{s_i}{x} } } \\
-    &\quad \cup \bigcup_{k \leq n} \left( \setbuildc{ \forall (x,\fail) } \comp \setbuild{ ((t,\rho),x) }{ \transformx{t}{\rho}{s_k}{x} } \comp \setbuildc{ ((f(\ldots t_k \ldots),\rho),(t_k,\rho)) } \right. \\
-    &\qquad\qquad \left. \comp \mathop{\bigcirc}_{1\leq i < k} \setbuild{((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x) }{ \transformx{t}{\rho}{s_i}{x} } } \right) \\
-    &\quad \cup \setbuildc{ \forall (x,\fail) } \comp \setbuild{((f(t_1\ldots t_n'),\rho),f(t_1\ldots t_n'))}{ n' \neq n } \\
-    &\quad \cup \setbuildc{ \forall (x,\fail) } \comp \setbuild{((g(\ldots),\rho),(g(\ldots),\rho))}{ g \neq f } \\
-    &= \left( \Comp_{1\leq i \leq n} \map(i,\sem{s_i}) \right) \comp \arityeq(n) \comp \coneq(f) \\
-    &\quad \sqcup \left( \bigsqcup_{k \leq n} \lfail \comp \sem{s_k} \comp \get(k) \comp \mathop{\bigcirc}_{1 \leq i < k} \map(i,\sem{s_i}) \right) \comp \arityeq(n) \comp \coneq(f) \\
-    &\quad \sqcup \lfail \comp \arityneq(n) \\
-    &\quad \sqcup \lfail \comp \conneq(f) \\
-    &= \left( \left( \Comp_{1\leq i \leq n} \map(i,\sem{s_i}) \right) \sqcup \left( \bigsqcup_{k \leq n} \lfail \comp \sem{s_k} \comp \get(k) \comp \mathop{\bigcirc}_{1 \leq i < k} \map(i,\sem{s_i}) \right) \right) \\
-    &\qquad\quad \comp \arityeq(n) \comp \coneq(f) \\
-    &\quad \sqcup \lfail \comp \arityneq(n) \\
-    &\quad \sqcup \lfail \comp \conneq(f) \\
-    &= F_{1,n+1} \comp \arityeq(n) \comp \coneq(f) \\
-    &\quad \sqcup \lfail \comp \arityneq(n) \\
-    &\quad \sqcup \lfail \comp \conneq(f) \\
-\text{where}& \\
-  F_{i,n} &= F_{i+1,n} \comp \map(i,\sem{s_i}) \sqcup \lfail \comp \sem{s_i} \comp \get(i) \\
-  F_{n,n} &= \id
-\end{align*}
-
-\begin{align*}
-  \sem{\one{s}}
-    &= \setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\one{s}}{x}} \\
-    &= \bigcup_{n \in \Nat} \bigcup_{1 \leq i \leq n} \setbuild{((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho'))}{\transform{t_i}{\rho}{s}{t_i'}{\rho'}} \\
-    &\quad \cup \bigcup_{n \in \Nat} \setbuild{((f(t_1 \ldots t_n),\rho),\fail)}{\forall 1 \leq i \leq n.\, \transformfail{t_i}{\rho}{s}} \\
-    &= \witharity_{n} \left( \bigcup_{1 \leq i \leq n} \setbuild{ ((f(\ldots t_i \ldots),\rho),(f(\ldots t_i' \ldots),\rho')) }{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((t,\rho),x }{ \transformx{t_i}{\rho}{s}{x} } } \right) \\
-    &\quad \cup \witharity_{n} \left( \bigcap_{1 \leq i \leq n}  \setbuildc{ \forall (x,\fail) } \comp \setbuild{ ((t,\rho),x)}{ \transformx{t}{\rho}{s}{x} } \comp \setbuildc{ ((f(\ldots t_i \ldots),\rho),(t_i,\rho)) } \right) \\
-    &= \witharity_{n} \left( \bigsqcup_{1 \leq i \leq n} \map(i,\sem{s}) \right) \\
-    &\quad \sqcup \witharity_{n} \left( \bigsqcap_{1 \leq i \leq n}  \lfail \comp \sem{s} \comp \get(i) \right) \\
-    &= \witharity_{n} \left( \bigsqcup_{1 \leq i \leq n} \map(i, \sem{s}) \sqcup \bigsqcap_{1 \leq i \leq n} \lfail \comp \sem{s} \comp \get(i) \right)
-\end{align*}
-
-\begin{align*}
-  \sem{\all{s}}
-    &= {\setbuild{((t,\rho),x)}{\transformx{t}{\rho}{\all{s}}{x}}} \\
-    &= {\setbuild{((f(t_i\ldots t_n),\rho_1),(f(t_i'\ldots t_n'),\rho_{n+1}))}{ \forall 1 \leq i \leq n.\ \transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}}}} \\
-    &\quad \cup \setbuild { ((f(t_1 \ldots t_n),\rho_1),\fail) }{ \exists k \leq n.\ \left(\forall 1 \leq i < k.\ \transform{t_i}{\rho_i}{s}{t_i'}{\rho_{i+1}}\right) \land \transformfail{t_k}{\rho}{s} } \\
-    &= \bigcup_{n \in \mathbb{N}} \mathop{\bigcirc}_{1\leq i \leq n} \setbuild{((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((u,\sigma),x) }{ \transformx{u}{\sigma}{s}{x} } } \\
-    &\quad \cup \bigcup_{n \in \mathbb{N}} \mathop{\bigcirc}_{1 \leq i \leq n} \setbuild{((f(\ldots t_i \ldots t_n),\rho),(f(\ldots t_i' \ldots t_n),\rho'))}{ ((t_i,\rho),(t_i',\rho')) \in \setbuild{ ((u,\sigma),x) }{ \transformx{u}{\sigma}{s}{x} } } \\
-    &\qquad\qquad\qquad  \\
-    &= ?
-\end{align*}
-  
-\end{definition}
-
-% \begin{definition}[$\Naive$ semantics of System S] \normalfont
-%   Let $\mathcal{N}$ be the set of abstract program states with $\mathcal{N} = \State \cup \lbrace \top, \bot, \ttop, \tbot \rbrace$. We define a finitely complete partial order (lattice) $\leq_\mathcal{N}$ on $\mathcal{N}$
-%   \[
-%     \begin{tikzpicture}
-%      \matrix (m) [matrix of nodes, row sep=4em, column sep=2em]
-%     {                              &                        & \node (top) {$\top$};       &                       &                         \\
-%                                    & \node (ttop){$\ttop$}; &                             &                       &                          \\
-%       \node (t1) {$(t_1,\rho_1)$}; & \node {\ldots};        & \node (tn) {$(t_n,\rho_n)$}; &                       & \node (fail) {$\fail$}; \\
-%                                    &                        & \node (bot) {$\bot$};       &                       &                          \\
-%     };
-
-%     \draw [thick] (ttop) -- (top);
-%     \draw [thick] (fail) -- (top);
-%     \draw [thick] (t1) -- (ttop);
-%     \draw [thick] (tn) -- (ttop);
-%     \draw [thick] (bot) -- (t1);
-%     \draw [thick] (bot) -- (tn);
-%     \draw [thick] (bot) -- (fail);
-%     \end{tikzpicture}
-%   \]
-
-%   Next, we define the category $\Naive$  
-%   \begin{itemize}
-%   \item objects $A,B,C \ldots$ are elements of $\mathcal{N}$,
-%   \item arrows are total functions $A \rightarrow B$,
-%   \item arrows are ordered point-wise, i.e. \[ f \leq_{A \rightarrow B} g\ \text{ iff }\ \forall x \in A.\ f(x) \leq_{\mathcal{N}} g(x), \]
-%   \end{itemize}
-%   Additionally, we define auxiliary functions for $f:A \rightarrow C, g:B \rightarrow D$
-%   \begin{align*}
-%     \alphan &: \Rel(\State) \rightarrow \Naive \\
-%     \alphan(A) &\eqdef \bigsqcup A \\
-%     \alphan(R)(x) &\eqdef
-%       \begin{cases}                     
-%         \bigsqcup \setbuild{ y }{ (x,y) \in R }, & x = (t,\rho) \\
-%         \bigsqcup \setbuild{ y }{ (z,y) \in R.\ z \in \Term }, & x = \ttop \\       
-%         \bigsqcup \setbuild{ y }{ (z,y) \in R.\ z \in \Term \cup \{ \fail \} }, & x = \top \\
-%       \end{cases}
-%     \\
-%     \semn{A} &: \SAlg \rightarrow \Naive \\
-%     \semn{A} & \eqdef A \\
-%     \\
-%     \alphan(\semsalg{f \sqcup g})(x)
-%             &= \alphan(\semsalg{f} \cup \semsalg{g})(x) \\
-%             &= \bigsqcup \setbuild{y}{ (x,y) \in \semsalg{f} \cup \semsalg{g} } \\
-%             &\overset{\text{IH}}{\leq} \bigsqcup \setbuild{y}{ (x,y) \in \semn{f} \cup \semn{g} } \\
-%             &= \begin{cases}
-%                  \semn{f}(x) \sqcup \semn{g}(x), & x \in \dom(\semn{f}) \land x \in \dom(\semn{g}) \\
-%                  \semn{f}(x), & x \in \dom(\semn{f}) \land x \notin \dom(\semn{g}) \\
-%                  \semn{g}(x), & x \notin \dom(\semn{f}) \land x \in \dom(\semn{g}) \\
-%                \end{cases} \\
-%             & \eqdef \semn{f \sqcup g}(x) \\
-%     \\
-%     \alphan(\semsalg{f \sqcap g})(x)
-%             &= \alphan(\semsalg{f} \cap \semsalg{g})(x) \\
-%             &= \bigsqcup \setbuild{y}{ (x,y) \in \semsalg{f} \cap \semsalg{g} } \\
-%             &= \bigsqcup \setbuild{y}{ (x,y) \in \semsalg{f} \land (x,y) \in \semsalg{g} } \\
-%             &= \bigsqcup \setbuild{y}{ (x,y) \in \semsalg{f}} \sqcap \bigsqcup \setbuild{y}{ (x,y) \in \semsalg{g} } \\
-%             &\overset{\text{IH}}{\leq} \bigsqcup \setbuild{y}{ (x,y) \in \semn{f}} \sqcap \bigsqcup \setbuild{y}{ (x,y) \in \semn{g} } \\
-%             & \eqdef \semn{f \sqcap g}(x) \\
-%     \\
-%     \domain(f) &: A \rightarrow A \\
-%     \domain(f)(x) &\eqdef
-%       \begin{cases}
-%         x, & x \in \dom(f) \\
-%         \bot, & \text{otherwise} \\
-%       \end{cases} \\
-%     \\
-%     \lsucc &: A \rightarrow A \setminus \{ \fail \} \\
-%     \lsucc(x) &\eqdef
-%       \begin{cases}
-%         x, & x \neq \fail \\
-%         \bot, & \text{otherwise} \\
-%       \end{cases} \\
-%     \\
-%     \lfail &: A \rightarrow \{ \fail \} \\
-%     \lfail(x) &\eqdef
-%       \begin{cases}
-%         \fail, & x = \fail \\
-%         \bot, & \text{otherwise} \\
-%       \end{cases} \\
-%     \\
-%     \Fail &: A \rightarrow \{ \fail \} \\
-%     \Fail(x) &\eqdef \fail \\
-%     \\
-%     \semn{\test{s}} & \eqdef \domain(\lsucc \comp \semn{s}) \sqcup \lfail \comp \semn{s} \\
-%     \semn{\negate{s}} & \eqdef \domain(\lfail \comp \semn{s}) \sqcup \Fail \comp \domain(\lsucc \comp \semn{s}) \\
-%     \semn{\seq{s_1}{s_2}} &\eqdef \left(\semn{s_2} \sqcup \lfail \right) \comp \semn{s_1} \\
-%     \semn{\match{x}}(l) &\eqdef
-%                 \begin{cases} 
-%                   (t,\rho[x \mapsto t]) & l = (t,\rho) \land x \notin \dom(\rho) \\
-%                   (t,\rho) & l = (t,\rho) \land x \in \dom(\rho) \land \rho(x) = t \\
-%                   \fail & l = (t,\rho) \land x \in \rho \land \rho(x) \neq t \\
-%                   \top & \ttop \leq l \leq \top \\
-%                   \bot & l = \bot \\
-%                 \end{cases} \\
-%     \semn{\match{f(t_1 \ldots t_n)}}(l) &\eqdef
-%                 \begin{cases} 
-%                   (f(t_1' \ldots t_n'),\rho_{n+1}) & l = (g(t_1'\ldots t_n'),\rho_0) \land f = g \land \bigwedge_{1 \leq i \leq n} \semn{\match{t_i}}(t_i',\rho_i) = (t_i'',\rho_{i+1}) \\
-%                   \fail & l = (g(t_1'\ldots t_n'),\rho_0) \land f = g \land \exists k. \bigwedge_{1 \leq i < k} \semn{\match{t_i}}(t_i',\rho_i) = (t_i'',\rho_{i+1}) \\
-%                         & \quad \land \semn{\match{t_k}}(t_k',\rho_k) = \fail \\
-%                   \fail & l = (g(\ldots),\rho) \land f \neq g \\
-%                   \top  & l = (g(t_1'\ldots t_n'),\rho_0) \land f = g \land \exists k. \bigwedge_{1 \leq i < k} \semn{\match{t_i}}(t_i',\rho_i) = (t_i'',\rho_{i+1}) \\
-%                         & \quad \land \ttop \leq \semn{\match{t_k}}(t_k',\rho_k) \leq \top \\
-%                   \top  & \ttop \leq l \leq \top \\
-%                 \end{cases} \\
-%     \semn{\build{t}}(l) & \eqdef
-%                 \begin{cases}
-%                   (\rho(t'),\rho), & l = (t,\rho) \land \vars{t} \subseteq \dom(\rho) \\
-%                   \fail, & l = (t,\rho) \land \vars{t} \not\subseteq \dom(\rho) \\
-%                   \top, & \ttop \leq l \leq \top \\
-%                 \end{cases}
-%   \end{align*}
-  
-%   We continue by defining the abstraction functor $\alpha : \Rel(\State) \rightarrow \Naive$, for objects $X$ by \[\alpha(X) \coloneq \lub X \] and arrows $R$ by \[\alpha(R) \coloneq (\alpha(\setbuild{ x }{ \forall (x,y) \in R }), \alpha(\setbuild{ y }{ \forall (x,y) \in R})). \] The corresponding concretization functor $\gamma : \Naive \rightarrow \Rel(\State)$ is defined by
-%   \begin{align*}
-%     \gamma((t,\rho)) &\coloneq \setbuildc{ (t,\rho) } \\
-%     \gamma(\ttop) &\coloneq \Term \times (\Env) \\
-%     \gamma(\top) &\coloneq \Term \times (\Env) \cup \Fail \\
-%     \gamma(\bot) &\coloneq \setbuildc{} \\
-%   \end{align*}
-
-%   We now show, that $(\alpha,\gamma)$ is an morphism between $\SAlgebras$. For all objects X,
-%   \begin{align*}
-%     \alpha(\id_X) = (\lub X, \lub X) = \id_{\lub X} = \id_{\alpha(X)}
-%   \end{align*}
-%   and for all $R : A \rightarrow B, S : B \rightarrow C$,
-%   \begin{align*}
-%     \alpha(S \comp R) &= (\lub A, \lub C) \\
-%                       &= (\lub B, \lub C) \comp (\lub A, \lub B) \\
-%                       &= (\alpha(\dom(S)), \alpha(\cod(S))) \comp (\alpha(\dom(R)), \alpha(\cod(R))) \\
-%                       &= \alpha(S) \comp \alpha(R).
-%   \end{align*}
-
-%   Observe that $R \cup S : X_1 \cup Y_1 \rightarrow X_2 \cup Y_2$ and since $N$ is a complete partial order, it holds that $\forall A,B. \lub(A \cup B) = (\lub A) \sqcup (\lub B),$ then
-%  \begin{align*}
-%     \alpha(R \cup S) &= (\lub(X_1 \cup Y_1),\lub(X_2\cup Y_2)) \\
-%                      &= ((\lub X_1) \sqcup (\lub Y_1), (\lub X_2) \sqcup (\lub Y_2)) \\
-%                      &= (\lub X_1,\lub X_2) \sqcup (\lub Y_1, \lub Y_2) \\
-%                      &= \alpha(R) \sqcup \alpha(S).
-%  \end{align*}
-%  Analoguosly for meets.
-% \end{definition}
-
-\bibliography{references}{}
 
 \end{document}

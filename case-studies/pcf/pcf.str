@@ -57,5 +57,3 @@ strategies
 
   lookup = (?(x,[(x,y)|_]); !y)
          <+ (?(x,[_|r]); <lookup> (x,r))
-
-  try(s) = s <+ id

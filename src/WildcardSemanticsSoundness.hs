@@ -3,26 +3,25 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WildcardSemanticsSoundness where
 
-import Prelude hiding (Ord(..),abs)
-
-import Syntax(Strat,StratEnv,Signature)
-import Result
+import           Prelude hiding (Ord(..),abs)
 
 import qualified ConcreteSemantics as C
+import           Syntax (Strat,StratEnv)
 import qualified WildcardSemantics as W
 import qualified WildcardSemanticsDelayed as W
 
-import Control.Arrow
+import           Control.Arrow
 
-import Data.HashSet (HashSet)
+import           Data.Foldable (toList)
 import qualified Data.HashMap.Lazy as M
-
-import Data.Foldable (toList)
-import Data.Sequence (Seq)
+import           Data.HashSet (HashSet)
+import           Data.Result
+import           Data.Sequence (Seq)
 import qualified Data.Sequence as S
-import Text.Printf
 
-import Test.QuickCheck hiding (Result(..))
+import           Text.Printf
+
+import           Test.QuickCheck hiding (Result(..))
 
 alphaTerm :: C.Term -> W.Term
 alphaTerm t = case t of
@@ -36,13 +35,13 @@ alphaEnv = fmap alphaTerm
 alphaResult :: Seq (Result (C.Term,C.TermEnv)) -> Seq (Result (W.Term,W.TermEnv))
 alphaResult = (fmap.fmap) (alphaTerm *** alphaEnv)
 
-sound'' :: Int -> Signature -> Strat -> Property
-sound'' i sig s = property $ do
+sound'' :: Int -> Strat -> Property
+sound'' i s = property $ do
   (t1,t2) <- C.similar
-  return $ sound' i sig s (S.fromList [t1,t2])
+  return $ sound' i s (S.fromList [t1,t2])
 
-sound' :: Int -> Signature -> Strat -> Seq C.Term -> Property
-sound' i sig s ts = sound i sig M.empty s (fmap (id &&& const M.empty) ts)
+sound' :: Int -> Strat -> Seq C.Term -> Property
+sound' i s ts = sound i M.empty s (fmap (id &&& const M.empty) ts)
 
 {-         P (C.eval s)
 P (T x E) --------------> P (R (T x E))
@@ -51,10 +50,10 @@ P (T x E) --------------> P (R (T x E))
    v|        W.eval s       >= v|
  T' x E' --------------> P (R (T' x E'))
 -}
-sound :: Int -> Signature -> StratEnv -> Strat -> Seq (C.Term,C.TermEnv) -> Property
-sound i sig senv s ts =
-  let abs = W.eval i sig senv s $ alphaDom ts
-      con = alphaResult $ C.eval sig senv s <$> ts
+sound :: Int -> StratEnv -> Strat -> Seq (C.Term,C.TermEnv) -> Property
+sound i senv s ts =
+  let abs = W.eval i senv s $ alphaDom ts
+      con = alphaResult $ C.eval senv s <$> ts
   in counterexample (printf "%s < %s" (show (toList abs)) (show (toList con)))
        (con <= abs)
 

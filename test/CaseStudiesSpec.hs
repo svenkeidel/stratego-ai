@@ -1,19 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 module CaseStudiesSpec(main, spec) where
 
-import Prelude hiding (log)
-import ATerm
-import Syntax
-import Result
+import           Prelude hiding (log)
 
 import qualified ConcreteSemantics as C
+import           Interpreter
+import           Syntax
 
-import Paths_system_s
+import           Paths_system_s
 
+import           Data.ATerm
 import qualified Data.HashMap.Lazy as M
+import           Data.Result
 import qualified Data.Text.IO as T
 
-import Test.Hspec
+import           Test.Hspec
 
 main :: IO ()
 main = hspec spec
@@ -24,27 +25,27 @@ spec =
   describe "haskell arrows" $ beforeAll parseArrowCaseStudy $ do
 
     it "union should work" $ \module_ -> do
-      let l1 = C.convertToList [1,2,3,4]
-          l2 = C.convertToList [2,4]
+      let l1 = convertToList [1,2,3,4]
+          l2 = convertToList [2,4]
           t = tup l1 l2
-      C.eval (signature module_) (stratEnv module_) (Call "union_0_0" [] []) (t,M.empty)
+      C.eval (stratEnv module_) (Call "union_0_0" [] []) (t,M.empty)
         `shouldBe`
-           Success (C.convertToList [1,3,2,4], M.empty)
+           Success (convertToList [1,3,2,4], M.empty)
 
     it "concat should work" $ \module_ ->
-      let l = C.convertToList (fmap C.convertToList [[1,2,3],[4,5],[],[6]])
-      in C.eval (signature module_) (stratEnv module_) (Call "concat_0_0" [] []) (l,M.empty)
+      let l = convertToList (fmap convertToList [[1,2,3],[4,5],[],[6]])
+      in C.eval (stratEnv module_) (Call "concat_0_0" [] []) (l,M.empty)
         `shouldBe`
-           Success (C.convertToList [1,2,3,4,5,6], M.empty)
+           Success (convertToList [1,2,3,4,5,6], M.empty)
 
     it "free-pat-vars should work" $ \module_ ->
       let var x = C.Cons "Var" [x]
-          tuple x y = C.Cons "Tuple" [x,C.convertToList y]
+          tuple x y = C.Cons "Tuple" [x,convertToList y]
           t = tuple (tuple (var "a") [var "b"])
                     [tuple (var "c") [var "a"]]
-      in C.eval (signature module_) (stratEnv module_) (Call "free_pat_vars_0_0" [] []) (t,M.empty)
+      in C.eval (stratEnv module_) (Call "free_pat_vars_0_0" [] []) (t,M.empty)
           `shouldBe`
-             Success (C.convertToList [var "b", var "c", var "a"], M.empty)
+             Success (convertToList [var "b", var "c", var "a"], M.empty)
 
   where
     parseArrowCaseStudy = do
@@ -54,3 +55,4 @@ spec =
         Right module_ -> return module_
 
     tup x y = C.Cons "" [x,y]
+

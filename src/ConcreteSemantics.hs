@@ -7,26 +7,30 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ConcreteSemantics where
 
-import           Prelude hiding (id,(.),fail,sequence,all,uncurry,zipWith)
+import           Prelude hiding (id,(.),fail,sequence,all,zipWith)
 
-import           Syntax hiding (Fail,TermPattern(..))
+import           Interpreter
 import           Syntax (TermPattern)
 import qualified Syntax as S
-import           Interpreter
-import           Result
+import           Syntax hiding (Fail,TermPattern(..))
+import           Utils
 
-import           Control.Monad hiding (fail,sequence)
-import           Control.Category
 import           Control.Arrow
-import           Control.Arrow.Operations
+import           Control.Category
+import           Control.Monad hiding (fail,sequence)
 
+import           Data.Constructor
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.String (IsString(..))
 import           Data.Hashable
-import           Data.Semigroup(Semigroup(..))
+import           Data.Maybe
+import           Data.Result
+import           Data.Semigroup (Semigroup(..))
+import           Data.String (IsString(..))
+import           Data.Term (HasTerm(..),TermF)
+import qualified Data.Term as T
 import           Data.Text (Text)
-import qualified Data.Text as T
+import qualified Data.Text as Text
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -37,12 +41,12 @@ data Term
   deriving (Eq)
 
 type TermEnv = HashMap TermVar Term
-newtype Interp a b = Interp { runInterp :: (Signature, StratEnv) -> (a,TermEnv) -> Result (b,TermEnv) }
+newtype Interp r s a b = Interp { runInterp :: r -> (a,s) -> Result (b,s) }
 
-eval :: Signature -> StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval sig senv s = runInterp (eval' s) (sig,senv)
+eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
+eval senv s = runInterp (eval' s) senv
 
-eval' :: Strat -> Interp Term Term
+eval' :: (ArrowChoice p, ArrowTry p, ArrowAppend p, ArrowApply p, HasTermEnv t p, HasStratEnv p, Monoid t) => Strat -> p t t
 eval' s0 = case s0 of
   Id -> id
   S.Fail -> fail
@@ -56,20 +60,28 @@ eval' s0 = case s0 of
   Build f -> proc _ -> build -< f
   Let bnds body -> let_ bnds body eval'
   Call f ss ps -> call f ss ps bindTermArgs eval'
-  Prim f _ ps -> proc _ -> case f of
+  Prim f _ ps -> prim f ps
+
+prim :: (ArrowTry p, HasTermEnv t p) => StratVar -> [TermVar] -> p t t
+prim f ps = proc _ -> case f of
     "strcat" -> do
       tenv <- getTermEnv -< ()
       case mapM (`M.lookup` tenv) ps of
-        Just [StringLiteral t1, StringLiteral t2] -> success -< StringLiteral (t1 `T.append` t2)
+        Just [t1, t2] -> do
+          m <- matchTerm *** matchTerm -< (t1,t2)
+          case m of
+            (T.StringLiteral s1,T.StringLiteral s2) ->
+              T.stringLiteral -< s1 `Text.append` s2
+            _ -> fail -< ()
         _ -> fail -< ()
     "SSL_newname" -> do
       tenv <- getTermEnv -< ()
       case mapM (`M.lookup` tenv) ps of
-        Just [StringLiteral _] -> undefined -< ()
+        Just [_] -> undefined -< ()
         _ -> fail -< ()
     _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
-match :: Interp (TermPattern, Term) Term
+match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTermEnv t p, Monoid t) => p (TermPattern, t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
     t' <- match -< (S.Var v,t)
@@ -82,52 +94,49 @@ match = proc (p,t) -> case p of
       Nothing -> do
         putTermEnv -< M.insert x t env
         success -< t
-  S.Cons c ts -> case t of
-    Cons c' ts'
-      | c == c' && length ts == length ts' -> do
-          ts'' <- zipWith match -< (ts,ts')
-          success -< Cons c ts''
-      | otherwise -> fail -< ()
-    _ -> fail -< ()
-  S.Explode c ts -> case t of
-    Cons (Constructor c') ts' -> do
-      match -< (c,StringLiteral c')
-      match -< (ts, convertToList ts')
-      success -< t
-    StringLiteral _ -> do
-      match -< (ts, convertToList [])
-      success -< t
-    NumberLiteral _ -> do
-      match -< (ts, convertToList [])
-      success -< t
-  S.StringLiteral s -> case t of
-    StringLiteral s'
-      | s == s' -> success -< t
-      | otherwise -> fail -< ()
-    _ -> fail -< ()
-  S.NumberLiteral n -> case t of
-    NumberLiteral n'
-      | n == n' -> success -< t
-      | otherwise -> fail -< ()
-    _ -> fail -< ()
+  S.Cons c ts -> do
+    m <- matchTerm -< t
+    case m of
+      T.Cons c' ts'
+        | c == c' && eqLength ts ts' -> do
+            ts'' <- zipWithA match -< (ts,ts')
+            T.cons -< (c,ts'')
+        | otherwise -> fail -< ()
+      _ -> fail -< ()
+  S.Explode c ts -> do
+    m <- matchTerm -< t
+    case m of
+      T.Cons (Constructor c') ts' -> do
+        s <- T.stringLiteral -< c'
+        match -< (c,s)
+        l <- convertToList -< ts'
+        match -< (ts, l)
+        success -< t
+      T.StringLiteral _ -> do
+        l <- convertToList -< []
+        match -< (ts, l)
+        success -< t
+      T.NumberLiteral _ -> do
+        l <- convertToList -< []
+        match -< (ts,l) 
+        success -< t
+      _ -> fail -< ()
+  S.StringLiteral s -> do
+    m <- matchTerm -< t
+    case m of
+      T.StringLiteral s'
+        | s == s' -> success -< t
+        | otherwise -> fail -< ()
+      _ -> fail -< ()
+  S.NumberLiteral n -> do
+    m <- matchTerm -< t
+    case m of
+      T.NumberLiteral n'
+        | n == n' -> success -< t
+        | otherwise -> fail -< ()
+      _ -> fail -< ()
 
-equal :: (ArrowChoice p, ArrowTry p) => p (Term,Term) Term
-equal = proc (t1,t2) -> case (t1,t2) of
-  (Cons c ts,Cons c' ts')
-    | c == c' && length ts == length ts' -> do
-      ts'' <- zipWith equal -< (ts,ts')
-      returnA -< Cons c ts''
-    | otherwise -> fail -< ()
-  (StringLiteral s, StringLiteral s')
-    | s == s' -> success -< t1
-    | otherwise -> fail -< ()
-  (NumberLiteral n, NumberLiteral n')
-    | n == n' -> success -< t1
-    | otherwise -> fail -< ()
-  (_,_) -> fail -< ()
-
-
-build :: Interp TermPattern Term
+build :: (ArrowChoice p, ArrowTry p, HasTermEnv t p) => p TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
@@ -137,42 +146,20 @@ build = proc p -> case p of
       Nothing -> fail -< ()
   S.Cons c ts -> do
     ts' <- mapA build -< ts
-    returnA -< Cons c ts'
+    T.cons -< (c,ts')
   S.Explode c ts -> do
-    c' <- build -< c
-    case c' of
-      StringLiteral s -> do
+    m <- matchTerm <<< build -< c
+    case m of
+      T.StringLiteral s -> do
         ts' <- build -< ts
-        ts'' <- convertFromList -< ts'
-        returnA -< Cons (Constructor s) ts''
+        ts'' <- arr fromJust <<< convertFromList -< ts'
+        T.cons -< (Constructor s,ts'')
       _ -> fail -< ()
-  S.NumberLiteral n -> returnA -< NumberLiteral n
-  S.StringLiteral s -> returnA -< StringLiteral s
+  S.NumberLiteral n -> T.numberLiteral -< n
+  S.StringLiteral s -> T.stringLiteral -< s
 
-convertToList :: [Term] -> Term
-convertToList ts = case ts of
-  (x:xs) -> Cons "Cons" [x,convertToList xs]
-  [] -> Cons "Nil" []
-
-convertFromList :: (ArrowChoice p, ArrowTry p) => p Term [Term]
-convertFromList = proc t -> case t of
-  Cons "Cons" [x,tl] -> do
-    xs <- convertFromList -< tl
-    returnA -< x:xs
-  Cons "Nil" [] ->
-    returnA -< []
-  _ -> fail -< ()
-
-lift :: ArrowChoice p => p (Constructor,[Term]) (Constructor,[Term]) -> p Term Term
-lift p = proc t -> case t of
-  Cons c ts -> do
-    (c',ts') <- p -< (c,ts)
-    returnA -< Cons c' ts'
-  StringLiteral {} -> returnA -< t
-  NumberLiteral {} -> returnA -< t
-
-bindTermArgs :: (ArrowTry p, ArrowChoice p) =>
-    p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
+bindTermArgs :: (ArrowTry p, ArrowChoice p)
+             => p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
 bindTermArgs = proc (tenv,l) -> case l of
  (actual,formal) : rest -> case M.lookup actual tenv of
     Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
@@ -181,7 +168,35 @@ bindTermArgs = proc (tenv,l) -> case l of
 
 -- Instances -----------------------------------------------------------------------------------------
 
-instance Category Interp where
+matchTermDefault :: Term -> TermF Term
+matchTermDefault t = case t of
+  Cons c ts -> T.Cons c ts
+  StringLiteral s -> T.StringLiteral s
+  NumberLiteral n -> T.NumberLiteral n
+{-# INLINE matchTermDefault #-}
+
+
+termDefault :: TermF Term -> Term
+termDefault t = case t of
+  T.Cons c ts -> Cons c ts
+  T.NumberLiteral n -> NumberLiteral n
+  T.StringLiteral s -> StringLiteral s
+  _ -> error "cannot construct term"
+{-# INLINE termDefault #-}
+
+instance HasTerm Term (Interp r s) where
+  matchTerm = arr matchTermDefault
+  {-# INLINE matchTerm #-}
+  term = arr termDefault
+  {-# INLINE term #-}
+
+instance HasTerm Term (->) where
+  matchTerm = arr matchTermDefault
+  {-# INLINE matchTerm #-}
+  term = arr termDefault
+  {-# INLINE term #-}
+ 
+instance Category (Interp r s) where
   id = Interp $ \_ a -> Success a
   {-# INLINE id #-}
   Interp f . Interp g = Interp $ \r a ->
@@ -190,7 +205,7 @@ instance Category Interp where
       Fail -> Fail
   {-# INLINE (.) #-}
 
-instance ArrowTry Interp where
+instance ArrowTry (Interp r s) where
   fail = Interp $ \_ _ -> Fail
   {-# INLINE fail #-}
   try (Interp f) (Interp g) (Interp h) = Interp $ \e a ->
@@ -199,7 +214,7 @@ instance ArrowTry Interp where
       Fail -> h e a
   {-# INLINE try #-}
 
-instance Arrow Interp where
+instance Arrow (Interp r s) where
   arr f = Interp (\_ (a,e) -> Success (f a, e))
   {-# INLINE arr #-}
   first (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f r (a,e))
@@ -217,7 +232,7 @@ instance Arrow Interp where
     Success ((b,c),e'')
   {-# INLINE (&&&) #-}
 
-instance ArrowChoice Interp where
+instance ArrowChoice (Interp r s) where
   left (Interp f) = Interp $ \r (a,e) -> case a of
     Left b -> first Left <$> f r (b,e)
     Right c -> Success (Right c,e)
@@ -231,26 +246,26 @@ instance ArrowChoice Interp where
     Right b -> first Right <$> g r (b,e)
   {-# INLINE (+++) #-}
 
-instance ArrowAppend Interp where
+instance ArrowAppend (Interp r s) where
   -- zeroArrow = fail
   Interp f <+> Interp g = Interp $ \x -> f x `mappend` g x
   {-# INLINE (<+>) #-}
 
-instance ArrowState TermEnv Interp where
-  fetch = Interp $ \_ (_,e) -> Success (e,e)
-  {-# INLINE fetch #-}
-  store = Interp $ \_ (e,_) -> Success ((),e)
-  {-# INLINE store #-}
-
-instance ArrowReader (Signature,StratEnv) Interp where
-  readState = Interp $ \r (_,e) -> Success (r,e)
-  {-# INLINE readState #-}
-  newReader (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
-  {-# INLINE newReader #-}
-
-instance ArrowApply Interp where
+instance ArrowApply (Interp r s) where
   app = Interp $ \r ((f,b),e) -> runInterp f r (b,e)
   {-# INLINE app #-}
+
+instance HasTermEnv Term (Interp r TermEnv) where
+  getTermEnv = Interp $ \_ (_,e) -> Success (e,e)
+  {-# INLINE getTermEnv #-}
+  putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
+  {-# INLINE putTermEnv #-}
+
+instance HasStratEnv (Interp StratEnv s) where
+  readStratEnv = Interp $ \r (_,e) -> Success (r,e)
+  {-# INLINE readStratEnv #-}
+  localStratEnv (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
+  {-# INLINE localStratEnv #-}
 
 instance Semigroup Term where
   (<>) = undefined

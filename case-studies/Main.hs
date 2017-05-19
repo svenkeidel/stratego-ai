@@ -1,42 +1,42 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Prelude hiding (log)
-import ATerm
-import Syntax hiding (Fail)
-import Result
+import           Prelude hiding (log)
 
-import PrettyPrint
-import RegularTreeGrammar
-import qualified HaskellPretty as H
-import qualified PCFPretty as P
-import qualified JSPretty as J
+import           Grammar.RegularTreeGrammar
+import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
 import qualified WildcardSemanticsDelayed as W
 import qualified WildcardSemanticsSoundness as W
 
-import Paths_system_s
+import qualified Pretty.Haskell as H
+import qualified Pretty.JavaScript as J
+import qualified Pretty.PCF as P
+import           Pretty.Results
 
-import qualified Criterion.Types as CT
+import           Paths_system_s
+
+import           Control.Monad
 import qualified Criterion.Measurement as CM
-import Control.Monad
+import qualified Criterion.Types as CT
 
-import Data.Monoid
-import Data.Maybe
-import Data.String
-import Data.HashSet (HashSet)
-import Data.Hashable
-import Data.Foldable
-import qualified Data.HashSet as H
+import           Data.ATerm
+import           Data.Foldable
 import qualified Data.HashMap.Lazy as M
-import qualified Data.Text.IO as T
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as H
+import           Data.Hashable
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Result
 import qualified Data.Sequence as S
+import           Data.String
+import qualified Data.Text.IO as T
 
-import System.IO
+import           System.IO
 
-import Text.Printf
-
-import Text.PrettyPrint hiding (sep,(<>))
+import           Text.PrettyPrint hiding (sep,(<>))
+import           Text.Printf
 
 main :: IO ()
 main =
@@ -183,7 +183,7 @@ caseStudy name function maxDepth analysis = do
       forM_ ([1..maxDepth]::[Int]) $ \depth -> do
 
         let res = H.fromList $ toList $ filterResults
-                $ W.eval depth (signature module_) (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
+                $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
 
         (m,_) <- CM.measure (CT.nfIO (return res)) 1
         printf "function: %s, recursion depth: %d, results: %d, time: %s\n" function depth (H.size res) (CM.secs (CT.measCpuTime m))
