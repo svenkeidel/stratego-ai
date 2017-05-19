@@ -2,3 +2,9 @@
 *.log
 *.pdf
 *.csv
+*.core
+*.ast
+*.pp
+*.dep
+*.rtree
+auto/
