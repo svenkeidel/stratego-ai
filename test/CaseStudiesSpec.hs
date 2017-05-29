@@ -4,7 +4,7 @@ module CaseStudiesSpec(main, spec) where
 import           Prelude hiding (log)
 
 import qualified ConcreteSemantics as C
-import           Interpreter
+import           SharedSemantics
 import           Syntax
 
 import           Paths_system_s

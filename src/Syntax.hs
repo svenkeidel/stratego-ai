@@ -5,10 +5,11 @@ module Syntax where
 
 import           Prelude hiding (maybe)
 
-import           Signature (Signature,Sort,SortId,Fun)
+import           Signature (Signature,Sort,Fun)
 import qualified Signature as I
 
 import           Control.Monad.Except
+import           Control.Arrow
 
 import           Data.ATerm
 import           Data.Constructor
@@ -59,6 +60,10 @@ data Strat
   | Prim StratVar [Strat] [TermVar]
   deriving (Eq)
 
+class Arrow p => HasStratEnv p where
+  readStratEnv :: p a StratEnv
+  localStratEnv :: p a b -> p (a,StratEnv) b
+
 leftChoice :: Strat -> Strat -> Strat
 leftChoice f = GuardedChoice f Id
 
@@ -107,7 +112,7 @@ parseDeclaration sig t
       ATerm "OpDeclInj" [f@(ATerm "FunType" [_, ATerm "ConstType" [ATerm "SortTuple" _]])] ->
         parseDeclaration sig $ ATerm "OpDecl" [String "", f]
       ATerm "OpDeclInj" [ATerm "FunType" [List[ty1], ty2]] ->
-        I.insertSubtype <$> parseSortId ty1 <*> parseSortId ty2 <*> pure sig
+        I.insertSubtype <$> parseSort ty1 <*> parseSort ty2 <*> pure sig
       ATerm "OpDeclInj" [ATerm "ConstType" _] ->
         return sig
       _ -> throwError $ "unexpected input while parsing declaration from aterm: " ++ show t  
@@ -115,6 +120,7 @@ parseDeclaration sig t
     containsSortVar :: ATerm -> Bool
     containsSortVar (ATerm "SortVar" _) = True
     containsSortVar (ATerm _ ts) = any containsSortVar ts
+    containsSortVar (List ts) = any containsSortVar ts
     containsSortVar _ = False
 
 parseFun :: MonadError String m => ATerm -> m Fun
@@ -123,18 +129,16 @@ parseFun t = case t of
   ATerm "FunType" [List args,res] -> I.Fun <$> traverse parseSort args <*> parseSort res
   _ -> throwError $ "unexpected input while parsing function type from aterm: " ++ show t
 
-parseSortId :: MonadError String m => ATerm -> m SortId
-parseSortId t = case t of
-  ATerm "ConstType" [res] -> parseSortId res
-  ATerm "SortNoArgs" [String sortName] -> return $ I.SortId sortName
-  _ -> throwError $ "unexpected input while parsing sort id from aterm: " ++ show t
-
 parseSort :: MonadError String m => ATerm -> m Sort
 parseSort t = case t of
   ATerm "ConstType" [res] -> parseSort res
   ATerm "SortNoArgs" [String sortName] -> return $ I.Sort (I.SortId sortName)
   ATerm "Sort" [String sortName, List []] ->
     return $ I.Sort (I.SortId sortName)
+  ATerm "Sort" [String "List", List [s]] ->
+    I.List <$> parseSort s
+  ATerm "Sort" [String "Option", List [s]] ->
+    I.Option <$> parseSort s
   ATerm "SortTuple" [List args] ->
     I.Tuple <$> traverse parseSort args
   _ -> throwError $ "unexpected input while parsing sort from aterm: " ++ show t

@@ -1,8 +1,6 @@
 module pcf
 
 signature
-  sorts Exp Type
-
   constructors
     Var  : String -> Exp
     App  : Exp * Exp -> Exp
@@ -35,7 +33,7 @@ strategies
   check: (ctx, Pred(e)) -> Num()
     where <check> (ctx,e) => Num()
   check: (ctx, Ifz(e1,e2,e3)) -> t
-    where <check> (ctx,e1) => Num;
+    where <check> (ctx,e1) => Num();
           <check> (ctx,e2) => t;
           <check> (ctx,e2) => t
 

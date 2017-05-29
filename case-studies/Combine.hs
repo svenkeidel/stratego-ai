@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Combine where
 
-import ATerm
+import Data.ATerm
 import qualified Data.Text.IO as T
 import System.Environment
 

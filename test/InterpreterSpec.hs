@@ -5,14 +5,14 @@ module InterpreterSpec(main, spec) where
 import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map,(<=))
 
 import qualified ConcreteSemantics as C
-import           Interpreter
+import           SharedSemantics
 import           Syntax hiding (Fail)
-import           Utils
 import qualified WildcardSemantics as W
 import qualified WildcardSemanticsDelayed as W
 import           WildcardSemanticsSoundness
 
 import           Control.Arrow
+import           Control.Arrow.Try
 
 import qualified Data.HashMap.Lazy as M
 import           Data.Result

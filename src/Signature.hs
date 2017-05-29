@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
-module Signature(Signature, Sort(..), Fun(..), SortId(..), empty, insertType, lookupType, insertSubtype, subtype, lubs) where
+{-# LANGUAGE OverloadedStrings #-}
+module Signature(Signature, HasSignature(..), Sort(..), Fun(..), SortId(..),
+                 empty, insertType, lookupType, insertSubtype, subtype, lubs, inhabitants) where
 
 import           Prelude hiding (lookup)
 
@@ -8,28 +10,45 @@ import           SubtypeRelation (SubtypeRelation)
 import qualified SubtypeRelation as R
 
 import           Data.Constructor
-import           Data.HashSet (HashSet)
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Maybe
 
-type Context = HashMap Constructor Fun
+import           Control.Arrow
+
+type Context = (HashMap Constructor Fun, HashMap Sort (Constructor,Fun))
 data Signature = Signature Context SubtypeRelation deriving (Show,Eq)
 data Fun = Fun [Sort] Sort deriving (Show,Eq)
 
 empty :: Signature
-empty = Signature M.empty R.empty
+empty = Signature (M.empty, M.empty) R.empty
 
 insertType :: Constructor -> Fun -> Signature -> Signature
-insertType con ty (Signature ctx sub) = Signature (M.insert con ty ctx) sub
+insertType con ty@(Fun _ sort) (Signature (cons,sorts) sub) =
+  Signature (M.insert con ty cons, M.insert sort (con,ty) sorts) sub
 
-insertSubtype :: SortId -> SortId -> Signature -> Signature
+insertSubtype :: Sort -> Sort -> Signature -> Signature
 insertSubtype ty1 ty2 (Signature ctx sub) = Signature ctx (R.insert ty1 ty2 sub)
 
 lookupType :: Constructor -> Signature -> Maybe Fun
-lookupType c (Signature sig _) = M.lookup c sig
-
-lubs :: Signature -> Sort -> Sort -> HashSet Sort
-lubs (Signature _ rel) = R.lubs rel
+lookupType c (Signature (cons,_) _) = M.lookup c cons
 
 subtype :: Signature -> Sort -> Sort -> Bool
 subtype (Signature _ rel) = R.subtype rel
+
+lubs :: Signature -> [Sort] -> [Sort]
+lubs (Signature _ rel) = R.lubs rel
+
+inhabitants :: Signature -> Sort -> [(Constructor,Fun)]
+inhabitants (Signature (_,sorts) rel) s0 = do
+  s <- R.lower rel s0
+  case s of
+    Bottom -> []
+    List a -> [("Cons", Fun [a, List a] (List a)), ("Nil", Fun [] (List a))]
+    Option a -> [("Some", Fun [a] (Option a)), ("None", Fun [] (Option a))]
+    Tuple as -> [("", Fun as (Tuple as))]
+    Sort x -> fromMaybe (error $ "Sort not found: " ++ show x)
+                        (return <$> M.lookup s sorts)
+
+class Arrow p => HasSignature p where
+  getSignature :: p () Signature

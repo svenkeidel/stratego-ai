@@ -9,13 +9,16 @@ module ConcreteSemantics where
 
 import           Prelude hiding (id,(.),fail,sequence,all,zipWith)
 
-import           Interpreter
+import           InterpreterArrow
+import           SharedSemantics
 import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Syntax hiding (Fail,TermPattern(..))
 import           Utils
 
 import           Control.Arrow
+import           Control.Arrow.Try
+import           Control.Arrow.Append
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 
@@ -28,6 +31,7 @@ import           Data.Result
 import           Data.Semigroup (Semigroup(..))
 import           Data.String (IsString(..))
 import           Data.Term (HasTerm(..),TermF)
+import           Data.TermEnv
 import qualified Data.Term as T
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -41,12 +45,12 @@ data Term
   deriving (Eq)
 
 type TermEnv = HashMap TermVar Term
-newtype Interp r s a b = Interp { runInterp :: r -> (a,s) -> Result (b,s) }
 
 eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
 eval senv s = runInterp (eval' s) senv
+{-# INLINE eval #-}
 
-eval' :: (ArrowChoice p, ArrowTry p, ArrowAppend p, ArrowApply p, HasTermEnv t p, HasStratEnv p, Monoid t) => Strat -> p t t
+eval' :: (ArrowChoice p, ArrowTry p, ArrowAppend p, ArrowApply p, HasTerm t p, HasTermEnv t p, HasStratEnv p, Monoid t) => Strat -> p t t
 eval' s0 = case s0 of
   Id -> id
   S.Fail -> fail
@@ -62,7 +66,7 @@ eval' s0 = case s0 of
   Call f ss ps -> call f ss ps bindTermArgs eval'
   Prim f _ ps -> prim f ps
 
-prim :: (ArrowTry p, HasTermEnv t p) => StratVar -> [TermVar] -> p t t
+prim :: (ArrowTry p, HasTerm t p, HasTermEnv t p) => StratVar -> [TermVar] -> p t t
 prim f ps = proc _ -> case f of
     "strcat" -> do
       tenv <- getTermEnv -< ()
@@ -81,7 +85,7 @@ prim f ps = proc _ -> case f of
         _ -> fail -< ()
     _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
-match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTermEnv t p, Monoid t) => p (TermPattern, t) t
+match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTerm t p, HasTermEnv t p, Monoid t) => p (TermPattern, t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
     t' <- match -< (S.Var v,t)
@@ -95,10 +99,10 @@ match = proc (p,t) -> case p of
         putTermEnv -< M.insert x t env
         success -< t
   S.Cons c ts -> do
-    m <- matchTerm -< t
+    m <- matchTermAgainstConstructor -< (c, t)
     case m of
-      T.Cons c' ts'
-        | c == c' && eqLength ts ts' -> do
+      T.Cons _ ts'
+        | eqLength ts ts' -> do
             ts'' <- zipWithA match -< (ts,ts')
             T.cons -< (c,ts'')
         | otherwise -> fail -< ()
@@ -136,7 +140,7 @@ match = proc (p,t) -> case p of
         | otherwise -> fail -< ()
       _ -> fail -< ()
 
-build :: (ArrowChoice p, ArrowTry p, HasTermEnv t p) => p TermPattern t
+build :: (ArrowChoice p, ArrowTry p, HasTerm t p, HasTermEnv t p) => p TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
@@ -184,7 +188,7 @@ termDefault t = case t of
   _ -> error "cannot construct term"
 {-# INLINE termDefault #-}
 
-instance HasTerm Term (Interp r s) where
+instance Monad m => HasTerm Term (Interp s r m) where
   matchTerm = arr matchTermDefault
   {-# INLINE matchTerm #-}
   term = arr termDefault
@@ -196,77 +200,6 @@ instance HasTerm Term (->) where
   term = arr termDefault
   {-# INLINE term #-}
  
-instance Category (Interp r s) where
-  id = Interp $ \_ a -> Success a
-  {-# INLINE id #-}
-  Interp f . Interp g = Interp $ \r a ->
-    case g r a of
-      Success b -> f r b
-      Fail -> Fail
-  {-# INLINE (.) #-}
-
-instance ArrowTry (Interp r s) where
-  fail = Interp $ \_ _ -> Fail
-  {-# INLINE fail #-}
-  try (Interp f) (Interp g) (Interp h) = Interp $ \e a ->
-    case f e a of
-      Success b -> g e b 
-      Fail -> h e a
-  {-# INLINE try #-}
-
-instance Arrow (Interp r s) where
-  arr f = Interp (\_ (a,e) -> Success (f a, e))
-  {-# INLINE arr #-}
-  first (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f r (a,e))
-  {-# INLINE first #-}
-  second (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((a,c),e')) (f r (b,e))
-  {-# INLINE second #-}
-  Interp f *** Interp g = Interp $ \r ((a,b),e) -> do
-    (c,e')  <- f r (a,e)
-    (d,e'') <- g r (b,e')
-    Success ((c,d),e'')
-  {-# INLINE (***) #-}
-  Interp f &&& Interp g = Interp $ \r (a,e) -> do
-    (b,e')  <- f r (a,e)
-    (c,e'') <- g r (a,e')
-    Success ((b,c),e'')
-  {-# INLINE (&&&) #-}
-
-instance ArrowChoice (Interp r s) where
-  left (Interp f) = Interp $ \r (a,e) -> case a of
-    Left b -> first Left <$> f r (b,e)
-    Right c -> Success (Right c,e)
-  {-# INLINE left #-}
-  right (Interp f) = Interp $ \r (a,e) -> case a of
-    Left c -> Success (Left c,e)
-    Right b -> first Right <$> f r (b,e)
-  {-# INLINE right #-}
-  Interp f +++ Interp g = Interp $ \r (a,e) -> case a of
-    Left b -> first Left  <$> f r (b,e)
-    Right b -> first Right <$> g r (b,e)
-  {-# INLINE (+++) #-}
-
-instance ArrowAppend (Interp r s) where
-  -- zeroArrow = fail
-  Interp f <+> Interp g = Interp $ \x -> f x `mappend` g x
-  {-# INLINE (<+>) #-}
-
-instance ArrowApply (Interp r s) where
-  app = Interp $ \r ((f,b),e) -> runInterp f r (b,e)
-  {-# INLINE app #-}
-
-instance HasTermEnv Term (Interp r TermEnv) where
-  getTermEnv = Interp $ \_ (_,e) -> Success (e,e)
-  {-# INLINE getTermEnv #-}
-  putTermEnv = Interp $ \_ (e,_) -> Success ((),e)
-  {-# INLINE putTermEnv #-}
-
-instance HasStratEnv (Interp StratEnv s) where
-  readStratEnv = Interp $ \r (_,e) -> Success (r,e)
-  {-# INLINE readStratEnv #-}
-  localStratEnv (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
-  {-# INLINE localStratEnv #-}
-
 instance Semigroup Term where
   (<>) = undefined
 

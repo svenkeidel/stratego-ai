@@ -4,9 +4,6 @@ module SubtypingSpec(main, spec) where
 import           SubtypeRelation as S
 import           Sort
 
-import           Data.HashSet (HashSet)
-import qualified Data.HashSet as H
-
 import           Test.Hspec
 
 main :: IO ()
@@ -63,32 +60,38 @@ spec = do
              $ S.insert "C'" "B'"
                rel
 
-    it "are not necessarily unique" $
-      lubs rel' "C" "C'" `shouldBe` fromList ["B", "B'"]
+    it "are not necessarily unique" $ do
+      S.lubs rel' ["C","C'"] `shouldMatchList` ["B'", "B"]
+      S.lubs rel' [Tuple ["C", "C'"], Tuple ["C'","C"]] `shouldMatchList`
+        [ Tuple ["B'", "B'"],
+          Tuple ["B", "B'"],
+          Tuple ["B'", "B"],
+          Tuple ["B", "B"]
+        ]
 
   let leastUpperBounds sort f = 
         describe ("least upper bounds of " ++ sort) $ do
           it "is reflexive" $ do
-            S.lubs rel (f "C") (f "C") `shouldBe` fromList [f "C"]
-            S.lubs rel (f "B") (f "B") `shouldBe` fromList [f "B"]
-            S.lubs rel (f "B'") (f "B'") `shouldBe` fromList [f "B'"]
-            S.lubs rel (f "A") (f "A") `shouldBe` fromList [f "A"]
+            S.lubs rel [f "C",f "C"] `shouldBe` [f "C"]
+            S.lubs rel [f "B", f "B"] `shouldBe` [f "B"]
+            S.lubs rel [f "B'", f "B'"] `shouldBe` [f "B'"]
+            S.lubs rel [f "A", f "A"] `shouldBe` [f "A"]
           
           it "respects the subtyping order" $ do
-            S.lubs rel (f "C") (f "B") `shouldBe` fromList [f "B"]
-            S.lubs rel (f "C") (f "B'") `shouldBe` fromList [f "B'"]
-            S.lubs rel (f "C") (f "A") `shouldBe` fromList [f "A"]
+            S.lubs rel [f "C", f "B"] `shouldBe` [f "B"]
+            S.lubs rel [f "C", f "B'"] `shouldBe` [f "B'"]
+            S.lubs rel [f "C", f "A"] `shouldBe` [f "A"]
           
           it "is commutative" $ do
-            S.lubs rel (f "C") (f "B") `shouldBe` fromList [f "B"]
-            S.lubs rel (f "B") (f "C") `shouldBe` fromList [f "B"]
-            S.lubs rel (f "C") (f "B'") `shouldBe` fromList [f "B'"]
-            S.lubs rel (f "B'") (f "C") `shouldBe` fromList [f "B'"]
-            S.lubs rel (f "C") (f "A") `shouldBe` fromList [f "A"]
-            S.lubs rel (f "A") (f "C") `shouldBe` fromList [f "A"]
+            S.lubs rel [f "C", f "B"] `shouldBe` [f "B"]
+            S.lubs rel [f "B", f "C"] `shouldBe` [f "B"]
+            S.lubs rel [f "C", f "B'"] `shouldBe` [f "B'"]
+            S.lubs rel [f "B'", f "C"] `shouldBe` [f "B'"]
+            S.lubs rel [f "C", f "A"] `shouldBe` [f "A"]
+            S.lubs rel [f "A", f "C"] `shouldBe` [f "A"]
       
           it "finds non-trivial upper bounds" $
-            S.lubs rel (f "B") (f "B'") `shouldBe` fromList [f "A"]
+            S.lubs rel [f "B", f "B'"] `shouldBe` [f "A"]
 
   leastUpperBounds "regular types" id
   leastUpperBounds "list types" List
@@ -96,17 +99,13 @@ spec = do
 
   describe "least upper bounds of tuples" $ do
     it "is reflexive" $
-      S.lubs rel (Tuple ["C", "B"]) (Tuple ["C", "B"]) `shouldBe` fromList [Tuple ["C", "B"]]
+      S.lubs rel [Tuple ["C", "B"], Tuple ["C", "B"]] `shouldBe` [Tuple ["C", "B"]]
     
     it "respects the subtyping order" $
-      S.lubs rel (Tuple ["C", "C"]) (Tuple ["B", "B'"]) `shouldBe` fromList [Tuple ["B", "B'"]]
+      S.lubs rel [Tuple ["C", "C"], Tuple ["B", "B'"]] `shouldBe` [Tuple ["B", "B'"]]
     
     it "is commutative" $
-      S.lubs rel (Tuple ["B", "B'"]) (Tuple ["C", "C"]) `shouldBe` fromList [Tuple ["B", "B'"]]
+      S.lubs rel [Tuple ["B", "B'"], Tuple ["C", "C"]] `shouldBe` [Tuple ["B", "B'"]]
 
     it "finds non-trivial upper bounds" $
-      S.lubs rel (Tuple ["B"]) (Tuple ["B'"]) `shouldBe` fromList [Tuple ["A"]]
-
-  where
-    fromList :: [Sort] -> HashSet Sort
-    fromList = H.fromList
+      S.lubs rel [Tuple ["B"], Tuple ["B'"]] `shouldBe` [Tuple ["A"]]

@@ -1,12 +1,15 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE Arrows #-}
 module Data.Term where
 
+import Prelude hiding (fail)
 import Data.Constructor
 import Data.Text(Text)
 
 import Control.Arrow
+import Control.Arrow.Try
 
 type (:+:) = Either
 infixr :+:
@@ -15,6 +18,14 @@ type TermF t = (Constructor,[t]) :+: Text :+: Int :+: ()
 
 class (ArrowChoice p) => HasTerm t p where
   matchTerm :: p t (TermF t)
+
+  matchTermAgainstConstructor :: ArrowTry p => p (Constructor, t) (TermF t)
+  matchTermAgainstConstructor = proc (c,t) -> do
+    t' <- matchTerm -< t
+    case t' of
+      Cons c' _ | c == c' -> returnA -< t'
+      _ -> fail -< ()
+
   term :: p (TermF t) t
 
 cons :: HasTerm t p => p (Constructor,[t]) t

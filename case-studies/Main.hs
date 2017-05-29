@@ -47,19 +47,19 @@ main =
   classificationSetup $ \classification -> do
     CM.initializeTime
 
-    deactivate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
+    activate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
       prettyPrint H.ppHaskell <>
       sizeAnalysis <>
       heightAnalysis <>
       wittnessAnalysis
 
-    deactivate $ caseStudy "cca" "norm_0_0" 5 $
+    activate $ caseStudy "cca" "norm_0_0" 5 $
       prettyPrint H.ppHaskell <>
       sizeAnalysis <>
       heightAnalysis <>
       wittnessAnalysis
 
-    deactivate $ caseStudy "pcf" "eval_0_0" 4 $
+    activate $ caseStudy "pcf" "eval_0_0" 4 $
       prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
@@ -67,7 +67,7 @@ main =
       ruleInvocationsAnalysis pcfEvalGrammar <>
       classification pcfEvalGrammar 4
 
-    deactivate $ caseStudy "pcf" "check_eval_0_0" 5 $
+    activate $ caseStudy "pcf" "check_eval_0_0" 5 $
       prettyPrint P.ppPCF <>
       sizeAnalysis <>
       heightAnalysis <>
@@ -75,7 +75,7 @@ main =
       ruleInvocationsAnalysis pcfCheckEvalGrammar <>
       classification pcfCheckEvalGrammar 4
 
-    activate $ caseStudy "go2js" "generate_js_ast_0_0" 5 $
+    activate $ caseStudy "go2js" "generate_js_ast_0_0" 4 $
       prettyPrint J.tryPPJS <>
       sizeAnalysis <>
       heightAnalysis <>

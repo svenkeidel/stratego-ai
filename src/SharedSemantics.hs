@@ -3,8 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FunctionalDependencies #-}
-module Interpreter where
+module SharedSemantics where
 
 import           Prelude hiding (fail,(.),id,sum,flip)
 
@@ -12,21 +11,16 @@ import           Syntax hiding (Fail,TermPattern(..))
 import           Utils
 
 import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
+import           Control.Arrow.Append
+import           Control.Arrow.Try
 import           Control.Category
 
 import           Data.Term
+import           Data.TermEnv
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 
 import           Text.Printf
-
-class HasTerm t p => HasTermEnv t p | p -> t where
-  getTermEnv :: p () (HashMap TermVar t)
-  putTermEnv :: p (HashMap TermVar t) ()
-
-class Arrow p => HasStratEnv p where
-  readStratEnv :: p a StratEnv
-  localStratEnv :: p a b -> p (a,StratEnv) b
 
 -- Language Constructs
 
