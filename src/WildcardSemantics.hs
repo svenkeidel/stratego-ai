@@ -110,12 +110,12 @@ match = proc (p,t) -> case p of
         putTermEnv -< M.insert x t env
         fail <+> success -< t
   S.Cons c ts -> do
-    m <- matchTerm -< t
+    m <- matchTermAgainstConstructor -< (c,t)
     case m of
       T.Cons c' ts'
-        | c == c' && length ts == length ts' -> do
+        | eqLength ts ts' -> do
             ts'' <- zipWithA match -< (ts,ts')
-            T.cons -< (c,ts'')
+            T.cons -< (c',ts'')
         | otherwise -> fail -< ()
       T.Wildcard -> do
         l <- mapA wildcard -< [() | _ <- ts]

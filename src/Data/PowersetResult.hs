@@ -3,7 +3,7 @@ module Data.PowersetResult where
 import           Control.Monad
 
 import           Data.Hashable
-import           Data.Powerset
+import           Data.Powerset (Pow)
 import qualified Data.Powerset as P
 import           Data.Result
 
@@ -23,6 +23,10 @@ instance Monad PowersetResult where
     case r of
       Success a -> unPowRes (k a)
       Fail -> return Fail
+
+instance Monoid (PowersetResult a) where
+  mempty = empty
+  mappend = union
 
 empty :: PowersetResult a
 empty = PowRes mempty

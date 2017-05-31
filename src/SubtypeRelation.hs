@@ -41,6 +41,7 @@ lookupSort (SubtypeRelation _ nodes _) s = M.lookup s nodes
 subtype :: SubtypeRelation -> Sort -> Sort -> Bool
 subtype rel@(SubtypeRelation _ _ gr) x y = case (x,y) of
   (Bottom,_) -> True
+  (_,Top) -> True
   (List s1,List s2) -> subtype rel s1 s2
   (Option s1,Option s2) -> subtype rel s1 s2
   (Tuple s1,Tuple s2)
@@ -58,18 +59,20 @@ lubs :: SubtypeRelation -> [Sort] -> [Sort]
 lubs rel ss = case ss of
   [] -> []
   [x] -> [x]
-  (x:y:r) ->
-    let res = filter (\s -> all (\s' -> subtype rel s' s) r) (lubs' rel x y) ++ lubs rel r
+  (x:y:r) -> filter (\s -> all (\s' -> subtype rel s' s) r) (lubs' rel x y) ++ lubs rel r
+    --let res = filter (\s -> all (\s' -> subtype rel s' s) r) (lubs' rel x y) ++ lubs rel r
     -- The list res might contain duplicates and sorts which are subsumed by other sorts.
     -- The right thing to do here is to remove subsumed elements, however this operation
     -- is expensive.
-    in -- filter (\s -> not (any (\s' -> s /= s' && subtype rel s s') res)) (nub res)
-       res
+    --in filter (\s -> not (any (\s' -> s /= s' && subtype rel s s') res)) (nub res)
+    
 
 lubs' :: SubtypeRelation -> Sort -> Sort -> [Sort]
 lubs' rel@(SubtypeRelation _ _ gr) sort1 sort2 = case (sort1,sort2) of
   (Bottom,_) -> return sort2
   (_,Bottom) -> return sort1
+  (Top,_) -> return Top
+  (_,Top) -> return Top
   (List s1,  List s2)   -> List <$> lubs' rel s1 s2
   (Option s1,Option s2) -> Option <$> lubs' rel s1 s2
   (Tuple ts1,Tuple ts2) | eqLength ts1 ts2 -> Tuple <$> zipWithM (lubs' rel) ts1 ts2
@@ -99,6 +102,7 @@ removeNonLeastUpperBounds (SubtypeRelation _ _ gr) ss =
 lower :: SubtypeRelation -> Sort -> [Sort]
 lower rel@(SubtypeRelation _ _ gr) s0 = case s0 of
   Bottom -> [Bottom]
+  Top -> error "lower set of top is unsupported"
   List s -> List <$> lower rel s
   Option s -> Option <$> lower rel s
   Tuple ss -> Tuple <$> permutations (lower rel <$> ss)
@@ -107,10 +111,3 @@ lower rel@(SubtypeRelation _ _ gr) s0 = case s0 of
     ss <- traverse (G.lab gr) (G.pre gr n)
     return (s:ss)
 
-permutations :: [[s]] -> [[s]]
-permutations l = case l of
-  [] -> [[]]
-  (xs:rs) -> do
-    x <- xs
-    ys <- permutations rs
-    return (x:ys)

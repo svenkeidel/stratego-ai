@@ -138,22 +138,3 @@ convertFromList = proc t -> do
       returnA -< Just []
     Wildcard -> returnA -< Nothing
     _ -> fail -< ()
-
-equal :: (ArrowChoice p, ArrowTry p, ArrowAppend p, HasTerm t p, Monoid t) => p (t,t) t
-equal = proc (t1,t2) -> do
-  m <- matchTerm *** matchTerm -< (t1,t2)
-  case m of
-    (Cons c ts,Cons c' ts')
-      | c == c' && eqLength ts ts' -> do
-        ts'' <- zipWithA equal -< (ts,ts')
-        cons -< (c,ts'')
-      | otherwise -> fail -< ()
-    (StringLiteral s, StringLiteral s')
-      | s == s' -> success -< t1
-      | otherwise -> fail -< ()
-    (NumberLiteral n, NumberLiteral n')
-      | n == n' -> success -< t1
-      | otherwise -> fail -< ()
-    (Wildcard, t) -> fail <+> term -< t
-    (t, Wildcard) -> fail <+> term -< t
-    (_,_) -> fail -< ()

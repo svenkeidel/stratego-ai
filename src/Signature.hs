@@ -44,6 +44,7 @@ inhabitants (Signature (_,sorts) rel) s0 = do
   s <- R.lower rel s0
   case s of
     Bottom -> []
+    Top -> error "Calculating inhabitants from sort top is not allowed"
     List a -> [("Cons", Fun [a, List a] (List a)), ("Nil", Fun [] (List a))]
     Option a -> [("Some", Fun [a] (Option a)), ("None", Fun [] (Option a))]
     Tuple as -> [("", Fun as (Tuple as))]

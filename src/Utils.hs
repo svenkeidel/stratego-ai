@@ -25,3 +25,14 @@ zipWithA f = proc x -> case x of
     cs <- zipWithA f -< (as,bs)
     returnA -< c:cs
   _ -> returnA -< []
+
+permutations :: [[s]] -> [[s]]
+permutations l = case l of
+  [] -> [[]]
+  (xs:rs) -> do
+    x <- xs
+    ys <- permutations rs
+    return (x:ys)
+
+unless :: (ArrowChoice p, ArrowZero p) => p Bool ()
+unless = proc b -> if b then returnA -< () else zeroArrow -< ()
