@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Data.PowersetResult where
 
 import           Control.Monad
@@ -6,11 +8,10 @@ import           Data.Hashable
 import           Data.Powerset (Pow)
 import qualified Data.Powerset as P
 import           Data.Result
+import           Data.Order
 
-newtype PowersetResult a = PowRes {unPowRes :: Pow (Result a)}
-
-instance Functor PowersetResult where
-  fmap f (PowRes p) = PowRes (fmap (fmap f) p)
+newtype PowersetResult a = PowRes { unPowRes :: Pow (Result a) }
+  deriving (Functor,PreOrd,PartOrd,Lattice,Monoid)
 
 instance Applicative PowersetResult where
   pure = return
@@ -24,9 +25,8 @@ instance Monad PowersetResult where
       Success a -> unPowRes (k a)
       Fail -> return Fail
 
-instance Monoid (PowersetResult a) where
-  mempty = empty
-  mappend = union
+fromFoldable :: Foldable f => f (Result a) -> PowersetResult a
+fromFoldable = PowRes . P.fromFoldable
 
 empty :: PowersetResult a
 empty = PowRes mempty

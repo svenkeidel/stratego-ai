@@ -1,7 +1,11 @@
 module Data.UncertainResult where
 
 import Prelude hiding (fail,concat)
-import Control.Monad (ap)
+
+import Control.Monad
+import Control.Applicative
+
+import Data.Order
 
 data UncertainResult a
   = Success a
@@ -25,21 +29,41 @@ instance Monad UncertainResult where
     Success a -> SuccessOrFail a
     Fail -> Fail
   Fail >>= _ = Fail
+  fail _ = Fail
 
-instance (Monoid a) => Monoid (UncertainResult a) where
-  mempty = SuccessOrFail mempty
-  mappend (Success x) (Success y) = Success (x `mappend` y)
-  mappend (Success x) Fail = SuccessOrFail x
-  mappend Fail (Success y) = SuccessOrFail y
-  mappend Fail Fail = Fail
-  mappend (SuccessOrFail x) (Success y) = SuccessOrFail (x `mappend` y)
-  mappend (Success x) (SuccessOrFail y) = SuccessOrFail (x `mappend` y)
-  mappend (SuccessOrFail x) Fail = SuccessOrFail x
-  mappend Fail (SuccessOrFail y) = SuccessOrFail y
-  mappend (SuccessOrFail x) (SuccessOrFail y) = SuccessOrFail (x `mappend` y)
+instance Alternative UncertainResult where
+  empty = mzero
+  (<|>) = mplus
+
+instance MonadPlus UncertainResult where
+  mzero = Fail
+  mplus (Success a) _ = Success a
+  mplus (SuccessOrFail a) _ = SuccessOrFail a
+  mplus Fail r = r
 
 successOrFail :: UncertainResult a -> UncertainResult a
 successOrFail r = case r of
   Success x -> SuccessOrFail x
   SuccessOrFail x -> SuccessOrFail x
   Fail -> Fail
+
+instance PreOrd a => PreOrd (UncertainResult a) where
+  Fail ⊑ Fail = True
+  Success a ⊑ Success b = a ⊑ b
+  Success a ⊑ SuccessOrFail b = a ⊑ b
+  Fail ⊑ SuccessOrFail _ = True
+  _ ⊑ _ = False
+
+instance PartOrd a => PartOrd (UncertainResult a)
+
+instance Lattice a => Lattice (UncertainResult a) where
+  Success x ⊔ Success y = Success (x ⊔ y)
+  Success x ⊔ Fail = SuccessOrFail x
+  Fail ⊔ Success y = SuccessOrFail y
+  Fail ⊔ Fail = Fail
+  SuccessOrFail x ⊔ Success y = SuccessOrFail (x ⊔ y)
+  Success x ⊔ SuccessOrFail y = SuccessOrFail (x ⊔ y)
+  SuccessOrFail x ⊔ Fail = SuccessOrFail x
+  Fail ⊔ SuccessOrFail y = SuccessOrFail y
+  SuccessOrFail x ⊔ SuccessOrFail y = SuccessOrFail (x ⊔ y)
+

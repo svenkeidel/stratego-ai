@@ -5,10 +5,11 @@ import Prelude hiding (id,(.))
 
 import Control.Category
 import Control.Arrow
+import Data.Order
 
 class Arrow p => ArrowTry p where
   fail :: p t a
-  try :: Monoid c => p a b -> p b c -> p a c ->  p a c
+  try :: Lattice z => p x y -> p y z -> p x z ->  p x z
 
 success :: ArrowTry p => p a a
 success = id

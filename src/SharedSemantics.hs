@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ConstraintKinds #-}
 module SharedSemantics where
 
 import           Prelude hiding (fail,(.),id,sum,flip)
@@ -15,16 +16,16 @@ import           Control.Arrow.Append
 import           Control.Arrow.Try
 import           Control.Category
 
+import qualified Data.HashMap.Lazy as M
+import           Data.Order
 import           Data.Term
 import           Data.TermEnv
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
 
 import           Text.Printf
 
 -- Language Constructs
 
-guardedChoice :: (ArrowTry p, Monoid c) => p a b -> p b c -> p a c -> p a c
+guardedChoice :: (ArrowTry p, Lattice z) => p x y -> p y z -> p x z -> p x z
 guardedChoice = try
 {-# INLINE guardedChoice #-}
 
@@ -32,7 +33,7 @@ sequence :: Category p => p a b -> p b c -> p a c
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-lift :: (ArrowChoice p, ArrowTry p, ArrowAppend p, HasTerm t p, Monoid t) => p [t] [t] -> p t t
+lift :: (ArrowChoice p, ArrowTry p, ArrowAppend p, HasTerm t p, Lattice t) => p [t] [t] -> p t t
 lift p = proc t -> do
   m <- matchTerm -< t
   case m of
@@ -45,15 +46,15 @@ lift p = proc t -> do
     _ -> fail -< ()
 {-# INLINE lift #-}
 
-one :: (ArrowTry p, ArrowAppend p, ArrowChoice p, Monoid a) => p a a -> p [a] [a]
+one :: (ArrowTry p, ArrowAppend p, ArrowChoice p, Lattice t, Lattice [t]) => p t t -> p [t] [t]
 one f = proc l -> case l of
-  t:ts -> do
+  (t:ts) -> do
     (t',ts') <- first f <+> second (one f) -< (t,ts)
     returnA -< (t':ts')
   [] -> fail -< ()
 {-# INLINE one #-}
 
-some :: (ArrowTry p, ArrowChoice p, Monoid t) => p t t -> p [t] [t]
+some :: (ArrowTry p, ArrowChoice p, Lattice t, Lattice [t]) => p t t -> p [t] [t]
 some f = go
   where
     go = proc l -> case l of
@@ -73,13 +74,14 @@ all :: ArrowChoice p => p a b -> p [a] [b]
 all = mapA
 {-# INLINE all #-}
 
-scope :: (Arrow p, HasTermEnv t p) => [TermVar] -> p a b -> p a b
+scope :: (Arrow p, HasTermEnv t env p) => [TermVar] -> p a b -> p a b
 scope vars s = proc t -> do
-  env  <- getTermEnv -< ()
-  ()   <- putTermEnv -< foldr M.delete env vars
-  t'   <- s          -< t
-  env' <- getTermEnv -< ()
-  ()   <- putTermEnv -< env `M.union` foldr M.delete env' vars
+  env  <- getTermEnv     -< ()
+  _    <- deleteTermVars -< vars
+  t'   <- s              -< t
+  _    <- deleteTermVars -< vars
+  env' <- getTermEnv     -< ()
+  putTermEnv <<< unionTermEnvs -< (env,env')
   returnA -< t'
 {-# INLINE scope #-}
 
@@ -90,26 +92,34 @@ let_ ss body interp = proc a -> do
   localStratEnv (interp body) -< (a,M.union (M.fromList ss') senv) 
 {-# INLINE let_ #-}
 
-call :: (ArrowTry p, ArrowChoice p, ArrowApply p, HasTermEnv t p, HasStratEnv p)
+call :: (ArrowTry p, ArrowChoice p, ArrowApply p, HasTermEnv t env p, HasStratEnv p)
      => StratVar
      -> [Strat]
      -> [TermVar]
-     -> p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
      -> (Strat -> p a b)
      -> p a b
-call f actualStratArgs actualTermArgs bindTermArgs interp = proc a -> do
+call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of
     Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
-      putTermEnv <<< bindTermArgs -< (tenv,zip actualTermArgs formalTermArgs)
+      mapA bindTermArg -< zip actualTermArgs formalTermArgs
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
       b <- localStratEnv (interp body) -<< (a,senv'')
+      deleteTermVars -< formalTermArgs
       tenv' <- getTermEnv -< ()
-      putTermEnv -< tenv `M.union` foldr M.delete tenv' formalTermArgs
+      putTermEnv <<< unionTermEnvs -< (tenv,tenv')
       returnA -< b
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
+  where
+    bindTermArg = proc (actual,formal) -> do
+     m <- lookupTermVar -< actual
+     case m of
+       Just t -> insertTerm -< (formal,t)
+       Nothing -> fail -< ()
+     returnA -< ()
+    {-# INLINE bindTermArg #-}
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
 bindStratArgs [] senv = senv

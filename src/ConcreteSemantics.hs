@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ConcreteSemantics where
 
-import           Prelude hiding (id,(.),fail,sequence,all,zipWith)
+import           Prelude hiding (id,(.),fail,sequence,all)
 
 import           InterpreterArrow
 import           SharedSemantics
@@ -23,18 +23,16 @@ import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 
 import           Data.Constructor
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Maybe
 import           Data.Result
-import           Data.Semigroup (Semigroup(..))
 import           Data.String (IsString(..))
 import           Data.Term (HasTerm(..),TermF)
 import           Data.TermEnv
 import qualified Data.Term as T
 import           Data.Text (Text)
-import qualified Data.Text as Text
+-- import qualified Data.Text as Text
+import           Data.Order
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -44,13 +42,13 @@ data Term
   | NumberLiteral Int
   deriving (Eq)
 
-type TermEnv = HashMap TermVar Term
+type TermEnv = ConcreteTermEnv Term
 
 eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
 eval senv s = runInterp (eval' s) senv
 {-# INLINE eval #-}
 
-eval' :: (ArrowChoice p, ArrowTry p, ArrowAppend p, ArrowApply p, HasTerm t p, HasTermEnv t p, HasStratEnv p, Monoid t) => Strat -> p t t
+eval' :: (ArrowChoice p, ArrowTry p, ArrowAppend p, ArrowApply p, HasTerm t p, HasTermEnv env t p, HasStratEnv p, Lattice t) => Strat -> p t t
 eval' s0 = case s0 of
   Id -> id
   S.Fail -> fail
@@ -63,41 +61,51 @@ eval' s0 = case s0 of
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
   Let bnds body -> let_ bnds body eval'
-  Call f ss ps -> call f ss ps bindTermArgs eval'
+  Call f ss ps -> call f ss ps eval'
   Prim f _ ps -> prim f ps
 
-prim :: (ArrowTry p, HasTerm t p, HasTermEnv t p) => StratVar -> [TermVar] -> p t t
-prim f ps = proc _ -> case f of
-    "strcat" -> do
-      tenv <- getTermEnv -< ()
-      case mapM (`M.lookup` tenv) ps of
-        Just [t1, t2] -> do
-          m <- matchTerm *** matchTerm -< (t1,t2)
-          case m of
-            (T.StringLiteral s1,T.StringLiteral s2) ->
-              T.stringLiteral -< s1 `Text.append` s2
-            _ -> fail -< ()
-        _ -> fail -< ()
-    "SSL_newname" -> do
-      tenv <- getTermEnv -< ()
-      case mapM (`M.lookup` tenv) ps of
-        Just [_] -> undefined -< ()
-        _ -> fail -< ()
-    _ -> error ("unrecognized primitive function: " ++ show f) -< ()
+prim :: (ArrowTry p, HasTerm t p, HasTermEnv env t p) => StratVar -> [TermVar] -> p t t
+prim f ps = undefined
+  -- proc _ -> case f of
+  --   "strcat" -> do
+  --     tenv <- getTermEnv -< ()
+  --     case mapM (`M.lookup` tenv) ps of
+  --       Just [t1, t2] -> do
+  --         m <- matchTerm *** matchTerm -< (t1,t2)
+  --         case m of
+  --           (T.StringLiteral s1,T.StringLiteral s2) ->
+  --             T.stringLiteral -< s1 `Text.append` s2
+  --           _ -> fail -< ()
+  --       _ -> fail -< ()
+  --   "SSL_newname" -> do
+  --     tenv <- getTermEnv -< ()
+  --     case mapM (`M.lookup` tenv) ps of
+  --       Just [_] -> undefined -< ()
+  --       _ -> fail -< ()
+  --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
-match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTerm t p, HasTermEnv t p, Monoid t) => p (TermPattern, t) t
+match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTerm t p, HasTermEnv env t p, Lattice t) => p (TermPattern, t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
     t' <- match -< (S.Var v,t)
     match -< (p2,t')
   S.Var "_" -> success -< t
   S.Var x -> do
-    env <- getTermEnv -< ()
-    case M.lookup x env of
-      Just t' -> equal -< (t,t')
+    m <- lookupTermVar -< x
+    case m of
+      Just t' -> do
+        t'' <- equal -< (t,t')
+        insertTerm -< (x,t'')
+        success -< t''
       Nothing -> do
-        putTermEnv -< M.insert x t env
-        success -< t
+        insertTerm -< (x,t)
+        returnA -< t
+    -- env <- getTermEnv -< ()
+    -- case M.lookup x env of
+    --   Just t' -> equal -< (t,t')
+    --   Nothing -> do
+    --     putTermEnv -< M.insert x t env
+    --     success -< t
   S.Cons c ts -> do
     m <- matchTermAgainstConstructor -< (c, t)
     case m of
@@ -140,14 +148,18 @@ match = proc (p,t) -> case p of
         | otherwise -> fail -< ()
       _ -> fail -< ()
 
-build :: (ArrowChoice p, ArrowTry p, HasTerm t p, HasTermEnv t p) => p TermPattern t
+build :: (ArrowChoice p, ArrowTry p, HasTerm t p, HasTermEnv env t p) => p TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
-    env <- getTermEnv -< ()
-    case M.lookup x env of
+    m <- lookupTermVar -< x
+    case m of
       Just t -> returnA -< t
-      Nothing -> fail -< ()
+      Nothing -> T.wildcard -< ()
+    -- env <- getTermEnv -< ()
+    -- case M.lookup x env of
+    --   Just t -> returnA -< t
+    --   Nothing -> fail -< ()
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     T.cons -< (c,ts')
@@ -162,14 +174,6 @@ build = proc p -> case p of
   S.NumberLiteral n -> T.numberLiteral -< n
   S.StringLiteral s -> T.stringLiteral -< s
 
-bindTermArgs :: (ArrowTry p, ArrowChoice p)
-             => p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
-bindTermArgs = proc (tenv,l) -> case l of
- (actual,formal) : rest -> case M.lookup actual tenv of
-    Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
-    Nothing -> fail -< ()
- [] -> returnA -< tenv
-
 -- Instances -----------------------------------------------------------------------------------------
 
 matchTermDefault :: Term -> TermF Term
@@ -179,33 +183,46 @@ matchTermDefault t = case t of
   NumberLiteral n -> T.NumberLiteral n
 {-# INLINE matchTermDefault #-}
 
-
-termDefault :: TermF Term -> Term
-termDefault t = case t of
-  T.Cons c ts -> Cons c ts
-  T.NumberLiteral n -> NumberLiteral n
-  T.StringLiteral s -> StringLiteral s
-  _ -> error "cannot construct term"
-{-# INLINE termDefault #-}
-
-instance Monad m => HasTerm Term (Interp s r m) where
+instance (Monad m, ArrowTry (Interp s r m)) => HasTerm Term (Interp s r m) where
   matchTerm = arr matchTermDefault
   {-# INLINE matchTerm #-}
-  term = arr termDefault
+  term = proc t -> case t of
+    T.Cons c ts -> returnA -< Cons c ts
+    T.NumberLiteral n -> returnA -< NumberLiteral n
+    T.StringLiteral s -> returnA -< StringLiteral s
+    T.Wildcard -> fail -< ()
+    _ -> returnA -< error "cannot construct term"
   {-# INLINE term #-}
 
 instance HasTerm Term (->) where
   matchTerm = arr matchTermDefault
   {-# INLINE matchTerm #-}
-  term = arr termDefault
+  term = proc t -> case t of
+    T.Cons c ts -> returnA -< Cons c ts
+    T.NumberLiteral n -> returnA -< NumberLiteral n
+    T.StringLiteral s -> returnA -< StringLiteral s
+    T.Wildcard -> returnA -< error "cannot construct term"
   {-# INLINE term #-}
  
-instance Semigroup Term where
-  (<>) = undefined
+instance PreOrd Term where
+  Cons c ts ⊑ Cons c' ts' = c == c' && ts ⊑ ts'
+  StringLiteral s ⊑ StringLiteral s' = s == s'
+  NumberLiteral n ⊑ NumberLiteral n' = n == n'
+  _ ⊑ _ = False
 
-instance Monoid Term where
-  mempty = undefined
-  mappend = undefined
+instance PartOrd Term
+
+instance Lattice Term where
+  Cons c ts ⊔ Cons c' ts'
+    | c == c' && eqLength ts ts' = Cons c (zipWith (⊔) ts ts')
+    | otherwise = error "Top"
+  StringLiteral s ⊔ StringLiteral s'
+    | s == s' = StringLiteral s
+    | otherwise = error "Top"
+  NumberLiteral n ⊔ NumberLiteral n'
+    | n == n' = NumberLiteral n
+    | otherwise = error "Top"
+  _ ⊔ _ = error "Top"
 
 instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts

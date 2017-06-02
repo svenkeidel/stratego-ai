@@ -5,8 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WildcardSemantics where
 
-import           Prelude hiding (id,fail,concat,sequence,all,zipWith,(.))
-import qualified Prelude as P
+import           Prelude hiding (id,fail,concat,sequence,all,(.))
 
 import           InterpreterArrow
 import           SharedSemantics
@@ -27,12 +26,9 @@ import qualified Data.Term as T
 import           Data.TermEnv
 import           Data.Constructor
 import           Data.Powerset
-import           Data.PowersetResult(PowersetResult)
-import           Data.Semigroup (Semigroup(..))
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Text (Text,append)
+import           Data.Order
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -43,11 +39,11 @@ data Term
     | Wildcard
     deriving (Eq)
 
-type TermEnv = HashMap TermVar Term
+type TermEnv = AbstractTermEnv Term
 
-eval' :: (Eq t, Hashable t, Monoid t,
+eval' :: (Eq t, Hashable t, Lattice t, Lattice [t],
           ArrowChoice p, ArrowAppend p, ArrowTry p, ArrowApply p,
-          Deduplicate p, HasStratEnv p, HasTerm t p, HasTermEnv t p)
+          Deduplicate p, HasStratEnv p, HasTerm t p, HasTermEnv (AbstractTermEnv t) t p)
       => Int -> Strat -> p t t
 eval' 0 _ = proc _ ->
   fail <+> wildcard -< ()
@@ -63,11 +59,11 @@ eval' i s0 = dedup $ case s0 of
   Match f -> proc t -> match -< (f,t)
   Build f -> proc _ -> build -< f
   Let bnds body -> let_ bnds body (eval' i)
-  Call f ss ps -> call f ss ps bindTermArgs (eval' (i-1))
+  Call f ss ps -> call f ss ps (eval' (i-1))
   Prim f _ ps -> prim f ps
-{-# SPECIALISE eval' :: Int -> Strat -> Interp StratEnv TermEnv PowersetResult Term Term #-}
+-- {-# SPECIALISE eval' :: Int -> Strat -> Interp StratEnv TermEnv PowersetResult Term Term #-}
 
-prim :: (ArrowTry p, ArrowAppend p, HasTerm t p, HasTermEnv t p)
+prim :: (ArrowTry p, ArrowAppend p, HasTerm t p, HasTermEnv (AbstractTermEnv t) t p)
      => StratVar -> [TermVar] -> p a t
 prim f ps = proc _ -> case f of
     "SSL_strcat" -> do
@@ -85,14 +81,15 @@ prim f ps = proc _ -> case f of
         _ -> fail -< ()
     _ -> error ("unrecognized primitive function: " ++ show f) -< ()
   where
-    lookupTermArgs = proc args -> do
-      tenv <- getTermEnv -< ()
-      case mapM (`M.lookup` tenv) args of
-        Just t -> mapA matchTerm -< t
-        Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
-{-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
+    lookupTermArgs = undefined
+      -- proc args -> do
+      -- tenv <- getTermEnv -< ()
+      -- case mapM (`M.lookup` tenv) args of
+      --   Just t -> mapA matchTerm -< t
+      --   Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
+-- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
 
-match :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv t p, Monoid t)
+match :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv env t p, Lattice t)
       => p (TermPattern,t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
@@ -100,15 +97,15 @@ match = proc (p,t) -> case p of
     match -< (p2,t')
   S.Var "_" -> success -< t
   S.Var x -> do
-    env <- getTermEnv -< ()
-    case M.lookup x env of
+    m <- lookupTermVar -< x
+    case m of
       Just t' -> do
         t'' <- equal -< (t,t')
-        putTermEnv -< M.insert x t'' env
+        insertTerm -< (x,t'')
         success -< t''
       Nothing -> do
-        putTermEnv -< M.insert x t env
-        fail <+> success -< t
+        insertTerm -< (x,t)
+        returnA -< t
   S.Cons c ts -> do
     m <- matchTermAgainstConstructor -< (c,t)
     case m of
@@ -168,17 +165,17 @@ match = proc (p,t) -> case p of
         | otherwise -> fail -< ()
       T.Wildcard -> fail <+> numberLiteral -< n
       _ -> fail -< ()
-{-# SPECIALISE match :: Interp StratEnv TermEnv PowersetResult (TermPattern, Term) Term #-}
+-- {-# SPECIALISE match :: Interp StratEnv TermEnv PowersetResult (TermPattern, Term) Term #-}
 
-build :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv t p, Monoid t)
+build :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv env t p, Lattice t)
       => p TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x -> do
-    env <- getTermEnv -< ()
-    case M.lookup x env of
+    m <- lookupTermVar -< x
+    case m of
       Just t -> returnA -< t
-      Nothing -> fail <+> wildcard -< ()
+      Nothing -> wildcard -< ()
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     cons -< (c,ts')
@@ -195,17 +192,7 @@ build = proc p -> case p of
       _ -> fail -< ()
   S.NumberLiteral n -> numberLiteral -< n
   S.StringLiteral s -> stringLiteral -< s
-{-# SPECIALISE build :: Interp StratEnv TermEnv PowersetResult TermPattern Term #-}
-
-bindTermArgs :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTerm t p)
-             => p (HashMap TermVar t, [(TermVar,TermVar)]) (HashMap TermVar t)
-bindTermArgs = proc (tenv,l) -> case l of
- (actual,formal) : rest -> case M.lookup actual tenv of
-    Just t  -> bindTermArgs -< (M.insert formal t tenv, rest)
-    Nothing -> do
-      w <- wildcard -< ()
-      fail <+> bindTermArgs -< (M.insert formal w tenv, rest)
- [] -> returnA -< tenv
+-- {-# SPECIALISE build :: Interp StratEnv TermEnv PowersetResult TermPattern Term #-}
 
 -- Instances -----------------------------------------------------------------------------------------
 
@@ -238,23 +225,28 @@ instance HasTerm Term (->) where
   term = arr termDefault
   {-# INLINE term #-}
 
-instance Semigroup Term where
-  t1 <> t2 = case (t1,t2) of
-    (Cons c ts, Cons c' ts')
-      | c == c' && length ts == length ts' -> Cons c (P.zipWith (<>) ts ts')
-      | otherwise -> Wildcard
-    (StringLiteral s, StringLiteral s')
-      | s == s' -> StringLiteral s
-      | otherwise -> Wildcard
-    (NumberLiteral n, NumberLiteral n')
-      | n == n' -> NumberLiteral n
-      | otherwise -> Wildcard
-    (_, _) -> Wildcard
-  {-# INLINE (<>) #-}
+instance PreOrd Term where
+  _ ⊑ Wildcard = True
+  Cons c ts ⊑ Cons c' ts' = c == c' && ts ⊑ ts'
+  StringLiteral s ⊑ StringLiteral s' = s == s'
+  NumberLiteral n ⊑ NumberLiteral n' = n == n'
+  _ ⊑ _ = False
 
-instance Monoid Term where
-  mempty = undefined -- Wildcard
-  mappend = undefined --(<>)
+instance PartOrd Term
+
+instance Lattice Term where
+  Cons c ts ⊔ Cons c' ts'
+    | c == c' && eqLength ts ts' = Cons c (zipWith (⊔) ts ts')
+    | otherwise = Wildcard
+  StringLiteral s ⊔ StringLiteral s'
+    | s == s' = StringLiteral s
+    | otherwise = Wildcard
+  NumberLiteral n ⊔ NumberLiteral n'
+    | n == n' = NumberLiteral n
+    | otherwise = Wildcard
+  Wildcard ⊔ _ = Wildcard
+  _ ⊔ Wildcard = Wildcard
+  _ ⊔ _ = Wildcard
 
 instance Show Term where
   show (Cons c ts) = show c ++ show ts
@@ -302,11 +294,3 @@ arbitraryTerm h w = do
   c <- arbitrary
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
-
-height :: Term -> Int
-height (Cons _ ts) | null ts = 1 | otherwise = maximum (fmap height ts) + 1
-height _ = 1
-
-size :: Term -> Int
-size (Cons _ ts) = sum (fmap size ts) + 1
-size _ = 1

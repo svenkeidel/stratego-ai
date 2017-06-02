@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
 import           Prelude hiding (log)
@@ -31,7 +32,9 @@ import           Data.Monoid
 import           Data.Result
 import qualified Data.Sequence as S
 import           Data.String
-import qualified Data.Text.IO as T
+import qualified Data.Text.IO as TIO
+import           Data.Term (HasTerm)
+import qualified Data.Term as T
 
 import           System.IO
 
@@ -84,37 +87,38 @@ main =
   where
     activate :: IO () -> IO ()
     activate cs = cs
-    deactivate :: IO () -> IO ()
-    deactivate _ = return ()
 
-prettyPrint :: (W.Term -> Doc) -> Analysis
+    -- deactivate :: IO () -> IO ()
+    -- deactivate _ = return ()
+
+prettyPrint :: (t -> Doc) -> Analysis t
 prettyPrint pprint _ _ _ res =
   if H.size res <= 200
      then print $ ppResults pprint (toList res)
      else printf "Output ommited because of result set contains %d element\n" (H.size res)
 
-sizeAnalysisSetup :: (Analysis -> IO ()) -> IO ()
+sizeAnalysisSetup :: (Show t, HasTerm t (->)) => (Analysis t -> IO ()) -> IO ()
 sizeAnalysisSetup k =
   withFile "size.csv" WriteMode $ \csv -> do
     hPrintf csv "name;fun;depth;term;size\n"
     k $ \name fun depth res -> measure "Size Analysis" $ forM_ res $ \t ->
-      hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (W.size t)
+      hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.size t)
 
-heightAnalysisSetup :: (Analysis -> IO ()) -> IO ()
+heightAnalysisSetup :: (Show t, HasTerm t (->)) => (Analysis t -> IO ()) -> IO ()
 heightAnalysisSetup k =
   withFile "height.csv" WriteMode $ \csv -> do
     hPrintf csv "name;fun;depth;term;height\n"
     k $ \name fun depth res -> measure "Height Analysis" $ forM_ res $ \t ->
-        hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (W.height t)
+        hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.height t)
 
-wittnessAnalysisSetup :: (Analysis -> IO ()) -> IO ()
+wittnessAnalysisSetup :: (Analysis t -> IO ()) -> IO ()
 wittnessAnalysisSetup k =
   withFile "wittness.csv" WriteMode $ \csv -> do
     hPrintf csv "name;fun;depth;term;wittness\n"
     k $ \name fun depth res -> measure "Wittness Analysis" $ forM_ res $ \t ->
         hPrintf csv "%s;%s;%d;%s;%s\n" name fun depth (show t) (show (W.isWittness t res))
 
-ruleInvocationsAnalysisSetup :: ((Grammar -> Analysis) -> IO ()) -> IO ()
+ruleInvocationsAnalysisSetup :: ((Grammar -> Analysis t) -> IO ()) -> IO ()
 ruleInvocationsAnalysisSetup k =
   withFile "rule.csv" WriteMode $ \csv -> do
     hPrintf csv "name;fun;depth;term;ruleId;rule;invocation\n"
@@ -132,7 +136,7 @@ type Distance = Int
 -- False-Positive: Terms in the analysis result that are *not* part of the output language of the program transformation
 -- True-Negative: Terms that occur neither in the output language of the program transformation nor in the analysis result
 -- False-Negative: Terms in output language of the program transformation that do not occur in the analysis result
-classificationSetup :: ((Grammar -> Distance -> Analysis) -> IO ()) -> IO ()
+classificationSetup :: ((Grammar -> Distance -> Analysis t) -> IO ()) -> IO ()
 classificationSetup k =
   withFile "classification.csv" WriteMode $ \csv -> do
     hPrintf csv "name;fun;depth;sample_distance;term;height;size;distance_sum;class\n"
@@ -144,7 +148,7 @@ classificationSetup k =
       forM_ [("true_positive", truePositive), ("false_positive", falsePositive), ("false_negative", falseNegative)] $ \(klass,terms) ->
         forM_ terms $ \t ->
           hPrintf csv "%s;%s;%d;%d;%s;%d;%d;%d;%s\n"
-            name fun depth sampleDistance (show t) (W.height t) (W.size t) (distanceSum grammar t `orElse` 0) (klass :: String)
+            name fun depth sampleDistance (show t) (T.height t) (T.size t) (distanceSum grammar t `orElse` 0) (klass :: String)
   where
     partition :: (Eq a, Hashable a) => (a -> Bool) -> HashSet a -> (HashSet a, HashSet a)
     partition predicate = H.foldl' (\(pos,neg) t -> if predicate t then (H.insert t pos,neg) else (pos,H.insert t neg))
@@ -171,12 +175,12 @@ measure analysisName action = do
   (m,_) <- CM.measure (CT.nfIO action) 1
   printf "- %s: %s\n" analysisName (CM.secs (CT.measCpuTime m))
 
-type Analysis = String -> String -> Int -> HashSet W.Term -> IO ()
+type Analysis t = String -> String -> Int -> HashSet t -> IO ()
 
-caseStudy :: String -> String -> Int -> Analysis -> IO ()
+caseStudy :: String -> String -> Int -> Analysis t -> IO ()
 caseStudy name function maxDepth analysis = do
   printf "------------------ case study: %s ----------------------\n" name
-  file <- T.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
+  file <- TIO.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
   case parseModule =<< parseATerm file of
     Left e -> fail (show e)
     Right module_ ->

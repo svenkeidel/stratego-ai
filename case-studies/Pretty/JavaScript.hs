@@ -4,9 +4,9 @@ module Pretty.JavaScript where
 
 import WildcardSemantics
 import Text.PrettyPrint hiding (sep)
-import Control.Exception
-import System.IO.Unsafe
-import Control.DeepSeq
+-- import Control.Exception
+-- import System.IO.Unsafe
+-- import Control.DeepSeq
 import qualified Data.Text as T
 
 {-# NOINLINE tryPPJS #-}

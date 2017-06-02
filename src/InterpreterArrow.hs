@@ -1,31 +1,37 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE Arrows #-}
 module InterpreterArrow where
 
-import           Prelude hiding ((.),id)
+import           Prelude hiding ((.),id,fail)
     
-import           Syntax (StratEnv,HasStratEnv(..),TermVar)
+import           Syntax (StratEnv,HasStratEnv(..))
 import           Signature
 
-import           Data.HashMap.Lazy (HashMap)
+import           Control.Arrow hiding ((<+>))
+import           Control.Arrow.Append
+import           Control.Arrow.Try
+import           Control.Category
+import           Control.Monad hiding (fail)
+
+import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Monoid
+import           Data.Order
 import           Data.Powerset (Deduplicate(..))
 import           Data.PowersetResult (PowersetResult)
 import qualified Data.PowersetResult as P
 import           Data.Result (Result)
 import qualified Data.Result as R
-import           Data.TypedResult (TypedResult)
-import qualified Data.TypedResult as T
+import           Data.Foldable
+import           Data.Term
 import           Data.TermEnv
+import           Data.TypedResult (TypedResult,TypeError(..))
+import qualified Data.TypedResult as T
 import           Data.UncertainResult (UncertainResult)
 import qualified Data.UncertainResult as U
-
-import           Control.Arrow
-import           Control.Arrow.Append
-import           Control.Arrow.Try
-import           Control.Category
-import           Control.Monad
 
 newtype Interp r s m a b = Interp { runInterp :: r -> (a,s) -> m (b,s) }
 
@@ -90,11 +96,54 @@ instance Monad m => HasStratEnv (Interp (r,StratEnv) s m) where
 instance Monad m => HasSignature (Interp (Signature,r) s m) where
   getSignature = Interp $ \(r,_) (_,e) -> return (r,e)
 
-instance Monad m => HasTermEnv t (Interp r (HashMap TermVar t) m) where
+instance (Monad m,
+          HasTerm t (Interp r (ConcreteTermEnv t) m),
+          ArrowTry (Interp r (ConcreteTermEnv t) m)) =>
+  HasTermEnv (ConcreteTermEnv t) t (Interp r (ConcreteTermEnv t) m) where
   getTermEnv = Interp $ \_ (_,e) -> return (e,e)
   {-# INLINE getTermEnv #-}
   putTermEnv = Interp $ \_ (e,_) -> return ((),e)
   {-# INLINE putTermEnv #-}
+  lookupTermVar = proc v -> do
+    ConcreteTermEnv env <- getTermEnv -< ()
+    returnA -< M.lookup v env
+  {-# INLINE lookupTermVar #-}
+  insertTerm = proc (v,t) -> do
+    ConcreteTermEnv env <- getTermEnv -< ()
+    putTermEnv -< ConcreteTermEnv (M.insert v t env)
+  {-# INLINE insertTerm #-}
+  deleteTermVars = proc vars -> do
+    ConcreteTermEnv e <- getTermEnv -< ()
+    putTermEnv -< ConcreteTermEnv (foldr' M.delete e vars)
+  {-# INLINE deleteTermVars #-}
+  unionTermEnvs = arr (\(ConcreteTermEnv e1, ConcreteTermEnv e2) -> ConcreteTermEnv (M.union e1 e2))
+  {-# INLINE unionTermEnvs #-}
+
+instance (Monad m, Lattice t, Lattice (Maybe t),
+          HasTerm t (Interp r (AbstractTermEnv t) m),
+          ArrowTry (Interp r (AbstractTermEnv t) m),
+          ArrowAppend (Interp r (AbstractTermEnv t) m)) =>
+  HasTermEnv (AbstractTermEnv t) t (Interp r (AbstractTermEnv t) m) where
+  getTermEnv = Interp $ \_ (_,e) -> return (e,e)
+  {-# INLINE getTermEnv #-}
+  putTermEnv = Interp $ \_ (e,_) -> return ((),e)
+  {-# INLINE putTermEnv #-}
+  lookupTermVar = proc v -> do
+    AbstractTermEnv env <- getTermEnv -< ()
+    case M.lookup v env of
+      Just t -> returnA -< Just t
+      Nothing -> fail <+> success -< Nothing
+  {-# INLINE lookupTermVar #-}
+  insertTerm = proc (v,t) -> do
+    AbstractTermEnv env <- getTermEnv -< ()
+    putTermEnv -< AbstractTermEnv (M.insert v t env)
+  {-# INLINE insertTerm #-}
+  deleteTermVars = proc vars -> do
+    AbstractTermEnv e <- getTermEnv -< ()
+    putTermEnv -< AbstractTermEnv (foldr' M.delete e vars)
+  {-# INLINE deleteTermVars #-}
+  unionTermEnvs = arr (\(AbstractTermEnv e1, AbstractTermEnv e2) -> AbstractTermEnv (M.union e1 e2))
+  {-# INLINE unionTermEnvs #-}
 
 instance ArrowTry (Interp r s Result) where
   fail = Interp $ \_ _ -> R.Fail
@@ -108,19 +157,24 @@ instance ArrowTry (Interp r s Result) where
 instance ArrowAppend (Interp r s Result) where
   Interp f <+> Interp g = Interp $ \r a -> f r a <> g r a 
   {-# INLINE (<+>) #-}
+  alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
+  {-# INLINE alternatives #-}
 
-instance Monoid s => ArrowTry (Interp r s UncertainResult) where
+instance Lattice s => ArrowTry (Interp r s UncertainResult) where
   fail = Interp $ \_ _ -> U.Fail
   {-# INLINE fail #-}
   try (Interp f) (Interp g) (Interp h) = Interp $ \r a ->
     case f r a of
       U.Success b -> g r b 
-      U.SuccessOrFail b' -> g r b' `mappend` h r a
+      U.SuccessOrFail b' -> g r b' ⊔ h r a
       U.Fail -> h r a
   {-# INLINE try #-}
 
-instance Monoid s => ArrowAppend (Interp r s UncertainResult) where
-  f <+> g = Interp $ \x -> runInterp f x <> runInterp g x
+instance Lattice s => ArrowAppend (Interp r s UncertainResult) where
+  f <+> g = Interp $ \r a -> runInterp f r a ⊔ runInterp g r a
+  {-# INLINE (<+>) #-}
+  alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
+  {-# INLINE alternatives #-}
 
 instance Deduplicate (Interp r s UncertainResult) where
   dedup f = f
@@ -136,13 +190,14 @@ instance ArrowTry (Interp r s PowersetResult) where
       R.Fail -> P.unPowRes $ h r a
   {-# INLINE try #-}
 
-instance ArrowZero (Interp r s PowersetResult) where
-  zeroArrow = Interp $ \_ _ -> P.empty
-  {-# INLINE zeroArrow #-}
-
 instance ArrowAppend (Interp r s PowersetResult) where
   Interp f <+> Interp g = Interp $ \r x -> f r x `P.union` g r x
   {-# INLINE (<+>) #-}
+  alternatives = Interp $ \_ (as,e) -> P.fromFoldable (fmap (return . (,e)) as)
+  {-# INLINE alternatives #-}
+
+instance TypeError (Interp r s PowersetResult) where
+  typeError = Interp $ \_ _ -> mempty
 
 instance (Eq s, Hashable s) => Deduplicate (Interp r s PowersetResult) where
   dedup (Interp f) = Interp $ \r a -> P.dedup' $ f r a
@@ -161,3 +216,8 @@ instance ArrowTry (Interp r s TypedResult) where
 instance ArrowAppend (Interp r s TypedResult) where
   Interp f <+> Interp g = Interp $ \x -> f x `mappend` g x
   {-# INLINE (<+>) #-}
+  alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
+  {-# INLINE alternatives #-}
+
+instance TypeError (Interp r s TypedResult) where
+  typeError = Interp $ \_ (e,_) -> T.TypeError e

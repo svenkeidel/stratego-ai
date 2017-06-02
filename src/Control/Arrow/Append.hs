@@ -1,17 +1,16 @@
-{-# LANGUAGE Arrows #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 module Control.Arrow.Append where
 
 import Control.Arrow hiding ((<+>))
 import Control.Monad
 
-class Arrow p => ArrowAppend p where
-  (<+>) :: Monoid b => p a b -> p a b -> p a b
+import Data.Order
 
-alternatives :: (ArrowChoice p, ArrowZero p, ArrowAppend p, Monoid a) => p [a] a
-alternatives = proc l -> case l of
-  [] -> zeroArrow -< ()
-  (x:xs) -> (returnA -< x)
-        <+> (alternatives -< xs)
+class Arrow p => ArrowAppend p where
+  (<+>) :: Lattice b => p a b -> p a b -> p a b
+  alternatives :: (Functor f, Foldable f) => p (f a) a
 
 instance MonadPlus m => ArrowAppend (Kleisli m) where
   Kleisli f <+> Kleisli g = Kleisli $ \a -> f a `mplus` g a
+  alternatives = Kleisli $ \as -> msum (fmap return as)

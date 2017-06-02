@@ -1,17 +1,13 @@
-module SubtypeRelation(SubtypeRelation,empty,insert,subtype,lubs,lower) where
+module SubtypeRelation(SubtypeRelation,empty,insert,subtype,lower,lub) where
 
 import           Sort
 import           Utils
-
-import           Control.Monad
 
 import           Data.Graph.Inductive (Node)
 import qualified Data.Graph.Inductive as G
 import           Data.Graph.Inductive.PatriciaTree (Gr)
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.IntSet (IntSet)
-import qualified Data.IntSet as S
 import           Data.Maybe
 
 data SubtypeRelation = SubtypeRelation Node (HashMap Sort Node) (Gr Sort ()) deriving (Show,Eq)
@@ -39,75 +35,40 @@ lookupSort :: SubtypeRelation -> Sort -> Maybe Node
 lookupSort (SubtypeRelation _ nodes _) s = M.lookup s nodes
 
 subtype :: SubtypeRelation -> Sort -> Sort -> Bool
-subtype rel@(SubtypeRelation _ _ gr) x y = case (x,y) of
+subtype rel@(SubtypeRelation _ _ gr) s1 s2 = case (s1,s2) of
   (Bottom,_) -> True
   (_,Top) -> True
-  (List s1,List s2) -> subtype rel s1 s2
-  (Option s1,Option s2) -> subtype rel s1 s2
-  (Tuple s1,Tuple s2)
-    | eqLength s1 s2 -> all (uncurry (subtype rel)) $ zip s1 s2
+  (x, Coproduct a b) -> subtype rel x a || subtype rel x b
+  (Coproduct a b, x) -> subtype rel a x && subtype rel b x
+  (List x,List y) -> subtype rel x y
+  (Option x,Option y) -> subtype rel x y
+  (Tuple xs,Tuple ys)
+    | eqLength xs ys -> and (zipWith (subtype rel) xs ys)
     | otherwise -> False
-  (s1,Sort s2)
-    | s1 == Sort s2 -> True
+  (x,Sort y)
+    | x == Sort y -> True
     | otherwise -> fromMaybe False $ do
-        n1 <- lookupSort rel s1
-        n2 <- lookupSort rel (Sort s2)
+        n1 <- lookupSort rel x 
+        n2 <- lookupSort rel (Sort y)
         return $ G.hasEdge gr (n1, n2)
   (_,_) -> False
 
-lubs :: SubtypeRelation -> [Sort] -> [Sort]
-lubs rel ss = case ss of
-  [] -> []
-  [x] -> [x]
-  (x:y:r) -> filter (\s -> all (\s' -> subtype rel s' s) r) (lubs' rel x y) ++ lubs rel r
-    --let res = filter (\s -> all (\s' -> subtype rel s' s) r) (lubs' rel x y) ++ lubs rel r
-    -- The list res might contain duplicates and sorts which are subsumed by other sorts.
-    -- The right thing to do here is to remove subsumed elements, however this operation
-    -- is expensive.
-    --in filter (\s -> not (any (\s' -> s /= s' && subtype rel s s') res)) (nub res)
-    
-
-lubs' :: SubtypeRelation -> Sort -> Sort -> [Sort]
-lubs' rel@(SubtypeRelation _ _ gr) sort1 sort2 = case (sort1,sort2) of
-  (Bottom,_) -> return sort2
-  (_,Bottom) -> return sort1
-  (Top,_) -> return Top
-  (_,Top) -> return Top
-  (List s1,  List s2)   -> List <$> lubs' rel s1 s2
-  (Option s1,Option s2) -> Option <$> lubs' rel s1 s2
-  (Tuple ts1,Tuple ts2) | eqLength ts1 ts2 -> Tuple <$> zipWithM (lubs' rel) ts1 ts2
-  (s1,Sort s2)
-    | s1 == Sort s2 -> return sort1
-    | otherwise -> fromMaybe mempty $ do
-       n1 <- lookupSort rel s1
-       n2 <- lookupSort rel (Sort s2)
-       case () of
-         _ | n1 == n2 -> return [sort1]
-           | G.hasEdge gr (n1, n2) -> return [sort2]
-           | G.hasEdge gr (n2, n1) -> return [sort1]
-           | otherwise -> do
-               let sup1 = S.fromList $ G.suc gr n1
-                   sup2 = S.fromList $ G.suc gr n2
-               mapM (G.lab gr) $
-                 S.toList $
-                 removeNonLeastUpperBounds rel $
-                 sup1 `S.intersection` sup2
-  _ -> mempty
-
-removeNonLeastUpperBounds :: SubtypeRelation -> IntSet -> IntSet
-removeNonLeastUpperBounds (SubtypeRelation _ _ gr) ss =
-    S.filter (\x -> not $ any (\y -> x /= y && G.hasEdge gr (y,x)) (S.toList ss)) ss
-{-# INLINE removeNonLeastUpperBounds #-}
+lub :: SubtypeRelation -> Sort -> Sort -> Sort
+lub rel s1 s2
+  | subtype rel s1 s2 = s2
+  | subtype rel s2 s1 = s1
+  | otherwise         = Coproduct s1 s2
 
 lower :: SubtypeRelation -> Sort -> [Sort]
-lower rel@(SubtypeRelation _ _ gr) s0 = case s0 of
+lower rel@(SubtypeRelation _ _ gr) s = case s of
   Bottom -> [Bottom]
   Top -> error "lower set of top is unsupported"
-  List s -> List <$> lower rel s
-  Option s -> Option <$> lower rel s
-  Tuple ss -> Tuple <$> permutations (lower rel <$> ss)
-  s@(Sort _) -> fromMaybe mempty $ do
+  Coproduct x y -> [x,y]
+  List x -> List <$> lower rel x
+  Option x -> Option <$> lower rel x
+  Tuple xs -> Tuple <$> permutations (lower rel <$> xs)
+  Sort _ -> fromMaybe (return s) $ do
     n <- lookupSort rel s
-    ss <- traverse (G.lab gr) (G.pre gr n)
-    return (s:ss)
+    xs <- traverse (G.lab gr) (G.pre gr n)
+    return (s:xs)
 

@@ -1,6 +1,9 @@
 module Data.TypedResult where
 
 import Control.Monad
+import Control.Arrow
+import Control.Applicative
+
 import Data.Hashable
 import Data.Semigroup
 import Data.Text (Text)
@@ -24,6 +27,16 @@ instance Monad TypedResult where
     Fail -> Fail
     TypeError t -> TypeError t
 
+instance Alternative TypedResult where
+  empty = mzero
+  (<|>) = mplus
+
+instance MonadPlus TypedResult where
+  mzero = Fail
+  mplus (Success a) _ = Success a
+  mplus Fail r = r
+  mplus (TypeError msg) _ = TypeError msg
+
 instance Semigroup (TypedResult a) where
   Success a <> _ = Success a
   Fail <> Success b = Success b
@@ -39,3 +52,7 @@ instance Hashable a => Hashable (TypedResult a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a
   hashWithSalt s Fail = s `hashWithSalt` (1::Int)
   hashWithSalt s (TypeError t) = s `hashWithSalt` (2::Int) `hashWithSalt` t
+
+class Arrow p => TypeError p where
+  typeError :: p Text a
+

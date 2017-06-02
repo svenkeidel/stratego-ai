@@ -5,8 +5,10 @@
 module Data.Term where
 
 import Prelude hiding (fail)
+
 import Data.Constructor
 import Data.Text(Text)
+import Data.Order
 
 import Control.Arrow hiding ((<+>))
 import Control.Arrow.Try
@@ -17,7 +19,7 @@ import Utils
 type (:+:) = Either
 infixr :+:
 
-type TermF t = (Constructor,[t]) :+: Text :+: Int :+: ()
+newtype TermF t = TermF ((Constructor,[t]) :+: Text :+: Int :+: ()) deriving (Eq)
 
 class (ArrowChoice p) => HasTerm t p where
   matchTerm :: p t (TermF t)
@@ -32,7 +34,7 @@ class (ArrowChoice p) => HasTerm t p where
 
   term :: p (TermF t) t
 
-  equal :: (ArrowChoice p, ArrowTry p, ArrowAppend p, Monoid t) => p (t,t) t
+  equal :: (ArrowChoice p, ArrowTry p, ArrowAppend p, Lattice t) => p (t,t) t
   equal = proc (t1,t2) -> do
     m <- matchTerm *** matchTerm -< (t1,t2)
     case m of
@@ -51,6 +53,12 @@ class (ArrowChoice p) => HasTerm t p where
       (t, Wildcard) -> fail <+> term -< t
       (_,_) -> fail -< ()
 
+instance Show s => Show (TermF s) where
+  show (Cons c ts) = show c ++ if null ts then "" else show ts
+  show (StringLiteral s) = show s
+  show (NumberLiteral n) = show n
+  show _ = "_"
+
 cons :: HasTerm t p => p (Constructor,[t]) t
 cons = term <<^ uncurry Cons
 
@@ -64,14 +72,31 @@ wildcard :: HasTerm t p => p () t
 wildcard = term <<^ const Wildcard
 
 pattern Cons :: Constructor -> [t] -> TermF t
-pattern Cons c ts = Left (c,ts)
+pattern Cons c ts = TermF (Left (c,ts))
 
 pattern StringLiteral :: Text -> TermF t
-pattern StringLiteral s = Right (Left s)
+pattern StringLiteral s = TermF (Right (Left s))
 
 pattern NumberLiteral :: Int -> TermF t
-pattern NumberLiteral s = (Right (Right (Left s)))
+pattern NumberLiteral s = TermF (Right (Right (Left s)))
 
 pattern Wildcard :: TermF t
-pattern Wildcard = Right (Right (Right ()))
+pattern Wildcard = TermF (Right (Right (Right ())))
+
+size :: HasTerm t p => p t Int
+size = proc t -> do
+  t' <- matchTerm -< t
+  case t' of
+    Cons _ ts ->
+      arr (succ . sum) <<< mapA size -< ts
+    _ -> returnA -< 1
+         
+height :: HasTerm t p => p t Int
+height = proc t -> do
+  t' <- matchTerm -< t
+  case t' of
+    Cons _ ts
+      | null ts -> returnA -< 1
+      | otherwise -> arr (succ . maximum) <<< mapA height -< ts
+    _ -> returnA -< 1
 
