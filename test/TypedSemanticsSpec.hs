@@ -16,6 +16,7 @@ import           Data.ATerm(parseATerm)
 import           Data.TypedResult
 import qualified Data.Term as T
 import           Data.Text (Text)
+import           Data.TermEnv
 import qualified Data.Text.IO as TIO
 import qualified Data.HashMap.Lazy as M
 
@@ -74,13 +75,13 @@ spec = do
   describe "Case Studies" $ describe "PCF" $ beforeAll parsePCFCaseStudy $
     it "should execute well typed programs without a problem" $ \m -> do
       evalPCF m (tup [nil (List Bottom), zero])
-        `shouldBe` Success (zero, M.empty)
+        `shouldBe` Success (zero, tenv)
 
       evalPCF m (tup [nil (List Bottom), abs "x" num (var "x")])
-        `shouldBe` Success (abs "x" num (var "x"), M.empty)
+        `shouldBe` Success (abs "x" num (var "x"), tenv)
  
       evalPCF m (tup [nil (List Bottom), app (abs "x" num (succ (var "x"))) zero])
-        `shouldBe` Success (succ zero, M.empty)
+        `shouldBe` Success (succ zero, tenv)
 
   where
 
@@ -101,7 +102,7 @@ spec = do
 
     (&) = flip ($)
 
-    evalPCF module_ t = evalModule module_ (Call "eval_0_0" [] []) (t,M.empty)
+    evalPCF module_ t = evalModule module_ (Call "eval_0_0" [] []) (t,tenv)
 
     parsePCFCaseStudy = do
       file <- TIO.readFile =<< getDataFileName "case-studies/pcf/pcf.aterm"
@@ -128,4 +129,6 @@ spec = do
     num = Cons "Num" [] "Type"
 
     tup :: [Term] -> Term
-    tup ts = Cons "" ts (Tuple (map getSort ts))
+    tup ts = Cons "" ts (Tuple (fmap getSort ts))
+
+    tenv = ConcreteTermEnv M.empty

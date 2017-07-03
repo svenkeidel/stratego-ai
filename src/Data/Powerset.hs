@@ -1,27 +1,53 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE DeriveTraversable #-}
 module Data.Powerset where
 
+import           Prelude hiding (map,(.),id)
+
+import           Control.Category
 import           Control.Arrow 
 
-import           Data.Sequence (Seq,(|>))
+import           Data.Sequence (Seq,(|>),(<|),viewl,ViewL(..))
+import qualified Data.Sequence as S
 import           Data.Hashable
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as H
-import           Data.Foldable (foldl')
-import           Data.Order
+import           Data.Foldable (foldl',toList)
+-- import           Data.Order
+import           Data.List (intercalate)
 
-newtype Pow a = Pow (Seq a) deriving (Functor, Applicative, Monad, Monoid, Foldable)
+newtype Pow a = Pow (Seq a) deriving (Eq, Functor, Applicative, Monad, Monoid, Foldable, Traversable)
+
+map :: ArrowChoice c => c x y -> c (Pow x) (Pow y)
+map f = proc (Pow s) -> case viewl s of
+  EmptyL -> returnA -< Pow S.empty
+  x S.:< xs -> do
+    y <- f -< x
+    Pow ys <- map f -< Pow xs
+    returnA -< Pow (y <| ys)
 
 union :: Pow a -> Pow a -> Pow a
 union = mappend
 
-instance (Eq a, Hashable a) => PreOrd (Pow a) where
-  as ⊑ bs = toHashSet as ⊑ toHashSet bs
+unit :: Arrow c => c a (Pow a)
+unit = arr return
 
-instance (Eq a, Hashable a) => PartOrd (Pow a)
+instance Show a => Show (Pow a) where
+  show (Pow a) = "{" ++ intercalate ", " (show <$> toList a) ++ "}"
 
-instance (Eq a, Hashable a) => Lattice (Pow a) where
-  (⊔) = union
+-- instance (Eq (x,y), Hashable (x,y), Galois (Pow x) x' c, Galois (Pow y) y' c, ArrowChoice c) => Galois (Pow (x,y)) (x',y') c where
+--   alpha = (alpha <<< map pi1) &&& (map pi2 >>> alpha)
+--   gamma = cartesian ^<< gamma *** gamma
+
+cartesian :: (Pow a, Pow b) -> Pow (a,b)
+cartesian (as,bs) = do
+  a <- as
+  b <- bs
+  return (a,b)
 
 class Arrow p => Deduplicate p where
   dedup :: (Hashable b,Eq b) => p a b -> p a b

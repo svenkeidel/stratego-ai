@@ -14,8 +14,8 @@ import           Data.ATerm(parseATerm)
 import           Data.PowersetResult
 import           Data.Result
 import qualified Data.Term as T
+import           Data.TermEnv
 import qualified Data.Text.IO as TIO
-import qualified Data.HashMap.Lazy as M
 import           Data.Foldable
 import           Data.List
 
@@ -111,7 +111,7 @@ spec = do
 
     (&) = flip ($)
 
-    evalPCF n module_ t = toList $ unPowRes $ evalModule n module_ (Call "eval_0_0" [] []) (t,M.empty)
+    evalPCF n module_ t = toList $ unPowRes $ evalModule n module_ (Call "eval_0_0" [] []) (t,abstractTermEnv [])
 
     parsePCFCaseStudy = do
       file <- TIO.readFile =<< getDataFileName "case-studies/pcf/pcf.aterm"

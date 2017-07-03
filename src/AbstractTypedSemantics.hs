@@ -11,9 +11,9 @@ import           Prelude hiding (id,(.),fail,all)
 import           InterpreterArrow
 import           WildcardSemantics hiding (Term(..),TermEnv)
 import           Sort
-import           Signature hiding (lookupType,lub)
+import           Signature hiding (lookupType)
 import qualified Signature as Sig
-import           Syntax(Strat,StratEnv,TermVar,Module,signature,stratEnv)
+import           Syntax(Strat,StratEnv,Module,signature,stratEnv)
 import           Utils
 
 import           Control.Arrow hiding ((<+>))
@@ -21,14 +21,16 @@ import           Control.Arrow.Append
 import           Control.Arrow.Try
 
 import           Data.Constructor
-import           Data.HashMap.Lazy (HashMap)
 import           Data.Hashable
 import           Data.Order hiding (lub)
 import           Data.PowersetResult
 import qualified Data.Term as T
 import           Data.Term(HasTerm(..),TermF)
+import           Data.TermEnv
 import           Data.Text(Text,pack)
 import           Data.TypedResult(TypeError(..))
+import           Data.Complete (Complete)
+import qualified Data.Complete as C
 
 import           Text.Printf
 
@@ -39,7 +41,7 @@ data Term
   | Wildcard Sort
   deriving (Eq)
 
-type TermEnv = HashMap TermVar Term
+type TermEnv = AbstractTermEnv Term
 
 evalModule :: Int -> Module -> Strat -> (Term,TermEnv) -> PowersetResult (Term,TermEnv)
 evalModule i module_ = eval i (signature module_) (stratEnv module_)
@@ -52,6 +54,9 @@ instance HasTerm Term (Interp (Signature,senv) s PowersetResult) where
     Cons c ts _ -> returnA -< T.Cons c ts
     StringLiteral s -> returnA -< T.StringLiteral s
     NumberLiteral n -> returnA -< T.NumberLiteral n
+    Wildcard _ -> returnA -< T.Wildcard
+
+  matchTermRefine = proc t -> case t of
     Wildcard Top -> returnA -< T.Wildcard
     Wildcard (Option s) ->
       alternatives -< [T.Cons "None" [], T.Cons "Some" [Wildcard s]]
@@ -69,7 +74,7 @@ instance HasTerm Term (Interp (Signature,senv) s PowersetResult) where
           "String" -> return T.Wildcard
           "INT" -> return T.Wildcard
           _ -> return $ T.Cons c [ Wildcard s | s <- args ]
-  {-# INLINE matchTerm #-}
+    _ -> matchTerm -< t
 
   matchTermAgainstConstructor = proc (c,t) -> case t of
     Cons c' ts _ | c' == c -> returnA -< T.Cons c ts
@@ -95,7 +100,6 @@ instance HasTerm Term (Interp (Signature,senv) s PowersetResult) where
       case Sig.lookupType c sig of
         Just (Fun args _) -> fail <+> returnA -< T.Cons c [ Wildcard s | s <- args ]
         Nothing -> typeError -< pack $ "cannot find constructor: " ++ show c
-  {-# INLINE matchTermAgainstConstructor #-}
 
   term = proc t0 -> case t0 of
     T.Cons "Cons" [x,xs] -> do
@@ -113,7 +117,7 @@ instance HasTerm Term (Interp (Signature,senv) s PowersetResult) where
       returnA -< Cons "Some" [x] $ Option $ getSort x
     T.Cons "None" [] ->
      returnA -< Cons "None" [] $ Option Bottom
-    T.Cons "" ts -> returnA -< Cons "" ts $ Tuple $ map getSort ts
+    T.Cons "" ts -> returnA -< Cons "" ts $ Tuple $ fmap getSort ts
     T.Cons c ts -> do
       sig <- getSignature -< ()
       case Sig.lookupType c sig of
@@ -127,23 +131,6 @@ instance HasTerm Term (Interp (Signature,senv) s PowersetResult) where
     T.NumberLiteral n -> returnA -< NumberLiteral n
     T.Wildcard -> returnA -< Wildcard Top
     _ -> returnA -< error "Pattern match non exhaustive"
-
-  equal = proc (t1,t2) -> case (t1,t2) of
-    (Cons c ts tau,Cons c' ts' _)
-      | c == c' && eqLength ts ts' -> do
-        ts'' <- zipWithA equal -< (ts,ts')
-        returnA -< Cons c ts'' tau
-      | otherwise -> fail -< ()
-    (StringLiteral s, StringLiteral s')
-      | s == s' -> success -< t1
-      | otherwise -> fail -< ()
-    (NumberLiteral n, NumberLiteral n')
-      | n == n' -> success -< t1
-      | otherwise -> fail -< ()
-    (Wildcard _, t) -> fail <+> returnA -< t
-    (t, Wildcard _) -> fail <+> returnA -< t
-    (_,_) -> fail -< ()
- 
 
 -- updates all type tags of terms of structural types while checking
 -- that all terms of non-structural types are subtypes of the expected type.
@@ -183,7 +170,7 @@ getSort t = case t of
 lub :: HasSignature p => p (Sort,Sort) Sort
 lub = proc (s1,s2) -> do
   sig <- getSignature -< ()
-  returnA -< Sig.lub sig s1 s2
+  returnA -< undefined -- Sig.lub sig s1 s2
 
 instance Show Term where
   show (Cons c ts s) = show c ++ (if null ts then "" else show ts) ++ ":" ++ show s
@@ -197,10 +184,53 @@ instance Hashable Term where
   hashWithSalt s (NumberLiteral n) = s `hashWithSalt` (2::Int) `hashWithSalt` n
   hashWithSalt s (Wildcard ss) = s `hashWithSalt` (3::Int) `hashWithSalt` ss
 
-instance PreOrd Term where
-  t ⊑ Wildcard s' = subtype sig (getSort t) s'
-  Cons c ts _ ⊑ Cons c' ts' _ = c == c' && ts ⊑ ts'
-  StringLiteral s ⊑ StringLiteral s' = s == s'
-  NumberLiteral n ⊑ NumberLiteral n' = n == n'
-  _ ⊑ _ = False
+instance (ArrowChoice p, HasSignature p) => PreOrd Term p where
+  (⊑) = proc (t1,t2) -> case (t1,t2) of
+    (t,Wildcard s') -> do
+      sig <- getSignature -< ()
+      returnA -< subtype sig (getSort t) s'
+    (Cons c ts _,Cons c' ts' _) -> do
+      b <- (⊑) -< (ts,ts')
+      returnA -< c == c' && b
+    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
+    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
+    (_, _) -> returnA -< False
 
+instance (ArrowChoice c, HasSignature c) => PartOrd Term c where
+
+instance (ArrowChoice c, HasSignature c) => Lattice Term c where
+  (⊔) = proc (t1,t2) -> case (t1,t2) of
+    (Cons c ts t, Cons c' ts' _)
+      | c == c' -> do
+        ts'' <- zipWithA (⊔) -< (ts,ts')
+        returnA -< Cons c ts'' t
+      | otherwise -> lubWildcard -< (t1,t2)
+    (StringLiteral s, StringLiteral s')
+      | s == s' -> returnA -< StringLiteral s
+      | otherwise -> lubWildcard -< (t1,t2)
+    (NumberLiteral n, NumberLiteral n')
+      | n == n' -> returnA -< NumberLiteral n
+      | otherwise -> lubWildcard -< (t1,t2)
+    (Wildcard _, _) -> lubWildcard -< (t1,t2)
+    (_, Wildcard _) -> lubWildcard -< (t1,t2)
+    (_, _) -> lubWildcard -< (t1,t2)
+    where
+      lubWildcard = proc (t1,t2) -> do
+        s3 <- lub -< (getSort t1, getSort t2)
+        returnA -< Wildcard s3
+
+instance (ArrowChoice c, HasSignature c) => Lattice (Complete Term) c where
+  (⊔) = proc (x,y) -> case (x,y) of
+    (C.Complete t1, C.Complete t2) -> C.Complete ^<< (⊔) -< (t1,t2)
+    (_,_) -> returnA -< C.Top
+
+instance (ArrowChoice c, HasTerm Term c, HasSignature c) => Lattice (Complete (TermF Term)) c where
+  (⊔) = proc (x,y) -> case (x,y) of
+    (C.Complete t1, C.Complete t2) -> do
+      t1' <- term -< t1
+      t2' <- term -< t2
+      t3' <- (⊔) -< (t1',t2')
+      t3  <- matchTerm -< t3'
+      returnA -< C.Complete t3
+    (_,_) -> returnA -< C.Top
+ 

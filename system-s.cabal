@@ -22,6 +22,8 @@ library
                        Data.Constructor,
                        Data.Powerset,
                        Data.Result,
+                       Data.Order,
+                       Data.Complete,
                        Data.PowersetResult,
                        Data.TypedResult,
                        Data.Term,

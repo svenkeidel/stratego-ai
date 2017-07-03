@@ -12,17 +12,18 @@ import           ConcreteSemantics hiding (Term(..),TermEnv,eval)
 import           Sort
 import           Signature hiding (lookupType,lub)
 import qualified Signature as Sig
-import           Syntax(Module,Strat,StratEnv,TermVar,stratEnv,signature)
+import           Syntax(Module,Strat,StratEnv,stratEnv,signature)
 import           Utils
 
 import           Data.Constructor
-import           Data.HashMap.Lazy (HashMap)
-import           Data.Order hiding (lub)
+import           Data.Order hiding (Top,lub)
 import qualified Data.Term as T
 import           Data.Term(HasTerm(..))
 import           Data.TermEnv
 import           Data.Text(Text,pack)
 import           Data.TypedResult
+import           Data.Complete (Complete)
+import qualified Data.Complete as C
 
 import           Control.Arrow
 
@@ -62,15 +63,15 @@ instance HasTerm Term (Interp (Signature,senv) s TypedResult) where
       returnA -< Cons "Some" [x] $ Option $ getSort x
     T.Cons "None" [] ->
      returnA -< Cons "None" [] $ Option Bottom
-    T.Cons "" ts -> returnA -< Cons "" ts $ Tuple $ map getSort ts
+    T.Cons "" ts -> returnA -< Cons "" ts $ Tuple $ fmap getSort ts
     T.Cons c ts -> do
       sig <- getSignature -< ()
       case Sig.lookupType c sig of
         Just (Fun ss rs)
           | eqLength ss ts ->
-              if and (zipWith (subtype sig) (map getSort ts) ss) 
+              if and (zipWith (subtype sig) (fmap getSort ts) ss) 
               then returnA -< Cons c ts rs
-              else typeError -< pack $ printf "constructor application not well typed: %s\nexpected arguments: %s\nbut got: %s" (show c) (show ss) (show (map getSort ts))
+              else typeError -< pack $ printf "constructor application not well typed: %s\nexpected arguments: %s\nbut got: %s" (show c) (show ss) (show (fmap getSort ts))
           | otherwise -> typeError -< pack $ "Wrong number of arguments to constructor: " ++ show c
         Nothing -> typeError -< pack $ "cannot find constructor: " ++ show c
     T.StringLiteral s -> returnA -< StringLiteral s
@@ -98,10 +99,10 @@ updateTag = proc x0 -> case x0 of
       then returnA -< t
       else typeError -< pack $ printf "Expected term of sort %s, but got %s" (show s') (show (getSort t))
        
-lub :: (Arrow p, HasSignature p) => p (Sort,Sort) Sort
+lub :: (Arrow c, HasSignature c) => c (Sort,Sort) Sort
 lub = proc (s1,s2) -> do
   sig <- getSignature -< ()
-  returnA -< Sig.lub sig s1 s2
+  returnA -< undefined -- Sig.lub sig s1 s2
 
 instance Show Term where
   show (Cons c ts s) = show c ++ (if null ts then "" else show ts) ++ ":" ++ show s
@@ -113,23 +114,29 @@ getSort t = case t of
   Cons _ _ s -> s
   StringLiteral _ -> Sort "String"
   NumberLiteral _ -> Sort "INT"
+ 
+instance ArrowChoice c => PreOrd Term c where
+  (⊑) = proc (t1,t2) -> case (t1,t2) of
+    (Cons c ts _,Cons c' ts' _) -> do
+      b <- (⊑) -< (ts,ts')
+      returnA -< c == c' && b
+    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
+    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
+    (_, _) -> returnA -< False
 
-instance PreOrd Term where
-  Cons c ts _ ⊑ Cons c' ts' _ = c == c' && ts ⊑ ts'
-  StringLiteral s ⊑ StringLiteral s' = s == s'
-  NumberLiteral n ⊑ NumberLiteral n' = n == n'
-  _ ⊑ _ = False
+instance ArrowChoice c => PartOrd Term c
 
-instance PartOrd Term
-
-instance Lattice Term where
-  Cons c ts t ⊔ Cons c' ts' _
-    | c == c' && eqLength ts ts' = Cons c (zipWith (⊔) ts ts') t
-    | otherwise = error "Top"
-  StringLiteral s ⊔ StringLiteral s'
-    | s == s' = StringLiteral s
-    | otherwise = error "Top"
-  NumberLiteral n ⊔ NumberLiteral n'
-    | n == n' = NumberLiteral n
-    | otherwise = error "Top"
-  _ ⊔ _ = error "Top"
+instance ArrowChoice c => Lattice (Complete Term) c where
+  (⊔) = proc (t1,t2) -> case (t1,t2) of
+    (C.Complete (Cons c ts t), C.Complete (Cons c' ts' _))
+      | c == c' -> do
+        ts'' <- zipWithA (⊔) -< (C.Complete <$> ts,C.Complete <$> ts')
+        returnA -< Cons c <$> sequenceA ts'' <*> pure t
+      | otherwise -> returnA -< C.Top
+    (C.Complete (StringLiteral s), C.Complete (StringLiteral s'))
+      | s == s' -> returnA -< C.Complete (StringLiteral s)
+      | otherwise -> returnA -< C.Top
+    (C.Complete (NumberLiteral n), C.Complete (NumberLiteral n'))
+      | n == n' -> returnA -< C.Complete (NumberLiteral n)
+      | otherwise -> returnA -< C.Top
+    (_, _) -> returnA -< C.Top

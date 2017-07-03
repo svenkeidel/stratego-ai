@@ -1,15 +1,22 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Control.Arrow.Try where
 
 import Prelude hiding (id,(.))
 
 import Control.Category
 import Control.Arrow
-import Data.Order
 
-class Arrow p => ArrowTry p where
-  fail :: p t a
-  try :: Lattice z => p x y -> p y z -> p x z ->  p x z
+import Data.Order
+import Data.Complete
+
+class Arrow c => ArrowTry c where
+  fail :: c x y
+  try :: Lattice (Complete z) c => c x y -> c y z -> c x z -> c x z
+
+instance ArrowTry (->) where
+  fail = error "fail"
+  try f g _ = g . f
 
 success :: ArrowTry p => p a a
 success = id

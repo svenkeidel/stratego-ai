@@ -1,6 +1,8 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE Arrows #-}
 module Data.Term where
 
@@ -12,7 +14,6 @@ import Data.Order
 
 import Control.Arrow hiding ((<+>))
 import Control.Arrow.Try
-import Control.Arrow.Append
 
 import Utils
 
@@ -21,8 +22,11 @@ infixr :+:
 
 newtype TermF t = TermF ((Constructor,[t]) :+: Text :+: Int :+: ()) deriving (Eq)
 
-class (ArrowChoice p) => HasTerm t p where
+class ArrowChoice p => HasTerm t p where
   matchTerm :: p t (TermF t)
+
+  matchTermRefine :: p t (TermF t)
+  matchTermRefine = matchTerm
 
   matchTermAgainstConstructor :: ArrowTry p => p (Constructor, t) (TermF t)
   matchTermAgainstConstructor = proc (c,t) -> do
@@ -34,33 +38,27 @@ class (ArrowChoice p) => HasTerm t p where
 
   term :: p (TermF t) t
 
-  equal :: (ArrowChoice p, ArrowTry p, ArrowAppend p, Lattice t) => p (t,t) t
-  equal = proc (t1,t2) -> do
-    m <- matchTerm *** matchTerm -< (t1,t2)
-    case m of
-      (Cons c ts,Cons c' ts')
-        | c == c' && eqLength ts ts' -> do
-          ts'' <- zipWithA equal -< (ts,ts')
-          cons -< (c,ts'')
-        | otherwise -> fail -< ()
-      (StringLiteral s, StringLiteral s')
-        | s == s' -> success -< t1
-        | otherwise -> fail -< ()
-      (NumberLiteral n, NumberLiteral n')
-        | n == n' -> success -< t1
-        | otherwise -> fail -< ()
-      (Wildcard, t) -> fail <+> term -< t
-      (t, Wildcard) -> fail <+> term -< t
-      (_,_) -> fail -< ()
-
 instance Show s => Show (TermF s) where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
   show (StringLiteral s) = show s
   show (NumberLiteral n) = show n
   show _ = "_"
 
+instance (PreOrd t p, ArrowChoice p) => PreOrd (TermF t) p where
+  (⊑) = proc (t1,t2) -> case (t1,t2) of
+    (Cons c ts,Cons c' ts') -> do
+      b <- (⊑) -< (ts,ts')
+      returnA -< c == c' && b
+    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
+    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
+    (_,Wildcard) -> returnA -< True
+    (_, _) -> returnA -< False
+
+
+instance (PartOrd t p, ArrowChoice p) => PartOrd (TermF t) p
+
 cons :: HasTerm t p => p (Constructor,[t]) t
-cons = term <<^ uncurry Cons
+cons = term <<~ Cons
 
 stringLiteral :: HasTerm t p => p Text t
 stringLiteral = term <<^ StringLiteral

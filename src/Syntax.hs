@@ -75,13 +75,22 @@ signature (Module sig _) = sig
 
 patternVars :: TermPattern -> Set TermVar
 patternVars t = case t of
+  As v p -> S.singleton v `S.union` patternVars p
   Cons _ ts -> S.unions $ patternVars <$> ts
   Explode f l -> patternVars f `S.union` patternVars l
   Var x -> S.singleton x
   _ -> S.empty
 
 patternVars' :: TermPattern -> [TermVar]
-patternVars' = S.toList . patternVars
+patternVars' t =  case t of
+  As v p -> v : patternVars' p
+  Cons _ ts -> concat $ patternVars' <$> ts
+  Explode f l -> patternVars' f ++ patternVars' l
+  Var x -> return x
+  _ -> []
+
+linear :: TermPattern -> Bool
+linear p = S.size (patternVars p) == length (patternVars' p)
 
 parseModule :: MonadError String m => ATerm -> m Module
 parseModule t = case t of

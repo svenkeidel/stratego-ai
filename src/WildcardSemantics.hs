@@ -9,8 +9,8 @@ import           Prelude hiding (id,fail,concat,sequence,all,(.))
 
 import           InterpreterArrow
 import           SharedSemantics
+import qualified ConcreteSemantics as C
 import           Syntax hiding (Fail,TermPattern(..))
-import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Utils
 
@@ -21,14 +21,16 @@ import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Append
 import           Control.Arrow.Try
 
-import           Data.Term (HasTerm(..),TermF,cons,numberLiteral,stringLiteral,wildcard)
+import           Data.Term (HasTerm(..),TermF,stringLiteral,wildcard)
 import qualified Data.Term as T
 import           Data.TermEnv
 import           Data.Constructor
 import           Data.Powerset
+import qualified Data.Powerset as P
 import           Data.Hashable
 import           Data.Text (Text,append)
 import           Data.Order
+import           Data.Complete
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -41,10 +43,10 @@ data Term
 
 type TermEnv = AbstractTermEnv Term
 
-eval' :: (Eq t, Hashable t, Lattice t, Lattice [t],
-          ArrowChoice p, ArrowAppend p, ArrowTry p, ArrowApply p,
-          Deduplicate p, HasStratEnv p, HasTerm t p, HasTermEnv (AbstractTermEnv t) t p)
-      => Int -> Strat -> p t t
+eval' :: (Eq t, Hashable t, PartOrd t c, Lattice (Complete t) c,
+          ArrowChoice c, ArrowAppend c, ArrowTry c, ArrowApply c,
+          Deduplicate c, HasStratEnv c, HasTerm t c, HasTermEnv (AbstractTermEnv t) t c)
+      => Int -> Strat -> c t t
 eval' 0 _ = proc _ ->
   fail <+> wildcard -< ()
 eval' i s0 = dedup $ case s0 of
@@ -89,111 +91,6 @@ prim f ps = proc _ -> case f of
       --   Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
 -- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
 
-match :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv env t p, Lattice t)
-      => p (TermPattern,t) t
-match = proc (p,t) -> case p of
-  S.As v p2 -> do
-    t' <- match -< (S.Var v,t)
-    match -< (p2,t')
-  S.Var "_" -> success -< t
-  S.Var x -> do
-    m <- lookupTermVar -< x
-    case m of
-      Just t' -> do
-        t'' <- equal -< (t,t')
-        insertTerm -< (x,t'')
-        success -< t''
-      Nothing -> do
-        insertTerm -< (x,t)
-        returnA -< t
-  S.Cons c ts -> do
-    m <- matchTermAgainstConstructor -< (c,t)
-    case m of
-      T.Cons c' ts'
-        | eqLength ts ts' -> do
-            ts'' <- zipWithA match -< (ts,ts')
-            T.cons -< (c',ts'')
-        | otherwise -> fail -< ()
-      T.Wildcard -> do
-        l <- mapA wildcard -< [() | _ <- ts]
-        ts'' <- zipWithA match -< (ts,l)
-        fail <+> cons -< (c,ts'')
-      _ -> fail -< ()
-  S.Explode c ts -> do
-    m <- matchTerm -< t
-    case m of
-      T.Cons (Constructor c') ts' -> do
-        s <- stringLiteral -< c'
-        match -< (c,s)
-        l <- convertToList -< ts'
-        match -< (ts, l)
-        success -< t
-      T.StringLiteral _ -> do
-        l <- convertToList -< []
-        match -< (ts, l)
-        success -< t
-      T.NumberLiteral _ -> do
-        l <- convertToList -< []
-        match -< (ts, l)
-        success -< t
-      T.Wildcard ->
-        (do
-          w <- wildcard -< ()
-          match -< (c,  w)
-          w' <- wildcard -< ()
-          match -< (ts, w')
-          success -< t)
-        <+>
-        (do
-          l <- convertToList -< []
-          match -< (ts, l)
-          success -< t)
-      _ -> fail -< ()
-  S.StringLiteral s -> do
-    m <- matchTerm -< t
-    case m of
-      T.StringLiteral s'
-        | s == s' -> success -< t
-        | otherwise -> fail -< ()
-      T.Wildcard -> fail <+> stringLiteral -< s
-      _ -> fail -< ()
-  S.NumberLiteral n -> do
-    m <- matchTerm -< t
-    case m of
-      T.NumberLiteral n'
-        | n == n' -> success -< t
-        | otherwise -> fail -< ()
-      T.Wildcard -> fail <+> numberLiteral -< n
-      _ -> fail -< ()
--- {-# SPECIALISE match :: Interp StratEnv TermEnv PowersetResult (TermPattern, Term) Term #-}
-
-build :: (ArrowChoice p, ArrowAppend p, ArrowTry p, HasTerm t p, HasTermEnv env t p, Lattice t)
-      => p TermPattern t
-build = proc p -> case p of
-  S.As _ _ -> error "As-pattern in build is disallowed" -< ()
-  S.Var x -> do
-    m <- lookupTermVar -< x
-    case m of
-      Just t -> returnA -< t
-      Nothing -> wildcard -< ()
-  S.Cons c ts -> do
-    ts' <- mapA build -< ts
-    cons -< (c,ts')
-  S.Explode c ts -> do
-    m <- matchTerm <<< build -< c
-    case m of
-      T.StringLiteral s -> do
-        ts' <- build -< ts
-        ts'' <- convertFromList -< ts'
-        case ts'' of
-          Just tl -> cons -< (Constructor s,tl)
-          Nothing -> fail <+> wildcard -< ()
-      T.Wildcard -> fail <+> wildcard -< ()
-      _ -> fail -< ()
-  S.NumberLiteral n -> numberLiteral -< n
-  S.StringLiteral s -> stringLiteral -< s
--- {-# SPECIALISE build :: Interp StratEnv TermEnv PowersetResult TermPattern Term #-}
-
 -- Instances -----------------------------------------------------------------------------------------
 
 matchTermDefault :: Term -> TermF Term
@@ -202,7 +99,6 @@ matchTermDefault t = case t of
   StringLiteral s -> T.StringLiteral s
   NumberLiteral n -> T.NumberLiteral n
   Wildcard -> T.Wildcard
-{-# INLINE matchTermDefault #-}
 
 termDefault :: TermF Term -> Term
 termDefault t = case t of
@@ -211,42 +107,59 @@ termDefault t = case t of
   T.StringLiteral s -> StringLiteral s
   T.Wildcard -> Wildcard
   _ -> error "cannot construct term"
-{-# INLINE termDefault #-}
 
 instance Monad m => HasTerm Term (Interp r s m) where
   matchTerm = arr matchTermDefault
-  {-# INLINE matchTerm #-}
   term = arr termDefault
-  {-# INLINE term #-}
 
 instance HasTerm Term (->) where
   matchTerm = arr matchTermDefault
-  {-# INLINE matchTerm #-}
   term = arr termDefault
-  {-# INLINE term #-}
 
-instance PreOrd Term where
-  _ ⊑ Wildcard = True
-  Cons c ts ⊑ Cons c' ts' = c == c' && ts ⊑ ts'
-  StringLiteral s ⊑ StringLiteral s' = s == s'
-  NumberLiteral n ⊑ NumberLiteral n' = n == n'
-  _ ⊑ _ = False
+instance ArrowChoice c => PreOrd Term c where
+  (⊑) = proc (t1,t2) -> case (t1,t2) of
+    (_,Wildcard) -> returnA -< True
+    (Cons c ts,Cons c' ts') -> do
+      b <- (⊑) -< (ts,ts')
+      returnA -< c == c' && b
+    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
+    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
+    (_, _) -> returnA -< False
 
-instance PartOrd Term
+instance ArrowChoice c => PartOrd Term c
 
-instance Lattice Term where
-  Cons c ts ⊔ Cons c' ts'
-    | c == c' && eqLength ts ts' = Cons c (zipWith (⊔) ts ts')
-    | otherwise = Wildcard
-  StringLiteral s ⊔ StringLiteral s'
-    | s == s' = StringLiteral s
-    | otherwise = Wildcard
-  NumberLiteral n ⊔ NumberLiteral n'
-    | n == n' = NumberLiteral n
-    | otherwise = Wildcard
-  Wildcard ⊔ _ = Wildcard
-  _ ⊔ Wildcard = Wildcard
-  _ ⊔ _ = Wildcard
+instance ArrowChoice c => Lattice Term c where
+  (⊔) = proc (t1,t2) -> case (t1,t2) of
+    (Cons c ts, Cons c' ts')
+      | c == c' && eqLength ts ts' -> do
+        ts'' <- zipWithA (⊔) -< (ts,ts')
+        returnA -< Cons c ts''
+      | otherwise -> returnA -< Wildcard
+    (StringLiteral s, StringLiteral s')
+      | s == s' -> returnA -< StringLiteral s
+      | otherwise -> returnA -< Wildcard
+    (NumberLiteral n, NumberLiteral n')
+      | n == n' -> returnA -< NumberLiteral n
+      | otherwise -> returnA -< Wildcard
+    (Wildcard, _) -> returnA -< Wildcard
+    (_, Wildcard) -> returnA -< Wildcard
+    (_, _) -> returnA -< Wildcard
+
+instance ArrowChoice p => Lattice (Complete Term) p where
+  (⊔) = proc (x,y) -> case (x,y) of
+    (Complete t1, Complete t2) -> Complete ^<< (⊔) -< (t1,t2)
+    (_,_) -> returnA -< Top
+
+instance ArrowChoice p => Galois (Pow C.Term) Term p where
+  alpha = lub <<< P.map go
+    where
+      go = proc t -> case t of
+        C.Cons c ts -> do
+          ts' <- mapA go -< ts
+          returnA -< Cons c ts'
+        C.StringLiteral s -> returnA -< StringLiteral s
+        C.NumberLiteral s -> returnA -< NumberLiteral s
+  gamma = error "Infinite"
 
 instance Show Term where
   show (Cons c ts) = show c ++ show ts

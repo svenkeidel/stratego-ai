@@ -1,7 +1,13 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE Arrows #-}
 module Data.Result where
+
+import Prelude hiding (map)
 
 import Control.Monad
 import Control.Applicative
+import Control.Arrow
 
 import Data.Hashable
 import Data.Semigroup
@@ -10,9 +16,17 @@ import Data.Order
 data Result a = Success a | Fail
   deriving (Eq,Ord,Show)
 
+isSuccess :: Result a -> Bool
+isSuccess (Success _) = True
+isSuccess Fail = False
+
 instance Functor Result where
-  fmap f (Success a) = Success (f a)
-  fmap _ Fail = Fail
+  fmap = map
+
+map :: ArrowChoice c => c x y -> c (Result x) (Result y)
+map f = proc r -> case r of
+  Success a -> Success ^<< f -< a
+  Fail -> returnA -< Fail
 
 instance Applicative Result where
   pure = return
@@ -47,9 +61,14 @@ instance Hashable a => Hashable (Result a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a
   hashWithSalt s Fail = s `hashWithSalt` (1::Int)
 
-instance PreOrd a => PreOrd (Result a) where
-  Fail ⊑ Fail = True
-  Success a ⊑ Success b = a ⊑ b
-  _ ⊑ _ = False
+instance (PreOrd a p, ArrowChoice p) => PreOrd (Result a) p where
+  (⊑) = proc m -> case m of
+    (Success a, Success b) -> (⊑) -< (a,b)
+    (Fail, Fail) -> returnA -< True
+    (_,_) -> returnA -< False
 
-instance PartOrd a => PartOrd (Result a)
+instance (PartOrd a p, ArrowChoice p) => PartOrd (Result a) p
+
+instance (Galois x y p, ArrowChoice p) => Galois (Result x) (Result y) p where
+  alpha = map alpha
+  gamma = map gamma

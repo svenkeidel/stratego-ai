@@ -1,7 +1,11 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Arrows #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Signature(Signature, HasSignature(..), Sort(..), Fun(..), SortId(..),
-                 empty, insertType, lookupType, insertSubtype, subtype, lub, inhabitants) where
+                 empty, insertType, lookupType, insertSubtype, subtype, inhabitants) where
 
 import           Prelude hiding (lookup)
 
@@ -13,6 +17,7 @@ import           Data.Constructor
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Maybe
+import           Data.Order
 
 import           Control.Arrow
 
@@ -36,9 +41,6 @@ lookupType c (Signature (cons,_) _) = M.lookup c cons
 subtype :: Signature -> Sort -> Sort -> Bool
 subtype (Signature _ rel) = R.subtype rel
 
-lub :: Signature -> Sort -> Sort -> Sort
-lub (Signature _ rel) = R.lub rel
-
 inhabitants :: Signature -> Sort -> [(Constructor,Fun)]
 inhabitants sig@(Signature (_,sorts) rel) s0 = do
   s <- R.lower rel s0
@@ -54,5 +56,10 @@ inhabitants sig@(Signature (_,sorts) rel) s0 = do
     Sort x -> fromMaybe (error $ "Sort not found: " ++ show x)
                         (M.lookup s sorts)
 
-class Arrow p => HasSignature p where
-  getSignature :: p () Signature
+class Arrow c => HasSignature c where
+  getSignature :: c () Signature
+
+instance HasSignature c => PreOrd Sort c where
+  (⊑) = proc (s1,s2) -> do
+    sig <- getSignature -< ()
+    returnA -< subtype sig s1 s2

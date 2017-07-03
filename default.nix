@@ -2,7 +2,7 @@
 
 let hsEnv = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install attoparsec hlint text containers unordered-containers hspec mtl
-    pretty arrows fgl criterion stylish-haskell (pkgs.haskell.lib.dontCheck HaRe)
+    pretty arrows fgl criterion stylish-haskell
   ]);
 
   texEnv = (pkgs.texlive.combine {

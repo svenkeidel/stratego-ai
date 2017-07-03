@@ -1,17 +1,46 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Data.PowersetResult where
 
+import           Prelude hiding (map,(.),id)
+
 import           Control.Monad
+import           Control.Arrow
+import           Control.Category
 
 import           Data.Hashable
 import           Data.Powerset (Pow)
 import qualified Data.Powerset as P
-import           Data.Result
+import           Data.Result (Result(..))
+import qualified Data.Result as R
 import           Data.Order
+import           Data.Foldable (toList)
+import           Utils
 
 newtype PowersetResult a = PowRes { unPowRes :: Pow (Result a) }
-  deriving (Functor,PreOrd,PartOrd,Lattice,Monoid)
+  deriving (Functor,Monoid)
+
+map :: ArrowChoice c => c x y -> c (PowersetResult x) (PowersetResult y)
+map f = proc (PowRes a) -> PowRes ^<< P.map (R.map f) -< a
+
+instance (PreOrd a p, ArrowChoice p, ArrowApply p) => PreOrd (PowersetResult a) p where
+  (⊑) = proc (PowRes xs,PowRes ys) ->
+    allA (proc x -> anyA (proc y -> (⊑) -< (x,y)) -<< toList ys) -<< toList xs
+
+instance (Galois (Pow x) x' p, ArrowChoice p, ArrowApply p, Eq x, Hashable x)
+  => Galois (Pow (Result x)) (PowersetResult x') p where
+  alpha = map (alpha . arr (return :: x -> Pow x)) . arr PowRes
+  gamma = arr (join . fmap collect . unPowRes) . map (gamma :: p x' (Pow x))
+
+collect :: Result (Pow a) -> Pow (Result a)
+collect r = case r of
+  Success x -> Success <$> x
+  Fail -> return Fail
 
 instance Applicative PowersetResult where
   pure = return
@@ -24,6 +53,9 @@ instance Monad PowersetResult where
     case r of
       Success a -> unPowRes (k a)
       Fail -> return Fail
+
+instance Show a => Show (PowersetResult a) where
+  show (PowRes a) = show a
 
 fromFoldable :: Foldable f => f (Result a) -> PowersetResult a
 fromFoldable = PowRes . P.fromFoldable
