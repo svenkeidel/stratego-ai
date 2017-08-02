@@ -5,30 +5,27 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WildcardSemantics where
 
-import           Prelude hiding (id,fail,concat,sequence,all,(.))
+import           Prelude hiding (id,fail,concat,sequence,all,(.),uncurry)
 
 import           InterpreterArrow
-import           SharedSemantics
 import qualified ConcreteSemantics as C
-import           Syntax hiding (Fail,TermPattern(..))
-import qualified Syntax as S
 import           Utils
 
 import           Control.DeepSeq
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
 import           Control.Arrow hiding ((<+>))
-import           Control.Arrow.Append
+import           Control.Arrow.Join
 import           Control.Arrow.Try
+import           Control.Arrow.Apply
 
-import           Data.Term (HasTerm(..),TermF,stringLiteral,wildcard)
-import qualified Data.Term as T
+import           Data.Term (IsTerm(..),IsAbstractTerm(..),stringLiteral,TermUtils(..))
 import           Data.TermEnv
 import           Data.Constructor
 import           Data.Powerset
 import qualified Data.Powerset as P
 import           Data.Hashable
-import           Data.Text (Text,append)
+import           Data.Text (Text)
 import           Data.Order
 import           Data.Complete
 
@@ -43,47 +40,26 @@ data Term
 
 type TermEnv = AbstractTermEnv Term
 
-eval' :: (Eq t, Hashable t, PartOrd t c, Lattice (Complete t) c,
-          ArrowChoice c, ArrowAppend c, ArrowTry c, ArrowApply c,
-          Deduplicate c, HasStratEnv c, HasTerm t c, HasTermEnv (AbstractTermEnv t) t c)
-      => Int -> Strat -> c t t
-eval' 0 _ = proc _ ->
-  fail <+> wildcard -< ()
-eval' i s0 = dedup $ case s0 of
-  Id -> id
-  S.Fail -> fail
-  Seq s1 s2 -> eval' i s2 . eval' i s1 
-  GuardedChoice s1 s2 s3 -> try (eval' i s1) (eval' i s2) (eval' i s3)
-  One s -> lift (one (eval' i s))
-  Some s -> lift (some (eval' i s))
-  All s -> lift (all (eval' i s))
-  Scope xs s -> scope xs (eval' i s)
-  Match f -> proc t -> match -< (f,t)
-  Build f -> proc _ -> build -< f
-  Let bnds body -> let_ bnds body (eval' i)
-  Call f ss ps -> call f ss ps (eval' (i-1))
-  Prim f _ ps -> prim f ps
--- {-# SPECIALISE eval' :: Int -> Strat -> Interp StratEnv TermEnv PowersetResult Term Term #-}
-
-prim :: (ArrowTry p, ArrowAppend p, HasTerm t p, HasTermEnv (AbstractTermEnv t) t p)
-     => StratVar -> [TermVar] -> p a t
-prim f ps = proc _ -> case f of
-    "SSL_strcat" -> do
-      args <- lookupTermArgs -< ps
-      case args of
-        [T.StringLiteral t1, T.StringLiteral t2] -> stringLiteral -< t1 `append` t2
-        [T.Wildcard, _] -> wildcard -< ()
-        [_, T.Wildcard] -> wildcard -< ()
-        _ -> fail -< ()
-    "SSL_newname" -> do
-      args <- lookupTermArgs -< ps
-      case args of
-        [T.StringLiteral _] -> wildcard -< ()
-        [T.Wildcard] -> wildcard -< ()
-        _ -> fail -< ()
-    _ -> error ("unrecognized primitive function: " ++ show f) -< ()
-  where
-    lookupTermArgs = undefined
+-- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
+--      => StratVar -> [TermVar] -> p a t
+-- prim f ps = undefined
+  -- proc _ -> case f of
+  --   "SSL_strcat" -> do
+  --     args <- lookupTermArgs -< ps
+  --     case args of
+  --       [T.StringLiteral t1, T.StringLiteral t2] -> stringLiteral -< t1 `append` t2
+  --       [T.Wildcard, _] -> wildcard -< ()
+  --       [_, T.Wildcard] -> wildcard -< ()
+  --       _ -> fail -< ()
+  --   "SSL_newname" -> do
+  --     args <- lookupTermArgs -< ps
+  --     case args of
+  --       [T.StringLiteral _] -> wildcard -< ()
+  --       [T.Wildcard] -> wildcard -< ()
+  --       _ -> fail -< ()
+  --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
+  -- where
+  --   lookupTermArgs = undefined
       -- proc args -> do
       -- tenv <- getTermEnv -< ()
       -- case mapM (`M.lookup` tenv) args of
@@ -93,28 +69,115 @@ prim f ps = proc _ -> case f of
 
 -- Instances -----------------------------------------------------------------------------------------
 
-matchTermDefault :: Term -> TermF Term
-matchTermDefault t = case t of
-  Cons c ts -> T.Cons c ts
-  StringLiteral s -> T.StringLiteral s
-  NumberLiteral n -> T.NumberLiteral n
-  Wildcard -> T.Wildcard
+instance Monad m => IsTerm Term (Interp r s m) where
+  matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
+    Cons c' ts'
+      | c == c' && eqLength ts ts' -> do
+        ts'' <- matchSubterms -< (ts,ts')
+        returnA -< Cons c ts''
+      | otherwise -> fail -< ()
+    Wildcard ->
+      (returnA <+> fail) -< Cons c [ Wildcard | _ <- [1..(length ts)] ]
+    _ -> returnA -< t
 
-termDefault :: TermF Term -> Term
-termDefault t = case t of
-  T.Cons c ts -> Cons c ts
-  T.NumberLiteral n -> NumberLiteral n
-  T.StringLiteral s -> StringLiteral s
-  T.Wildcard -> Wildcard
-  _ -> error "cannot construct term"
+  matchTermAgainstString = proc (s,t) -> case t of
+    StringLiteral s'
+      | s == s' -> returnA -< t
+      | otherwise -> fail -< ()
+    Wildcard ->
+      stringLiteral <+> fail -< s
+    _ -> fail -< ()
 
-instance Monad m => HasTerm Term (Interp r s m) where
-  matchTerm = arr matchTermDefault
-  term = arr termDefault
+  matchTermAgainstNumber = proc (n,t) -> case t of
+    NumberLiteral n'
+      | n == n' -> returnA -< t
+      | otherwise -> fail -< ()
+    Wildcard ->
+      numberLiteral <+> fail -< n
+    _ -> fail -< ()
+  
+  matchTermAgainstExplode matchCons matchSubterms = proc t -> case t of
+      Cons (Constructor c) ts -> do
+        matchCons -< (StringLiteral c)
+        matchSubterms -< convertToList ts
+        returnA -< t
+      StringLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+      NumberLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+      Wildcard ->
+        (do matchCons -< Wildcard
+            matchSubterms -< Wildcard)
+        <+>
+        (matchSubterms -< convertToList [])
 
-instance HasTerm Term (->) where
-  matchTerm = arr matchTermDefault
-  term = arr termDefault
+  equal = proc (t1,t2) ->
+    case (t1,t2) of
+      (Cons c ts, Cons c' ts')
+          | c == c' && eqLength ts ts' -> do
+          ts'' <- zipWithA equal -< (ts,ts')
+          cons -< (c,ts'')
+          | otherwise -> fail -< ()
+      (StringLiteral s, StringLiteral s')
+          | s == s' -> success -< t1
+          | otherwise -> fail -< ()
+      (NumberLiteral n, NumberLiteral n')
+          | n == n' -> success -< t1
+          | otherwise -> fail -< ()
+      (Wildcard, t) -> fail <+> success -< t
+      (t, Wildcard) -> fail <+> success -< t
+      (_,_) -> fail -< ()
+
+  convertFromList = proc (c,ts) -> case (c,go ts) of
+    (StringLiteral c', Just ts'') -> returnA -< Cons (Constructor c') ts''
+    (_,                Nothing)   -> fail <+> success -< Wildcard
+    _                             -> fail -< ()
+    where
+      go t = case t of
+        Cons "Cons" [x,tl] -> (x:) <$> go tl
+        Cons "Nil" [] -> Just []
+        Wildcard -> Nothing 
+        _ -> Nothing
+
+  lift f = proc t ->
+    case t of
+      Cons c ts -> do
+        ts' <- f -< ts
+        cons -< (c,ts')
+      StringLiteral {} -> returnA -< t
+      NumberLiteral {} -> returnA -< t
+      Wildcard -> fail <+> success -< Wildcard
+
+  cons = arr (uncurry Cons)
+  numberLiteral = arr NumberLiteral
+  stringLiteral = arr StringLiteral
+
+instance Monad m => IsAbstractTerm Term (Interp r s m) where
+  wildcard = arr (const Wildcard)
+
+instance Monad m => BoundedLattice Term (Interp r s m) where
+  top = arr (const Wildcard)
+
+instance TermUtils Term where
+  convertToList ts = case ts of
+    (x:xs) ->
+      let l = convertToList xs
+      in Cons "Cons" [x,l]
+    [] ->
+      Cons "Nil" []
+    
+  size (Cons _ ts) = sum (size <$> ts) + 1
+  size (StringLiteral _) = 1
+  size (NumberLiteral _) = 1
+  size Wildcard = 1
+
+  height (Cons _ []) = 1
+  height (Cons _ ts) = maximum (height <$> ts) + 1
+  height (StringLiteral _) = 1
+  height (NumberLiteral _) = 1
+  height Wildcard = 1
 
 instance ArrowChoice c => PreOrd Term c where
   (⊑) = proc (t1,t2) -> case (t1,t2) of

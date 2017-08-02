@@ -20,6 +20,7 @@ import           Data.Hashable
 import           Data.Result
 import           Data.Order
 import           Data.TermEnv
+import           Data.Term(TermUtils(..))
 import           Data.Powerset (Pow,fromFoldable)
 import qualified Data.Powerset as P
 import           Data.PowersetResult (PowersetResult)
@@ -40,7 +41,7 @@ spec = do
     it "should work for the abstract case" $ do
       let cons x xs = W.Cons "Cons" [x,xs]
       let t = cons 2 W.Wildcard
-      fmap fst <$> weval 5 (Let [("map", map)]
+      fmap fst <$> weval 2 (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"])) t
         `shouldBe'`
@@ -62,12 +63,13 @@ spec = do
       let t2 = convertToList l2
       return $ counterexample (printf "t: %s\n"
                                       (showLub t1 t2))
-             $ sound' 12 (Let [("map", map)]
+             $ sound' 2 (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"]))
                   [(t1,[]),(t2,[])]
 
   describe "match" $ do
+
     prop "should handle inconsistent environments" $ do
       let t1 = C.Cons "f" []
           t2 = C.Cons "g" []
@@ -97,14 +99,14 @@ spec = do
                     (showLub t2 t3))
              $ sound' i (Match matchPattern `Seq` Build buildPattern) [(t2,[]),(t3,[])]
 
-  describe "lookupTermVar" $
-    prop "should be sound" $
-      sound'' lookupTermVar lookupTermVar 
+  -- describe "lookupTermVar" $
+  --   prop "should be sound" $
+  --     sound'' lookupTermVar lookupTermVar 
 
   where
     
     sound' :: Int -> Strat -> [(C.Term,[(TermVar,C.Term)])] -> Property
-    sound' i s xs = sound'' (C.eval' s) (W.eval' i s) (fmap (\(t,tenv) -> (t,concreteTermEnv tenv)) xs)
+    sound' i s xs = sound'' (C.eval'' s) (W.eval'' i s) (fmap (\(t,tenv) -> (t,concreteTermEnv tenv)) xs)
 
     sound'' :: (Eq a, Eq b, Hashable a, Hashable b, Galois (Pow a) a' (->), Galois (Pow b) b' (->), Show b, Show b')
             => Interp StratEnv (ConcreteTermEnv C.Term) Result a b

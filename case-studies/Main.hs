@@ -2,59 +2,61 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Main where
 
--- import           Prelude hiding (log)
+import           Prelude hiding (log)
 
--- import           Grammar.RegularTreeGrammar
--- import           Syntax hiding (Fail)
--- import qualified WildcardSemantics as W
--- import qualified WildcardSemanticsDelayed as W
--- import qualified Soundness as U
+import           Grammar.RegularTreeGrammar
+import           Syntax hiding (Fail)
+import qualified WildcardSemantics as W
+import qualified WildcardSemanticsDelayed as W
+import qualified Soundness as U
 
--- import qualified Pretty.Haskell as H
--- import qualified Pretty.JavaScript as J
--- import qualified Pretty.PCF as P
--- import           Pretty.Results
+import qualified Pretty.Haskell as H
+import qualified Pretty.JavaScript as J
+import qualified Pretty.PCF as P
+import           Pretty.Results
 
--- import           Paths_system_s
+import           Paths_system_s
 
--- import           Control.Monad
--- import qualified Criterion.Measurement as CM
--- import qualified Criterion.Types as CT
+import           Control.Monad
+import qualified Criterion.Measurement as CM
+import qualified Criterion.Types as CT
 
--- import           Data.ATerm
--- import           Data.Foldable
--- import qualified Data.HashMap.Lazy as M
--- import           Data.HashSet (HashSet)
--- import qualified Data.HashSet as H
--- import           Data.Hashable
--- import           Data.Maybe
--- import           Data.Monoid
--- import           Data.Result
--- import qualified Data.Sequence as S
--- import           Data.String
--- import qualified Data.Text.IO as TIO
--- import           Data.Term (HasTerm)
--- import qualified Data.Term as T
+import           Data.ATerm
+import           Data.Foldable
+import qualified Data.HashMap.Lazy as M
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as H
+import           Data.Hashable
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Result
+import qualified Data.Sequence as S
+import           Data.String
+import qualified Data.Text.IO as TIO
+import           Data.Term (TermUtils)
+import qualified Data.Term as T
+import           Data.TermEnv
+import           Data.Powerset(unPow)
 
--- import           System.IO
+import           System.IO
 
--- import           Text.PrettyPrint hiding (sep,(<>))
--- import           Text.Printf
+import           Text.PrettyPrint hiding (sep,(<>))
+import           Text.Printf
 
 main :: IO ()
-main = return ()
-  -- sizeAnalysisSetup $ \sizeAnalysis ->
-  -- heightAnalysisSetup $ \heightAnalysis ->
+main =
+  sizeAnalysisSetup $ \sizeAnalysis ->
+  heightAnalysisSetup $ \heightAnalysis -> do
   -- wittnessAnalysisSetup $ \wittnessAnalysis ->
   -- ruleInvocationsAnalysisSetup $ \ruleInvocationsAnalysis ->
   -- classificationSetup $ \classification -> do
-  --   CM.initializeTime
+    CM.initializeTime
 
-  --   activate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
-  --     prettyPrint H.ppHaskell <>
-  --     sizeAnalysis <>
-  --     heightAnalysis <>
-  --     wittnessAnalysis
+    -- activate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
+    --   prettyPrint H.ppHaskell <>
+    --   sizeAnalysis <>
+    --   heightAnalysis
+      -- wittnessAnalysis
 
   --   activate $ caseStudy "cca" "norm_0_0" 5 $
   --     prettyPrint H.ppHaskell <>
@@ -62,10 +64,15 @@ main = return ()
   --     heightAnalysis <>
   --     wittnessAnalysis
 
-  --   activate $ caseStudy "pcf" "eval_0_0" 4 $
-  --     prettyPrint P.ppPCF <>
-  --     sizeAnalysis <>
-  --     heightAnalysis <>
+    activate $ caseStudy "arith" "eval_0_0" 3 $
+      prettyPrint P.ppPCF <>
+      sizeAnalysis <>
+      heightAnalysis
+
+    -- activate $ caseStudy "pcf" "eval_0_0" 4 $
+    --   prettyPrint P.ppPCF <>
+    --   sizeAnalysis <>
+    --   heightAnalysis
   --     wittnessAnalysis <>
   --     ruleInvocationsAnalysis pcfEvalGrammar <>
   --     classification pcfEvalGrammar 4
@@ -84,32 +91,32 @@ main = return ()
   --     heightAnalysis <>
   --     wittnessAnalysis
 
-  -- where
-  --   activate :: IO () -> IO ()
-  --   activate cs = cs
+  where
+    activate :: IO () -> IO ()
+    activate cs = cs
 
-    -- deactivate :: IO () -> IO ()
-    -- deactivate _ = return ()
+    deactivate :: IO () -> IO ()
+    deactivate _ = return ()
 
--- prettyPrint :: (t -> Doc) -> Analysis t
--- prettyPrint pprint _ _ _ res =
---   if H.size res <= 200
---      then print $ ppResults pprint (toList res)
---      else printf "Output ommited because of result set contains %d element\n" (H.size res)
+prettyPrint :: (W.Term -> Doc) -> Analysis W.Term
+prettyPrint pprint _ _ _ res =
+  if H.size res <= 200
+     then print $ ppResults pprint (toList res)
+     else printf "Output ommited because of result set contains %d element\n" (H.size res)
 
--- sizeAnalysisSetup :: (Show t, HasTerm t (->)) => (Analysis t -> IO ()) -> IO ()
--- sizeAnalysisSetup k =
---   withFile "size.csv" WriteMode $ \csv -> do
---     hPrintf csv "name;fun;depth;term;size\n"
---     k $ \name fun depth res -> measure "Size Analysis" $ forM_ res $ \t ->
---       hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.size t)
+sizeAnalysisSetup :: (Show t, TermUtils t) => (Analysis t -> IO ()) -> IO ()
+sizeAnalysisSetup k =
+  withFile "size.csv" WriteMode $ \csv -> do
+    hPrintf csv "name;fun;depth;term;size\n"
+    k $ \name fun depth res -> measure "Size Analysis" $ forM_ res $ \t ->
+      hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.size t)
 
--- heightAnalysisSetup :: (Show t, HasTerm t (->)) => (Analysis t -> IO ()) -> IO ()
--- heightAnalysisSetup k =
---   withFile "height.csv" WriteMode $ \csv -> do
---     hPrintf csv "name;fun;depth;term;height\n"
---     k $ \name fun depth res -> measure "Height Analysis" $ forM_ res $ \t ->
---         hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.height t)
+heightAnalysisSetup :: (Show t, TermUtils t) => (Analysis t -> IO ()) -> IO ()
+heightAnalysisSetup k =
+  withFile "height.csv" WriteMode $ \csv -> do
+    hPrintf csv "name;fun;depth;term;height\n"
+    k $ \name fun depth res -> measure "Height Analysis" $ forM_ res $ \t ->
+        hPrintf csv "%s;%s;%d;%s;%d\n" name fun depth (show t) (T.height t)
 
 -- wittnessAnalysisSetup :: (Analysis t -> IO ()) -> IO ()
 -- wittnessAnalysisSetup k =
@@ -170,29 +177,29 @@ main = return ()
 -- orElse :: Maybe a -> a -> a
 -- orElse = flip fromMaybe
 
--- measure :: String -> IO () -> IO ()
--- measure analysisName action = do
---   (m,_) <- CM.measure (CT.nfIO action) 1
---   printf "- %s: %s\n" analysisName (CM.secs (CT.measCpuTime m))
+measure :: String -> IO () -> IO ()
+measure analysisName action = do
+  (m,_) <- CM.measure (CT.nfIO action) 1
+  printf "- %s: %s\n" analysisName (CM.secs (CT.measCpuTime m))
 
--- type Analysis t = String -> String -> Int -> HashSet t -> IO ()
+type Analysis t = String -> String -> Int -> HashSet t -> IO ()
 
--- caseStudy :: String -> String -> Int -> Analysis t -> IO ()
--- caseStudy name function maxDepth analysis = do
---   printf "------------------ case study: %s ----------------------\n" name
---   file <- TIO.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
---   case parseModule =<< parseATerm file of
---     Left e -> fail (show e)
---     Right module_ ->
---       forM_ ([1..maxDepth]::[Int]) $ \depth -> do
+caseStudy :: String -> String -> Int -> Analysis W.Term -> IO ()
+caseStudy name function maxDepth analysis = do
+  printf "------------------ case study: %s ----------------------\n" name
+  file <- TIO.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
+  case parseModule =<< parseATerm file of
+    Left e -> fail (show e)
+    Right module_ ->
+      forM_ ([1..maxDepth]::[Int]) $ \depth -> do
 
---         let res = H.fromList $ toList $ filterResults
---                 $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,M.empty)
+        let res = H.fromList $ toList $ filterResults $ unPow
+                $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,AbstractTermEnv M.empty)
 
---         (m,_) <- CM.measure (CT.nfIO (return res)) 1
---         printf "function: %s, recursion depth: %d, results: %d, time: %s\n" function depth (H.size res) (CM.secs (CT.measCpuTime m))
---         analysis name function depth res
---         putStrLn "\n"
---  where
---    filterResults = fmap (\r -> case r of Success (t,_) -> t; Fail -> error "")
---                 . S.filter (\r -> case r of Success _ -> True; _ -> False)
+        (m,_) <- CM.measure (CT.nfIO (return res)) 1
+        printf "function: %s, recursion depth: %d, results: %d, time: %s\n" function depth (H.size res) (CM.secs (CT.measCpuTime m))
+        analysis name function depth res
+        putStrLn "\n"
+ where
+   filterResults = fmap (\r -> case r of Success (t,_) -> t; Fail -> error "")
+                 . S.filter (\r -> case r of Success _ -> True; _ -> False)

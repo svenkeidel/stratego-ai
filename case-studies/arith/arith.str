@@ -1,0 +1,27 @@
+module arith
+
+signature
+  constructors
+    Zero : Exp
+    Succ : Exp -> Exp
+    Mult : Exp * Exp -> Exp
+    Add  : Exp * Exp -> Exp
+
+    Nil  : List(a)
+    Cons : a * List(a) -> List(a)
+         : ()
+         : a -> (a)
+         : a * b -> (a, b)
+         : a * b * c -> (a, b, c)
+
+rules
+  eval: Mult(Zero(), _) -> Zero()
+  eval: Mult(Succ(m),n) -> <eval>(Add(Mult(m,n),n))
+  eval: Mult(e1,e2)     -> <eval>(Mult(<eval>(e1),<eval>(e2)))
+
+  eval: Add(Zero(), n) -> <eval>(n)
+  eval: Add(Succ(m),n) -> Succ(<eval>(Add(m,n)))
+  eval: Add(e1,e2)     -> <eval>(Add(<eval>(e1),<eval>(e2)))
+
+
+

@@ -16,17 +16,18 @@ import Data.Order
 data Result a = Success a | Fail
   deriving (Eq,Ord,Show)
 
-isSuccess :: Result a -> Bool
-isSuccess (Success _) = True
-isSuccess Fail = False
-
-instance Functor Result where
-  fmap = map
+-- isSuccess :: Result a -> Bool
+-- isSuccess (Success _) = True
+-- isSuccess Fail = False
 
 map :: ArrowChoice c => c x y -> c (Result x) (Result y)
 map f = proc r -> case r of
   Success a -> Success ^<< f -< a
   Fail -> returnA -< Fail
+
+instance Functor Result where
+  fmap f (Success a) = Success (f a)
+  fmap _ Fail = Fail
 
 instance Applicative Result where
   pure = return

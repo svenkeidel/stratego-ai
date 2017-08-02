@@ -5,9 +5,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 module ConcreteSemantics where
 
-import           Prelude hiding (id,(.),fail,all)
+import           Prelude hiding (id,(.),fail,all,curry,uncurry)
 
 import           InterpreterArrow
 import           SharedSemantics
@@ -18,7 +19,8 @@ import           Utils
 
 import           Control.Arrow
 import           Control.Arrow.Try
-import           Control.Arrow.Append
+import           Control.Arrow.Join
+import           Control.Arrow.Apply
 import           Control.Category
 import           Control.Monad hiding (fail)
 
@@ -26,11 +28,9 @@ import           Data.Constructor
 import           Data.Hashable
 import           Data.Result
 import           Data.String (IsString(..))
-import           Data.Term (HasTerm(..),TermF)
+import           Data.Term (IsTerm(..),TermUtils(..))
 import           Data.TermEnv
-import qualified Data.Term as T
 import           Data.Text (Text)
--- import qualified Data.Text as Text
 import           Data.Order
 import           Data.Complete
 
@@ -44,28 +44,13 @@ data Term
 
 type TermEnv = ConcreteTermEnv Term
 
+eval'' :: Strat -> Interp StratEnv TermEnv Result Term Term
+eval'' = eval' (-1)
+
 eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval senv s = runInterp (eval' s) senv
-{-# INLINE eval #-}
+eval senv s = runInterp (eval' (-1) s) senv
+-- eval senv s = runInterp (eval' 0 0 $$ s) senv
 
-eval' :: (ArrowChoice c, ArrowTry c, ArrowAppend c, ArrowApply c, HasTerm t c, HasTermEnv env t c, HasStratEnv c, PartOrd t c, Lattice (Complete t) c) => Strat -> c t t
-eval' s0 = case s0 of
-  Id -> id
-  S.Fail -> fail
-  Seq s1 s2 -> eval' s2 . eval' s1
-  GuardedChoice s1 s2 s3 -> try (eval' s1) (eval' s2) (eval' s3)
-  One s -> lift (one (eval' s))
-  Some s -> lift (some (eval' s))
-  All s -> lift (all (eval' s))
-  Scope xs s -> scope xs (eval' s)
-  Match f -> proc t -> match -< (f,t)
-  Build f -> proc _ -> build -< f
-  Let bnds body -> let_ bnds body eval'
-  Call f ss ps -> call f ss ps eval'
-  Prim f _ ps -> prim f ps
-
-prim :: (ArrowTry p, HasTerm t p, HasTermEnv env t p) => StratVar -> [TermVar] -> p t t
-prim = undefined
 -- prim f ps = proc _ -> case f of
 --   "strcat" -> do
 --     tenv <- getTermEnv -< ()
@@ -84,105 +69,77 @@ prim = undefined
 --       _ -> fail -< ()
 --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
--- match :: (ArrowTry p, ArrowChoice p, ArrowAppend p, HasTerm t p, HasTermEnv env t p, Lattice (Complete t) p) => p (TermPattern, t) t
--- match = proc (p,t) -> case p of
---   S.As v p2 -> do
---     t' <- match -< (S.Var v,t)
---     match -< (p2,t')
---   S.Var "_" -> success -< t
---   S.Var x -> do
---     m <- lookupTermVar -< x
---     case m of
---       Just t' -> do
---         t'' <- equal -< (t,t')
---         insertTerm -< (x,t'')
---         success -< t''
---       Nothing -> do
---         insertTerm -< (x,t)
---         returnA -< t
---   S.Cons c ts -> do
---     m <- matchTermAgainstConstructor -< (c, t)
---     case m of
---       T.Cons _ ts'
---         | eqLength ts ts' -> do
---             ts'' <- zipWithA match -< (ts,ts')
---             T.cons -< (c,ts'')
---         | otherwise -> fail -< ()
---       _ -> fail -< ()
---   S.Explode c ts -> do
---     m <- matchTermRefine -< t
---     case m of
---       T.Cons (Constructor c') ts' -> do
---         s <- T.stringLiteral -< c'
---         match -< (c,s)
---         l <- convertToList -< ts'
---         match -< (ts, l)
---         success -< t
---       T.StringLiteral _ -> do
---         l <- convertToList -< []
---         match -< (ts, l)
---         success -< t
---       T.NumberLiteral _ -> do
---         l <- convertToList -< []
---         match -< (ts,l) 
---         success -< t
---       _ -> fail -< ()
---   S.StringLiteral s -> do
---     m <- matchTerm -< t
---     case m of
---       T.StringLiteral s'
---         | s == s' -> success -< t
---         | otherwise -> fail -< ()
---       _ -> fail -< ()
---   S.NumberLiteral n -> do
---     m <- matchTerm -< t
---     case m of
---       T.NumberLiteral n'
---         | n == n' -> success -< t
---         | otherwise -> fail -< ()
---       _ -> fail -< ()
-
--- build :: (ArrowChoice p, ArrowTry p, HasTerm t p, HasTermEnv env t p) => p TermPattern t
--- build = proc p -> case p of
---   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
---   S.Var x -> do
---     m <- lookupTermVar -< x
---     case m of
---       Just t -> returnA -< t
---       Nothing -> T.wildcard -< ()
---     -- env <- getTermEnv -< ()
---     -- case M.lookup x env of
---     --   Just t -> returnA -< t
---     --   Nothing -> fail -< ()
---   S.Cons c ts -> do
---     ts' <- mapA build -< ts
---     T.cons -< (c,ts')
---   S.Explode c ts -> do
---     m <- matchTerm <<< build -< c
---     case m of
---       T.StringLiteral s -> do
---         ts' <- build -< ts
---         ts'' <- arr fromJust <<< convertFromList -< ts'
---         T.cons -< (Constructor s,ts'')
---       _ -> fail -< ()
---   S.NumberLiteral n -> T.numberLiteral -< n
---   S.StringLiteral s -> T.stringLiteral -< s
-
 -- Instances -----------------------------------------------------------------------------------------
 
-matchTermDefault :: Term -> TermF Term
-matchTermDefault t = case t of
-  Cons c ts -> T.Cons c ts
-  StringLiteral s -> T.StringLiteral s
-  NumberLiteral n -> T.NumberLiteral n
+instance (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm Term c where
+  matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
+    Cons c' ts'
+      | c == c' && eqLength ts ts' -> do
+        ts'' <- matchSubterms -< (ts,ts')
+        returnA -< Cons c ts''
+      | otherwise ->
+        fail -< ()
+    _ -> returnA -< t
 
-instance (ArrowChoice c, ArrowTry c) => HasTerm Term c where
-  matchTerm = arr matchTermDefault
-  term = proc t -> case t of
-    T.Cons c ts -> returnA -< Cons c ts
-    T.NumberLiteral n -> returnA -< NumberLiteral n
-    T.StringLiteral s -> returnA -< StringLiteral s
-    _ -> returnA -< error "cannot construct term"
+  matchTermAgainstString = proc (s,t) -> case t of
+    StringLiteral s'
+      | s == s' -> returnA -< t
+      | otherwise -> fail -< ()
+    _ -> fail -< ()
+
+  matchTermAgainstNumber = proc (n,t) -> case t of
+    NumberLiteral n'
+      | n == n' -> returnA -< t
+      | otherwise -> fail -< ()
+    _ -> fail -< ()
+
+  matchTermAgainstExplode matchCons matchSubterms = proc t -> case t of
+      Cons (Constructor c) ts -> do
+        matchCons -< (StringLiteral c)
+        matchSubterms -< convertToList ts
+        returnA -< t
+      StringLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+      NumberLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+  
+  equal = proc (t1,t2) ->
+    case (t1,t2) of
+      (Cons c ts, Cons c' ts')
+          | c == c' && eqLength ts ts' -> do
+          ts'' <- zipWithA equal -< (ts,ts')
+          cons -< (c,ts'')
+          | otherwise -> fail -< ()
+      (StringLiteral s, StringLiteral s')
+          | s == s' -> success -< t1
+          | otherwise -> fail -< ()
+      (NumberLiteral n, NumberLiteral n')
+          | n == n' -> success -< t1
+          | otherwise -> fail -< ()
+      (_,_) -> fail -< ()
+
+  convertFromList = proc (c,ts) -> case (c,go ts) of
+    (StringLiteral c', Just ts') -> returnA -< Cons (Constructor c') ts'
+    _                            -> fail -< ()
+    where
+      go t = case t of
+        Cons "Cons" [x,tl] -> (x:) <$> go tl
+        Cons "Nil" [] -> Just []
+        _ -> Nothing
+
+  lift f = proc t ->
+    case t of
+      Cons c ts -> do
+        ts' <- f -< ts
+        cons -< (c,ts')
+      StringLiteral {} -> returnA -< t
+      NumberLiteral {} -> returnA -< t
+
+  cons = arr (uncurry Cons)
+  numberLiteral = arr NumberLiteral
+  stringLiteral = arr StringLiteral
 
 instance ArrowChoice p => PreOrd Term p where
   (⊑) = proc (t1,t2) -> case (t1,t2) of
@@ -210,6 +167,32 @@ instance ArrowChoice p => Lattice (Complete Term) p where
       | otherwise -> returnA -< Top
     (_, _) -> returnA -< Top
 
+-- instance Lattice (Complete Term) c => BoundedLattice (Complete Term) c where
+--   top = arr (const Top)
+
+instance TermUtils Term where
+  convertToList ts = case ts of
+    (x:xs) ->
+      let l = convertToList xs
+      in Cons "Cons" [x,l]
+    [] ->
+      Cons "Nil" []
+    
+  size (Cons _ ts) = sum (size <$> ts) + 1
+  size (StringLiteral _) = 1
+  size (NumberLiteral _) = 1
+
+  height (Cons _ []) = 1
+  height (Cons _ ts) = maximum (height <$> ts) + 1
+  height (StringLiteral _) = 1
+  height (NumberLiteral _) = 1
+  
+instance ArrowChoice c => Lattice Term c where
+  (⊔) = undefined
+
+instance ArrowChoice c => BoundedLattice Term c where
+  top = undefined
+
 instance Show Term where
   show (Cons c ts) = show c ++ if null ts then "" else show ts
   show (StringLiteral s) = show s
@@ -236,11 +219,6 @@ instance Arbitrary Term where
     h <- choose (0,7)
     w <- choose (0,4)
     arbitraryTerm h w
-
-height :: Term -> Int
-height t = case t of
-  Cons _ ts -> maximum (fmap height ts ++ [0]) + 1
-  _ -> 1
 
 similar :: Gen (Term,Term)
 similar = do

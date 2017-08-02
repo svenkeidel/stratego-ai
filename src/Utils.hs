@@ -56,4 +56,3 @@ pi1 = arr fst
 
 pi2 :: Arrow c => c (x,y) y
 pi2 = arr snd
-

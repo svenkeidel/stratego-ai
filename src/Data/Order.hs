@@ -15,19 +15,22 @@ import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.Hashable
 import Data.Complete
-import Data.Powerset hiding (map)
+import Data.Powerset
 import qualified Data.Sequence as S
 
 -- | Reflexive, transitive order
-class Arrow p => PreOrd a p where
-  (⊑) :: p (a,a) Bool
+class Arrow c => PreOrd x c where
+  (⊑) :: c (x,x) Bool
 
 -- | Reflexive, transitive and anti-symmetric order
-class PreOrd a p => PartOrd a p
+class PreOrd x c => PartOrd x c
 
 -- | Reflexive, transitive, anti-symmetric and complete order
-class PartOrd a p => Lattice a p where
-  (⊔) :: p (a,a) a
+class PartOrd x c => Lattice x c where
+  (⊔) :: c (x,x) x
+
+class Lattice x c => BoundedLattice x c where
+  top :: c a x
 
 lub :: (Lattice x c, ArrowChoice c) => c (Pow x) x
 lub = go . arr (\(Pow a) -> a)
@@ -47,6 +50,10 @@ instance (Eq a, Hashable a, Arrow p) => PartOrd (Pow a) p
 
 instance (Eq a, Hashable a, Arrow p) => Lattice (Pow a) p where
   (⊔) = arr (uncurry union)
+
+instance (Eq (x,y), Hashable (x,y), Galois (Pow x) x' c, Galois (Pow y) y' c, ArrowChoice c) => Galois (Pow (x,y)) (x',y') c where
+  alpha = (alpha <<< Data.Powerset.map pi1) &&& (Data.Powerset.map pi2 >>> alpha)
+  gamma = cartesian ^<< gamma *** gamma
 
 instance (PreOrd x c, ArrowChoice c) => PreOrd (Complete x) c where
   (⊑) = proc (c1,c2) -> case (c1,c2) of
@@ -110,30 +117,44 @@ instance (PreOrd a p, ArrowChoice p) => PreOrd (Maybe a) p where
     (Nothing, Nothing) -> returnA -< True
     (_,_) -> returnA -< False
 
-instance (PartOrd a p, ArrowChoice p) => PartOrd (Maybe a) p
+instance (PartOrd a c, ArrowChoice c) => PartOrd (Maybe a) c
 
-instance (Lattice a p, ArrowChoice p) => Lattice (Complete (Maybe a)) p where
+instance (PartOrd a c, Lattice (Complete a) c, ArrowChoice c) => Lattice (Complete (Maybe a)) c where
   (⊔) = wrapComplete $ proc m -> case m of
-    (Just x,Just y) -> (Complete . Just) ^<< (⊔) -< (x,y)
+    (Just x,Just y) -> fmap Just ^<< (⊔) -< (Complete x,Complete y)
     (Nothing, Nothing) -> returnA -< Complete Nothing
     (_,_) -> returnA -< Top
 
-instance (Eq a, Hashable a, PartOrd a c, PartOrd a' c, ArrowChoice c, Galois (Pow a) a' c)
-    => Galois (Pow (Maybe a)) (Complete (Maybe a')) c where
-  alpha = proc xs ->
-    if xs == fromFoldable [Nothing]
-    then returnA -< Complete Nothing
-    else map (Just ^<< alpha) -< traverse maybeComplete xs
-    where
-      maybeComplete :: Maybe a -> Complete a
-      maybeComplete (Just a) = Complete a
-      maybeComplete Nothing  = Top
-  gamma = undefined
+-- instance (Eq a, Hashable a, PartOrd a c, PartOrd a' c, ArrowChoice c, Galois (Pow a) a' c)
+--     => Galois (Pow (Maybe a)) (Complete (Maybe a')) c where
+--   alpha = proc xs ->
+--     if xs == fromFoldable [Nothing]
+--     then returnA -< Complete Nothing
+--     else map (Just ^<< alpha) -< traverse maybeComplete xs
+--     where
+--       maybeComplete :: Maybe a -> Complete a
+--       maybeComplete (Just a) = Complete a
+--       maybeComplete Nothing  = Top
+--   gamma = undefined
 
-instance Arrow p => PreOrd Int p where
+instance Arrow c => PreOrd Int c where
   (⊑) = arr $ uncurry (<=)
 
-instance Arrow p => PartOrd Int p
+instance Arrow c => PartOrd Int c
+
+instance Arrow c => PreOrd () c where
+  (⊑) = arr (const True)
+
+instance Arrow c => PartOrd () c
+
+instance Arrow c => Lattice () c where
+  (⊔) = arr (const ())
+
+instance (ArrowChoice c, Arrow c) => Lattice (Complete ()) c where
+  (⊔) = proc (c1,c2) -> case (c1,c2) of
+    (_,Top) -> returnA -< Top
+    (Top,_) -> returnA -< Top
+    (Complete x,Complete y) -> Complete ^<< (⊔) -< (x,y)
 
 -- instance (Arrow p, ArrowZero p) => Lattice (Complete Int) p where
 --   (⊔) = proc (x,y) ->

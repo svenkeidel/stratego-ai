@@ -7,10 +7,13 @@ import Prelude hiding (fail)
 
 import InterpreterArrow
 import Syntax hiding (Fail,TermPattern(..))
+import SharedSemantics 
 import WildcardSemantics 
+
+import Control.Arrow.Apply
 
 import Data.UncertainResult
 
 eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> UncertainResult (Term,TermEnv)
-eval i senv s = runInterp (eval' i s) senv
+eval m senv s = runInterp (eval' m s) senv
 {-# INLINE eval #-}

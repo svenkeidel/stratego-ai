@@ -59,7 +59,7 @@ inhabitants sig@(Signature (_,sorts) rel) s0 = do
 class Arrow c => HasSignature c where
   getSignature :: c () Signature
 
-instance HasSignature c => PreOrd Sort c where
-  (⊑) = proc (s1,s2) -> do
-    sig <- getSignature -< ()
-    returnA -< subtype sig s1 s2
+-- instance HasSignature c => PreOrd Sort c where
+--   (⊑) = proc (s1,s2) -> do
+--     sig <- getSignature -< ()
+--     returnA -< subtype sig s1 s2

@@ -18,10 +18,11 @@ import           Control.Arrow
 import           Control.Monad
 
 import           Data.ATerm
+import           Data.Term (TermUtils(..))
 import           Data.Result
 import qualified Data.HashMap.Lazy as M
 import           Data.TermEnv
-    
+
 import           Test.Hspec
 import           Test.Hspec.QuickCheck
 import           Test.QuickCheck hiding (Result(..))

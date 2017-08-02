@@ -60,9 +60,9 @@ data Strat
   | Prim StratVar [Strat] [TermVar]
   deriving (Eq)
 
-class Arrow p => HasStratEnv p where
-  readStratEnv :: p a StratEnv
-  localStratEnv :: p a b -> p (a,StratEnv) b
+class Arrow c => HasStratEnv c where
+  readStratEnv :: c a StratEnv
+  localStratEnv :: c a b -> c (a,StratEnv) b
 
 leftChoice :: Strat -> Strat -> Strat
 leftChoice f = GuardedChoice f Id

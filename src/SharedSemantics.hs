@@ -6,7 +6,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 module SharedSemantics where
 
-import           Prelude hiding (fail,(.),id,sum,flip)
+import           Prelude hiding (fail,(.),id,sum,flip,uncurry,all)
 
 import           Syntax hiding (Fail,TermPattern(..))
 import           Syntax (TermPattern)
@@ -14,21 +14,61 @@ import qualified Syntax as S
 import           Utils
 
 import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
-import           Control.Arrow.Append
+import           Control.Arrow.Apply
+import           Control.Arrow.Join
 import           Control.Arrow.Try
+import           Control.Arrow.Fix
 import           Control.Category
 
 import qualified Data.HashMap.Lazy as M
 import           Data.Order
 import           Data.Complete
-import           Data.Constructor
 import           Data.Term
-import qualified Data.Term as T
 import           Data.TermEnv
+import           Data.Hashable
+import           Data.Powerset (Deduplicate(..))
 
 import           Text.Printf
+import           Debug.Trace
 
 -- Language Constructs
+eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, Deduplicate c,
+          HasStratEnv c, Eq t, Hashable t, IsTerm t c, BoundedLattice t c, IsTermEnv env t c)
+      => Int -> Strat -> c t t
+eval' n s0
+  | n == 0 = top
+  | otherwise = dedup $ case s0 of
+    Id -> id
+    S.Fail -> fail
+    Seq s1 s2 -> (eval' n s2) . (eval' n s1)
+    GuardedChoice s1 s2 s3 -> try (eval' n s1) (eval' n s2) (eval' n s3)
+    One s -> lift (one (eval' n s))
+    Some s -> lift (some (eval' n s))
+    All s -> lift (all (eval' n s))
+    Scope xs s -> scope xs (eval' n s)
+    Match f -> proc t -> match -< (f,t)
+    Build f -> proc _ -> build -< f
+    Let bnds body -> let_ bnds body (eval' n)
+    Call f ss ps -> call f ss ps (eval' (n-1))
+    Prim f _ ps -> prim f ps
+                  
+-- eval' n m = fixA' n m $ \(evalD,evalS) -> dedup $ uncurry $ arr $ \s0 -> case s0 of
+--     Id -> id
+--     S.Fail -> fail
+--     Seq s1 s2 -> (evalS $$ s2) . (evalS $$ s1)
+--     GuardedChoice s1 s2 s3 -> try (evalS $$ s1) (evalS $$ s2) (evalS $$ s3)
+--     One s -> lift (one (evalS $$ s))
+--     Some s -> lift (some (evalS $$ s))
+--     All s -> lift (all (evalS $$ s))
+--     Scope xs s -> scope xs (evalS $$ s)
+--     Match f -> proc t -> match -< (f,t)
+--     Build f -> proc _ -> build -< f
+--     Let bnds body -> let_ bnds body evalS
+--     Call f ss ps -> call f ss ps evalD
+--     Prim f _ ps -> prim f ps
+
+prim :: (ArrowTry p, IsTerm t p, IsTermEnv env t p) => StratVar -> [TermVar] -> p t t
+prim = undefined
 
 guardedChoice :: (ArrowTry c, Lattice (Complete z) c) => c x y -> c y z -> c x z -> c x z
 guardedChoice = try
@@ -38,20 +78,7 @@ sequence :: Category c => c x y -> c y z -> c x z
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-lift :: (ArrowChoice c, ArrowTry c, ArrowAppend c, HasTerm t c, Lattice (Complete t) c) => c [t] [t] -> c t t
-lift p = proc t -> do
-  m <- matchTermRefine -< t
-  case m of
-    Cons c ts -> do
-      ts' <- p -< ts
-      cons -< (c,ts')
-    StringLiteral {} -> returnA -< t
-    NumberLiteral {} -> returnA -< t
-    Wildcard -> fail <+> wildcard -< ()
-    _ -> fail -< ()
-{-# INLINE lift #-}
-
-one :: (ArrowTry c, ArrowAppend c, ArrowChoice c, PartOrd t c, Lattice (Complete t) c) => c t t -> c [t] [t]
+one :: (ArrowTry c, ArrowJoin c, ArrowChoice c, PartOrd t c, Lattice (Complete t) c) => c t t -> c [t] [t]
 one f = proc l -> case l of
   (t:ts) -> do
     (t',ts') <- first f <+> second (one f) -< (t,ts)
@@ -79,7 +106,7 @@ all :: ArrowChoice c => c x y -> c [x] [y]
 all = mapA
 {-# INLINE all #-}
 
-scope :: (Arrow c, HasTermEnv t env c) => [TermVar] -> c x y -> c x y
+scope :: (Arrow c, IsTermEnv env t c) => [TermVar] -> c x y -> c x y
 scope vars s = proc t -> do
   env  <- getTermEnv     -< ()
   _    <- deleteTermVars -< vars
@@ -89,19 +116,19 @@ scope vars s = proc t -> do
   returnA -< t'
 {-# INLINE scope #-}
 
-let_ :: HasStratEnv c => [(StratVar,Strategy)] -> Strat -> (Strat -> c x y) -> c x y
+let_ :: (ArrowApply c, HasStratEnv c) => [(StratVar,Strategy)] -> Strat -> (Strat -> c t t) -> c t t
 let_ ss body interp = proc a -> do
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
   senv <- readStratEnv -< ()
   localStratEnv (interp body) -< (a,M.union (M.fromList ss') senv) 
 {-# INLINE let_ #-}
 
-call :: (ArrowTry c, ArrowChoice c, ArrowApply c, HasTermEnv t env c, HasStratEnv c)
+call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c)
      => StratVar
      -> [Strat]
      -> [TermVar]
-     -> (Strat -> c x y)
-     -> c x y
+     -> (Strat -> c t t)
+     -> c t t
 call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of
@@ -116,12 +143,8 @@ call f actualStratArgs actualTermArgs interp = proc a -> do
       returnA -< b
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
   where
-    bindTermArg = proc (actual,formal) -> do
-     m <- lookupTermVar -< actual
-     case m of
-       Just t -> insertTerm -< (formal,t)
-       Nothing -> fail -< ()
-     returnA -< ()
+    bindTermArg = proc (actual,formal) ->
+      lookupTermVar (proc t -> insertTerm -< (formal,t)) fail -<< actual
     {-# INLINE bindTermArg #-}
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
@@ -132,143 +155,45 @@ bindStratArgs ((v,Call v' [] []) : ss) senv =
     _ -> error $ "unknown strategy: " ++ show v'
 bindStratArgs ((v,s) : ss) senv =
     M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
-
-convertToList :: (ArrowChoice c, HasTerm t c) => c [t] t
-convertToList = proc ts -> case ts of
-  (x:xs) -> do
-    l <- convertToList -< xs
-    cons -< ("Cons",[x,l])
-  [] -> cons -< ("Nil",[])
-    
-convertFromList :: (ArrowChoice c, ArrowTry c, HasTerm t c) => c t (Maybe [t])
-convertFromList = proc t -> do
-  m <- matchTerm -< t
-  case m of
-    Cons "Cons" [x,tl] -> do
-      xs <- convertFromList -< tl
-      returnA -< (x:) <$> xs
-    Cons "Nil" [] ->
-      returnA -< Just []
-    Wildcard -> returnA -< Nothing
-    _ -> fail -< ()
-
-equal :: (ArrowChoice c, ArrowAppend c, ArrowTry c, HasTerm t c, Lattice (Complete t) c) => c (t,t) t
-equal = proc (t1,t2) -> do
-  m <- matchTerm *** matchTerm -< (t1,t2)
-  case m of
-    (Cons c ts,Cons c' ts')
-        | c == c' && eqLength ts ts' -> do
-        ts'' <- zipWithA equal -< (ts,ts')
-        cons -< (c,ts'')
-        | otherwise -> fail -< ()
-    (StringLiteral s, StringLiteral s')
-        | s == s' -> success -< t1
-        | otherwise -> fail -< ()
-    (NumberLiteral n, NumberLiteral n')
-        | n == n' -> success -< t1
-        | otherwise -> fail -< ()
-    (Wildcard, t) -> fail <+> term -< t
-    (t, Wildcard) -> fail <+> term -< t
-    (_,_) -> fail -< ()
  
-match :: (ArrowChoice c, ArrowAppend c, ArrowTry c, HasTerm t c, HasTermEnv env t c, Lattice (Complete t) c)
+match :: (ArrowChoice c, ArrowJoin c, ArrowTry c, ArrowApply c,
+          IsTerm t c, IsTermEnv env t c)
       => c (TermPattern,t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
     t' <- match -< (S.Var v,t)
     match -< (p2,t')
-  S.Var "_" -> success -< t
-  S.Var x -> do
-    m <- lookupTermVar -< x
-    case m of
-      Just t' -> do
-        t'' <- equal -< (t,t')
-        success -< t''
-      Nothing -> do
-        insertTerm -< (x,t)
-        returnA -< t
-  S.Cons c ts -> do
-    m <- matchTermAgainstConstructor -< (c,t)
-    case m of
-      T.Cons c' ts'
-        | eqLength ts ts' -> do
-            ts'' <- zipWithA match -< (ts,ts')
-            T.cons -< (c',ts'')
-        | otherwise -> fail -< ()
-      T.Wildcard -> do
-        l <- mapA wildcard -< [() | _ <- ts]
-        ts'' <- zipWithA match -< (ts,l)
-        fail <+> cons -< (c,ts'')
-      _ -> fail -< ()
-  S.Explode c ts -> do
-    m <- matchTermRefine -< t
-    case m of
-      T.Cons (Constructor c') ts' -> do
-        s <- stringLiteral -< c'
-        match -< (c,s)
-        l <- convertToList -< ts'
-        match -< (ts, l)
-        success -< t
-      T.StringLiteral _ -> do
-        l <- convertToList -< []
-        match -< (ts, l)
-        success -< t
-      T.NumberLiteral _ -> do
-        l <- convertToList -< []
-        match -< (ts, l)
-        success -< t
-      T.Wildcard ->
-        (do
-          w <- wildcard -< ()
-          match -< (c,  w)
-          w' <- wildcard -< ()
-          match -< (ts, w')
-          success -< t)
-        <+>
-        (do
-          l <- convertToList -< []
-          match -< (ts, l)
-          success -< t)
-      _ -> fail -< ()
-  S.StringLiteral s -> do
-    m <- matchTermRefine -< t
-    case m of
-      T.StringLiteral s'
-        | s == s' -> success -< t
-        | otherwise -> fail -< ()
-      T.Wildcard -> fail <+> stringLiteral -< s
-      _ -> fail -< ()
-  S.NumberLiteral n -> do
-    m <- matchTerm -< t
-    case m of
-      T.NumberLiteral n'
-        | n == n' -> success -< t
-        | otherwise -> fail -< ()
-      T.Wildcard -> fail <+> numberLiteral -< n
-      _ -> fail -< ()
+  S.Var "_" ->
+    success -< t
+  S.Var x ->
+    lookupTermVar
+      (proc t' -> equal -< (t,t'))
+      (proc () -> do insertTerm -< (x,t); returnA -< t) -<< x
+  S.Cons c ts ->
+    matchTermAgainstConstructor (zipWithA match) -< (c,ts,t)
+  S.Explode c ts ->
+    matchTermAgainstExplode
+      (proc c' ->  match -< (c,c'))
+      (proc ts' -> match -< (ts,ts')) -<< t
+  S.StringLiteral s ->
+    matchTermAgainstString -< (s,t)
+  S.NumberLiteral n ->
+    matchTermAgainstNumber -< (n,t)
 
-build :: (ArrowChoice c, ArrowAppend c, ArrowTry c, HasTerm t c, HasTermEnv env t c, Lattice (Complete t) c)
+build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, IsTerm t c, IsTermEnv env t c)
       => c TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
-  S.Var x -> do
-    m <- lookupTermVar -< x
-    case m of
-      Just t -> returnA -< t
-      Nothing -> fail -< ()
+  S.Var x ->
+    lookupTermVar returnA fail -< x
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     cons -< (c,ts')
   S.Explode c ts -> do
-    m <- matchTerm <<< build -< c
-    case m of
-      T.StringLiteral s -> do
-        ts' <- build -< ts
-        ts'' <- convertFromList -< ts'
-        case ts'' of
-          Just tl -> cons -< (Constructor s,tl)
-          Nothing -> fail <+> wildcard -< ()
-      T.Wildcard -> fail <+> wildcard -< ()
-      _ -> fail -< ()
-  S.NumberLiteral n -> numberLiteral -< n
-  S.StringLiteral s -> stringLiteral -< s
+    c'  <- build -< c
+    ts' <- build -< ts
+    convertFromList -< (c',ts')
+  S.NumberLiteral n ->
+    numberLiteral -< n
+  S.StringLiteral s ->
+    stringLiteral -< s

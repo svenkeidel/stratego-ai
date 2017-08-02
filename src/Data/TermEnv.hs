@@ -16,6 +16,7 @@ import           Data.Hashable
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Order
+import           Data.Complete hiding (map)
 import           Data.Powerset (Pow)
 import qualified Data.Powerset as P
 import           Data.Term
@@ -40,7 +41,7 @@ newtype AbstractTermEnv t = AbstractTermEnv (HashMap TermVar t)
 
 dom :: AbstractTermEnv t -> [TermVar]
 dom (AbstractTermEnv env) = M.keys env
-           
+
 instance (PreOrd t p, ArrowChoice p, ArrowApply p) => PreOrd (AbstractTermEnv t) p where
   (⊑) = proc (AbstractTermEnv env1,AbstractTermEnv env2) ->
     allA (proc v -> (⊑) -< (M.lookup v env1, M.lookup v env2)) -<< dom (AbstractTermEnv env2)
@@ -63,10 +64,10 @@ instance (Eq t, Hashable t, Lattice t' c, Galois (Pow t) t' c, ArrowApply c, Arr
   alpha = lub . P.map (map (alpha . P.unit) . arr (\(ConcreteTermEnv e) -> AbstractTermEnv e))
   gamma = undefined
 
-class HasTerm t p => HasTermEnv env t p | p -> env, env -> t where
-  getTermEnv :: p () env
-  putTermEnv :: p env ()
-  lookupTermVar :: p TermVar (Maybe t)
-  insertTerm :: p (TermVar,t) ()
-  deleteTermVars :: p [TermVar] ()
-  unionTermEnvs :: p ([TermVar],env,env) env
+class IsTerm t c => IsTermEnv env t c | c -> env, env -> t where
+  getTermEnv :: c () env
+  putTermEnv :: c env ()
+  lookupTermVar :: Lattice (Complete a) c => c t a -> c () a -> c TermVar a
+  insertTerm :: c (TermVar,t) ()
+  deleteTermVars :: c [TermVar] ()
+  unionTermEnvs :: c ([TermVar],env,env) env
