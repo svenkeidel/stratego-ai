@@ -193,13 +193,17 @@ caseStudy name function maxDepth analysis = do
     Right module_ ->
       forM_ ([1..maxDepth]::[Int]) $ \depth -> do
 
-        let res = H.fromList $ toList $ filterResults $ unPow
-                $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,AbstractTermEnv M.empty)
+        let res = unPow $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,AbstractTermEnv M.empty)
+        let terms = H.fromList $ toList $ filterResults res
+        let failed = hasFail res
 
-        (m,_) <- CM.measure (CT.nfIO (return res)) 1
-        printf "function: %s, recursion depth: %d, results: %d, time: %s\n" function depth (H.size res) (CM.secs (CT.measCpuTime m))
-        analysis name function depth res
+        (m,_) <- CM.measure (CT.nfIO (return terms)) 1
+        printf "function: %s, recursion depth: %d, results: %d, fail: %s, time: %s\n" function depth (H.size terms) (yesno failed) (CM.secs (CT.measCpuTime m))
+        analysis name function depth terms
         putStrLn "\n"
  where
    filterResults = fmap (\r -> case r of Success (t,_) -> t; Fail -> error "")
                  . S.filter (\r -> case r of Success _ -> True; _ -> False)
+   hasFail = isJust . S.findIndexL (\r -> case r of Fail -> True; _ -> False)
+   yesno :: Bool -> String
+   yesno b = if b then "yes" else "no"

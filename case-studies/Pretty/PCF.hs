@@ -13,6 +13,8 @@ ppPCF t = case t of
     char '\\' <> text (show x) <> char ':' <> ppType ty <> text ". " <> ppPCF e
   Cons "Zero" [] -> char '0'
   Cons "Succ" [e] -> text "succ" <> parens (ppPCF e)
+  Cons "Add" [e1, e2] -> parens (ppPCF e1 <> text "+" <> ppPCF e2)
+  Cons "Mul" [e1, e2] -> parens (ppPCF e1 <> text "*" <> ppPCF e2)
   Cons "Pred" [e] -> text "pred" <> parens (ppPCF e)
   Cons "Ifz" [e1,e2,e3] -> parens $ text "if " <> ppPCF e1 <> text " then " <> ppPCF e2 <> text " else " <> ppPCF e3
   Wildcard -> ppWildcard
@@ -26,4 +28,4 @@ ppType t = case t of
   _ -> error $ "unexpected term: " ++ show t
 
 ppWildcard :: Doc
-ppWildcard = char '*'
+ppWildcard = char '?'
