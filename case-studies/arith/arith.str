@@ -19,14 +19,12 @@ rules
   eval: Succ(n) -> Succ(<eval> n)
 
   eval: Mul(Zero(), _) -> Zero()
-  eval: Mul(Succ(m),n) -> <eval>(Add(Mul(m,n),n))
-  /* eval: Mul(e1,e2)     -> <eval>(Mul(<eval>(e1),<eval>(e2))) */
+  eval: Mul(Succ(m),n) -> <eval> Add(Mul(m, n), n)
+  eval: Mul(e1,e2)     -> <eval> Mul(<eval> e1, <eval> e2)
 
-  /* eval: Add(Zero(), n) -> <eval>(n) */
-  /* eval: Add(Succ(m),n) -> Succ(<eval>(Add(m,n))) */
-  /* eval: Add(e1,e2)     -> <eval>(Add(<eval>(e1),<eval>(e2))) */
-
-
+  eval: Add(Zero(), n) -> <eval> n
+  eval: Add(Succ(m),n) -> <eval> Succ(Add(m, n))
+  eval: Add(e1,e2)     -> <eval> Add(e1, e2)
 
 
 /* rules */
