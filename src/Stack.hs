@@ -5,11 +5,40 @@ module Stack where
 
 import Control.Arrow
 import Data.Order
-import Data.TermEnv
 import Syntax
 
+import qualified Data.HashMap.Lazy as M
+import           Data.Hashable
+
+
+type StratCall = (Strategy, [Strat], [TermVar])
+
+data StratCallCatchAddr
+  = StratCallAddr StratCall Int
+  | CatchAddr
+  deriving (Eq, Show)
+
+instance Hashable StratCallCatchAddr where
+  hashWithSalt s (StratCallAddr call n) = s `hashWithSalt` (0::Int) `hashWithSalt` call `hashWithSalt` n
+  hashWithSalt s CatchAddr = s `hashWithSalt` (1::Int)
+
+
+
 class HasAlloc addr c | c -> addr where
-  alloc :: c (Strategy, [Strat], [TermVar]) addr
+  alloc :: c StratCall addr
+
+
+data Stack ts addr cell = Stack
+  { timestamp :: ts
+  , store :: M.HashMap addr cell
+  , stacked :: [addr] }
+  deriving (Eq, Show)
+
+emptyStack :: ts -> Stack ts addr cell
+emptyStack ts = Stack ts M.empty []
+
+instance (Hashable ts, Hashable addr, Hashable cell) => Hashable (Stack ts addr cell) where
+  hashWithSalt s (Stack ts sto sta) = s `hashWithSalt` ts `hashWithSalt` sto `hashWithSalt` sta
 
 class (ArrowChoice c, BoundedLattice cell c, Eq addr)
       => HasStack ts addr cell c | c -> ts, c -> addr, c -> cell where

@@ -14,6 +14,6 @@ import Control.Arrow.Apply
 
 import Data.UncertainResult
 
-eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> UncertainResult (Term,TermEnv)
-eval m senv s = runInterp (eval' m s) senv
+eval :: StratEnv -> Strat -> (Term,TermEnv) -> UncertainResult (Term,TermEnv)
+eval senv s = runInterp (eval' s) senv
 {-# INLINE eval #-}

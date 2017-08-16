@@ -11,10 +11,11 @@ import Data.Powerset
 import Data.PowersetResult
 import Data.Result
 
-eval'' :: Int -> Strat -> Interp StratEnv TermEnv PowersetResult Term Term
+eval'' :: Strat -> Interp StratEnv TermEnv Stack PowersetResult Term Term
 eval'' = eval' 
 
-eval :: Int -> StratEnv -> Strat -> (Term,TermEnv) -> Pow (Result (Term,TermEnv))
-eval n senv s te = unPowRes $ runInterp (eval' n s) senv te
+eval :: StratEnv -> Strat -> (Term,(TermEnv,Stack)) -> Pow (Result (Term,(TermEnv,Stack)))
+eval senv s te = unPowRes $ runInterp (eval' s) senv te
 -- eval n m senv s te = unPowRes $ runInterp (eval' n m $$ s) senv te
 {-# INLINE eval #-}
+

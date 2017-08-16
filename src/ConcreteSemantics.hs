@@ -266,7 +266,7 @@ arbitraryTerm h w = do
 
 
 instance HasAlloc Addr (Interp StratEnv TermEnv ConcreteStack Result) where
-  -- alloc :: Interp StratEnv TermEnv Result (Strategy, [Strat], [TermVar]) Int
+  -- alloc :: Interp StratEnv TermEnv Result StratCall Int
   alloc = proc _ -> do
     last <- getTimeStamp -< ()
     let next = last + 1

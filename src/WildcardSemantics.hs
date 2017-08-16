@@ -31,6 +31,9 @@ import           Data.Complete
 
 import           Test.QuickCheck hiding (Result(..))
 
+import AllocRecDepth
+import qualified Stack as S
+
 data Term
     = Cons Constructor [Term]
     | StringLiteral Text
@@ -39,6 +42,7 @@ data Term
     deriving (Eq)
 
 type TermEnv = AbstractTermEnv Term
+type Stack = S.Stack TimeStamp Addr Term
 
 -- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
 --      => StratVar -> [TermVar] -> p a t
@@ -69,7 +73,7 @@ type TermEnv = AbstractTermEnv Term
 
 -- Instances -----------------------------------------------------------------------------------------
 
-instance Monad m => IsTerm Term (Interp r s m) where
+instance Monad m => IsTerm Term (Interp r s Stack m) where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts'
       | c == c' && eqLength ts ts' -> do
@@ -154,10 +158,10 @@ instance Monad m => IsTerm Term (Interp r s m) where
   numberLiteral = arr NumberLiteral
   stringLiteral = arr StringLiteral
 
-instance Monad m => IsAbstractTerm Term (Interp r s m) where
+instance Monad m => IsAbstractTerm Term (Interp r s Stack m) where
   wildcard = arr (const Wildcard)
 
-instance Monad m => BoundedLattice Term (Interp r s m) where
+instance Monad m => BoundedLattice Term (Interp r s Stack m) where
   top = arr (const Wildcard)
 
 instance TermUtils Term where
@@ -270,3 +274,4 @@ arbitraryTerm h w = do
   c <- arbitrary
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
+

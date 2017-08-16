@@ -258,8 +258,6 @@ instance TypeError (Interp r s ts TypedResult) where
   typeError = Interp $ \_ (e,_) -> T.TypeError e
 
 
-data Stack ts addr cell = Stack { timestamp :: ts, store :: M.HashMap addr cell, stacked :: [addr] }
-
 instance (Hashable addr, Eq addr, Monad m, BoundedLattice cell (Interp r s (Stack ts addr cell) m))
          => HasStack ts addr cell (Interp r s (Stack ts addr cell) m) where
   getTimeStamp = Interp $ \_ (_,(e,st)) -> return (timestamp st,(e,st))
