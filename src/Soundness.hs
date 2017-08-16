@@ -20,12 +20,12 @@ import           Text.Printf
 
 import           Utils
 
-sound :: ( Galois (Pow (x,s)) (x',s') (->),
-           Galois (Pow (m (y,s))) (m' (y',s')) (->),
-           PreOrd (m' (y',s')) (->),
-           Show (Pow (m (y,s))), Show (m' (y',s'))
+sound :: ( Galois (Pow (x,(s,ts))) (x',(s',ts')) (->),
+           Galois (Pow (m (y,(s,ts)))) (m' (y',(s',ts'))) (->),
+           PreOrd (m' (y',(s',ts'))) (->),
+           Show (Pow (m (y,(s,ts)))), Show (m' (y',(s',ts')))
          )
-      => r -> Interp r s m x y -> Interp r s' m' x' y' -> Pow (x,s) -> Property
+      => r -> Interp r s ts m x y -> Interp r s' ts' m' x' y' -> Pow (x,(s,ts)) -> Property
 sound r ceval aeval = proc xs -> do
   abs <- runInterp aeval r <<< alpha -< xs
   con <- alpha <<< fmap (runInterp ceval r) -< xs

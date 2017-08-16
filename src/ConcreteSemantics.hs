@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module ConcreteSemantics where
 
-import           Prelude hiding (id,(.),fail,all,curry,uncurry)
+import           Prelude hiding (id,(.),fail,all,curry,uncurry,last)
 
 import           InterpreterArrow
 import           SharedSemantics
@@ -16,6 +16,7 @@ import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Syntax hiding (Fail,TermPattern(..))
 import           Utils
+import           Stack
 
 import           Control.Arrow
 import           Control.Arrow.Try
@@ -43,12 +44,15 @@ data Term
   deriving (Eq)
 
 type TermEnv = ConcreteTermEnv Term
+type TimeStamp = Int
+type Addr = TimeStamp
+type ConcreteStack = Stack TimeStamp Addr Term
 
-eval'' :: Strat -> Interp StratEnv TermEnv Result Term Term
-eval'' = eval' (-1)
+eval'' :: Strat -> Interp StratEnv TermEnv ConcreteStack Result Term Term
+eval'' = eval'
 
-eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval senv s = runInterp (eval' (-1) s) senv
+eval :: StratEnv -> Strat -> (Term,(TermEnv,ConcreteStack)) -> Result (Term,(TermEnv,ConcreteStack))
+eval senv s = runInterp (eval' s) senv
 -- eval senv s = runInterp (eval' 0 0 $$ s) senv
 
 -- prim f ps = proc _ -> case f of
@@ -260,3 +264,11 @@ arbitraryTerm h w = do
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
 
+
+instance HasAlloc Addr (Interp StratEnv TermEnv ConcreteStack Result) where
+  -- alloc :: Interp StratEnv TermEnv Result (Strategy, [Strat], [TermVar]) Int
+  alloc = proc _ -> do
+    last <- getTimeStamp -< ()
+    let next = last + 1
+    putTimeStamp -< next
+    returnA -< next

@@ -1,30 +1,32 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE FunctionalDependencies #-}
-module Control.Arrow.Stack where
+module Stack where
 
 import Control.Arrow
 import Data.Order
 import Data.TermEnv
 import Syntax
 
+class HasAlloc addr c | c -> addr where
+  alloc :: c (Strategy, [Strat], [TermVar]) addr
 
-class IsTermEnv env t c => Alloc addr env t c where
-  alloc :: c (StratVar, [Strat], [TermVar]) addr
+class (ArrowChoice c, BoundedLattice cell c, Eq addr)
+      => HasStack ts addr cell c | c -> ts, c -> addr, c -> cell where
+  getTimeStamp :: c a ts
+  putTimeStamp :: c ts ()
 
+  readAddr :: c addr (Maybe cell)
+  writeAddr :: c (addr, cell) ()
 
-class (ArrowChoice c, BoundedLattice x c, Eq addr, IsTermEnv env t c) => HasStack addr x env t c | c -> x where
-  readAddr :: c addr (Maybe x)
-  writeAddr :: c (addr, x) ()
-
-  getStack :: c a [addr]
+  stack :: c a [addr]
   localPush :: addr -> c x y -> c x y
   
-  pushPop :: addr -> c x x -> c x x
-  pushPop addr f = proc x -> do
-    stack <- getStack -< ()
+  localStackPush :: addr -> c cell cell -> c cell cell
+  localStackPush addr f = proc x -> do
+    addrs <- stack -< ()
     -- true if addr is currently being executed, meaning a further push would start a cycle
-    if addr `elem` stack
+    if addr `elem` addrs
       -- return top instead of running into cycle
       then top -< ()
       else do

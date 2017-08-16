@@ -12,12 +12,12 @@ import           Syntax hiding (Fail,TermPattern(..))
 import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Utils
+import           Stack
 
 import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
 import           Control.Arrow.Apply
 import           Control.Arrow.Join
 import           Control.Arrow.Try
-import           Control.Arrow.Fix
 import           Control.Category
 
 import qualified Data.HashMap.Lazy as M
@@ -33,23 +33,22 @@ import           Debug.Trace
 
 -- Language Constructs
 eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, Deduplicate c,
-          HasStratEnv c, Eq t, Hashable t, IsTerm t c, BoundedLattice t c, IsTermEnv env t c)
-      => Int -> Strat -> c t t
-eval' n s0
-  | n == 0 = top
-  | otherwise = dedup $ case s0 of
+          HasStratEnv c, Eq t, Hashable t, IsTerm t c, BoundedLattice t c, IsTermEnv env t c,
+          HasAlloc addr c, HasStack ts addr t c)
+      => Strat -> c t t
+eval' s0 = dedup $ case s0 of
     Id -> id
     S.Fail -> fail
-    Seq s1 s2 -> (eval' n s2) . (eval' n s1)
-    GuardedChoice s1 s2 s3 -> try (eval' n s1) (eval' n s2) (eval' n s3)
-    One s -> lift (one (eval' n s))
-    Some s -> lift (some (eval' n s))
-    All s -> lift (all (eval' n s))
-    Scope xs s -> scope xs (eval' n s)
+    Seq s1 s2 -> (eval' s2) . (eval' s1)
+    GuardedChoice s1 s2 s3 -> try (eval' s1) (eval' s2) (eval' s3)
+    One s -> lift (one (eval' s))
+    Some s -> lift (some (eval' s))
+    All s -> lift (all (eval' s))
+    Scope xs s -> scope xs (eval' s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
-    Let bnds body -> let_ bnds body (eval' n)
-    Call f ss ps -> call f ss ps (eval' (n-1))
+    Let bnds body -> let_ bnds body eval'
+    Call f ss ps -> call f ss ps eval'
     Prim f _ ps -> prim f ps
                   
 -- eval' n m = fixA' n m $ \(evalD,evalS) -> dedup $ uncurry $ arr $ \s0 -> case s0 of
@@ -123,7 +122,7 @@ let_ ss body interp = proc a -> do
   localStratEnv (interp body) -< (a,M.union (M.fromList ss') senv) 
 {-# INLINE let_ #-}
 
-call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c)
+call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c, HasAlloc addr c, HasStack ts addr t c)
      => StratVar
      -> [Strat]
      -> [TermVar]
@@ -132,12 +131,13 @@ call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv
 call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of
-    Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
+    Just (Closure strat@(Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
       mapA bindTermArg -< zip actualTermArgs formalTermArgs
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
-      b <- localStratEnv (interp body) -<< (a,senv'')
+      addr <- alloc -< (strat, actualStratArgs, actualTermArgs)
+      b <- localStratEnv (localStackPush addr (interp body)) -<< (a,senv'')
       tenv' <- getTermEnv -< ()
       putTermEnv <<< unionTermEnvs -< (formalTermArgs,tenv,tenv')
       returnA -< b

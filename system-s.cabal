@@ -36,6 +36,7 @@ library
                        Data.UncertainResult,
                        Syntax,
                        Signature,
+                       Stack,
                        Utils,
                        SubtypeRelation,
                        Sort,

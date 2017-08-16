@@ -10,6 +10,7 @@ import           Prelude hiding ((.),id,fail)
     
 import           Syntax (StratEnv,HasStratEnv(..))
 import           Signature hiding (Top)
+import           Stack
 
 import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Join
@@ -23,6 +24,7 @@ import           Data.Hashable
 import           Data.Monoid
 import           Data.Order
 import           Data.Complete
+import           Data.Order
 import           Data.Powerset (Deduplicate(..))
 import           Data.PowersetResult (PowersetResult)
 import qualified Data.PowersetResult as P
@@ -36,15 +38,15 @@ import qualified Data.TypedResult as T
 import           Data.UncertainResult (UncertainResult)
 import qualified Data.UncertainResult as U
 
-newtype Interp r s m a b = Interp { runInterp :: r -> (a,s) -> m (b,s) }
+newtype Interp r s ts m a b = Interp { runInterp :: r -> (a,(s,ts)) -> m (b,(s,ts)) }
 
-instance Monad m => Category (Interp r s m) where
+instance Monad m => Category (Interp r s ts m) where
   id = Interp $ \_ a -> return a
   {-# INLINE id #-}
   Interp f . Interp g = Interp $ \r -> g r >=> f r
   {-# INLINE (.) #-}
 
-instance Monad m => Arrow (Interp r s m) where
+instance Monad m => Arrow (Interp r s ts m) where
   arr f = Interp (\_ (a,e) -> return (f a, e))
   {-# INLINE arr #-}
   first (Interp f) = Interp $ \r ((a,b),e) -> fmap (\(c,e') -> ((c,b),e')) (f r (a,e))
@@ -62,7 +64,7 @@ instance Monad m => Arrow (Interp r s m) where
     return ((b,c),e'')
   {-# INLINE (&&&) #-}
 
-instance Monad m => ArrowChoice (Interp r s m) where
+instance Monad m => ArrowChoice (Interp r s ts m) where
   left (Interp f) = Interp $ \r (a,e) -> case a of
     Left b -> first Left <$> f r (b,e)
     Right c -> return (Right c,e)
@@ -80,31 +82,31 @@ instance Monad m => ArrowChoice (Interp r s m) where
     Right c -> g r (c,e)
   {-# INLINE (|||) #-}
 
-instance Monad m => ArrowApply (Interp r s m) where
+instance Monad m => ArrowApply (Interp r s ts m) where
   app = Interp $ \r ((f,b),e) -> runInterp f r (b,e)
   {-# INLINE app #-}
 
-instance Monad m => HasStratEnv (Interp StratEnv s m) where
+instance Monad m => HasStratEnv (Interp StratEnv ts s m) where
   readStratEnv = Interp $ \r (_,e) -> return (r,e)
   {-# INLINE readStratEnv #-}
   localStratEnv (Interp f) = Interp $ \_ ((a,r),e) -> f r (a,e)
   {-# INLINE localStratEnv #-}
 
-instance Monad m => HasStratEnv (Interp (r,StratEnv) s m) where
+instance Monad m => HasStratEnv (Interp (r,StratEnv) s ts m) where
   readStratEnv = Interp $ \(_,r) (_,e) -> return (r,e)
   {-# INLINE readStratEnv #-}
   localStratEnv (Interp f) = Interp $ \(r1,_) ((a,r2),e) -> f (r1,r2) (a,e)
   {-# INLINE localStratEnv #-} 
 
-instance Monad m => HasSignature (Interp (Signature,r) s m) where
+instance Monad m => HasSignature (Interp (Signature,r) s ts m) where
   getSignature = Interp $ \(r,_) (_,e) -> return (r,e)
   {-# INLINE getSignature #-} 
 
-instance Monad m => ArrowFix (Interp r (ConcreteTermEnv t) m) where
+instance Monad m => ArrowFix (Interp r (ConcreteTermEnv t) ts m) where
   fixA n f = f (fixA n f)
   fixA' n m f = f (fixA' n m f,fixA' n m f)
 
-instance Monad m => ArrowFix (Interp r (AbstractTermEnv t) m) where
+instance Monad m => ArrowFix (Interp r (AbstractTermEnv t) ts m) where
   fixA n f
     | n <= 0    = top
     | otherwise = f (fixA (n-1) f)
@@ -116,12 +118,12 @@ instance Monad m => ArrowFix (Interp r (AbstractTermEnv t) m) where
       go m n = f (go (m-1) n0,go m (n-1))
 
 instance (Monad m,
-          IsTerm t (Interp r (ConcreteTermEnv t) m),
-          ArrowTry (Interp r (ConcreteTermEnv t) m)) =>
-  IsTermEnv (ConcreteTermEnv t) t (Interp r (ConcreteTermEnv t) m) where
-  getTermEnv = Interp $ \_ (_,e) -> return (e,e)
+          IsTerm t (Interp r (ConcreteTermEnv t) ts m),
+          ArrowTry (Interp r (ConcreteTermEnv t) ts m)) =>
+  IsTermEnv (ConcreteTermEnv t) t (Interp r (ConcreteTermEnv t) ts m) where
+  getTermEnv = Interp $ \_ (_,(e,ts)) -> return (e,(e,ts))
   {-# INLINE getTermEnv #-} 
-  putTermEnv = Interp $ \_ (e,_) -> return ((),e)
+  putTermEnv = Interp $ \_ (e,(_,ts)) -> return ((),(e,ts))
   {-# INLINE putTermEnv #-} 
   lookupTermVar f g = proc v -> do
     ConcreteTermEnv env <- getTermEnv -< ()
@@ -141,14 +143,14 @@ instance (Monad m,
     ConcreteTermEnv (M.union e1 (foldr' M.delete e2 vars)))
   {-# INLINE unionTermEnvs #-} 
 
-instance (Monad m, Lattice t (Interp r (AbstractTermEnv t) m),
-          IsAbstractTerm t (Interp r (AbstractTermEnv t) m),
-          ArrowTry (Interp r (AbstractTermEnv t) m),
-          ArrowJoin (Interp r (AbstractTermEnv t) m)) =>
-  IsTermEnv (AbstractTermEnv t) t (Interp r (AbstractTermEnv t) m) where
-  getTermEnv = Interp $ \_ (_,e) -> return (e,e)
+instance (Monad m, Lattice t (Interp r (AbstractTermEnv t) ts m),
+          IsAbstractTerm t (Interp r (AbstractTermEnv t) ts m),
+          ArrowTry (Interp r (AbstractTermEnv t) ts m),
+          ArrowJoin (Interp r (AbstractTermEnv t) ts m)) =>
+  IsTermEnv (AbstractTermEnv t) t (Interp r (AbstractTermEnv t) ts m) where
+  getTermEnv = Interp $ \_ (_,(e,ts)) -> return (e,(e,ts))
   {-# INLINE getTermEnv #-} 
-  putTermEnv = Interp $ \_ (e,_) -> return ((),e)
+  putTermEnv = Interp $ \_ (e,(_,ts)) -> return ((),(e,ts))
   {-# INLINE putTermEnv #-} 
   lookupTermVar f g = proc v -> do
     AbstractTermEnv env <- getTermEnv -< ()
@@ -168,7 +170,7 @@ instance (Monad m, Lattice t (Interp r (AbstractTermEnv t) m),
     AbstractTermEnv (M.union e1 (foldr' M.delete e2 vars)))
   {-# INLINE unionTermEnvs #-} 
 
-instance ArrowTry (Interp r s Result) where
+instance ArrowTry (Interp r s ts Result) where
   fail = Interp $ \_ _ -> R.Fail
   {-# INLINE fail #-} 
   try (Interp f) (Interp g) (Interp h) = Interp $ \e a ->
@@ -177,13 +179,13 @@ instance ArrowTry (Interp r s Result) where
       R.Fail -> h e a
   {-# INLINE try #-} 
 
-instance ArrowJoin (Interp r s Result) where
+instance ArrowJoin (Interp r s ts Result) where
   Interp f <+> Interp g = Interp $ \r a -> f r a <> g r a 
   {-# INLINE (<+>) #-} 
   alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
   {-# INLINE alternatives #-} 
 
--- instance Lattice s (Interp r s UncertainResult) => ArrowTry (Interp r s UncertainResult) where
+-- instance Lattice s (Interp r s ts UncertainResult) => ArrowTry (Interp r s ts UncertainResult) where
 --   fail = Interp $ \_ _ -> U.Fail
 --   try (Interp f) (Interp g) (Interp h) = Interp $ \r (a,e) ->
 --     case f r (a,e) of
@@ -201,20 +203,20 @@ instance ArrowJoin (Interp r s Result) where
 --   _ -> U.Fail
       
 
--- instance Lattice s (Interp r s UncertainResult) => ArrowJoin (Interp r s UncertainResult) where
+-- instance Lattice s (Interp r s ts UncertainResult) => ArrowJoin (Interp r s ts UncertainResult) where
 --   Interp f <+> Interp g = Interp $ \r x@(_,e) ->
 --     join $ uncomplete . fst <$> runInterp (⊔) r ((complete (f r x), complete (g r x)),e)
 --   alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
 
-instance Deduplicate (Interp r s Result) where
+instance Deduplicate (Interp r s ts Result) where
   dedup f = f
   {-# INLINE dedup #-} 
 
-instance Deduplicate (Interp r s UncertainResult) where
+instance Deduplicate (Interp r s ts UncertainResult) where
   dedup f = f
   {-# INLINE dedup #-} 
 
-instance ArrowTry (Interp r s PowersetResult) where
+instance ArrowTry (Interp r s ts PowersetResult) where
   fail = Interp $ \_ _ -> P.PowRes (return R.Fail)
   {-# INLINE fail #-} 
   try (Interp f) (Interp g) (Interp h) = Interp $ \r a -> P.PowRes $ do
@@ -224,21 +226,21 @@ instance ArrowTry (Interp r s PowersetResult) where
       R.Fail -> P.unPowRes $ h r a
   {-# INLINE try #-} 
 
-instance ArrowJoin (Interp r s PowersetResult) where
+instance ArrowJoin (Interp r s ts PowersetResult) where
   Interp f <+> Interp g = Interp $ \r x -> f r x `P.union` g r x
   {-# INLINE (<+>) #-} 
   alternatives = Interp $ \_ (as,e) -> P.fromFoldable (fmap (return . (,e)) as)
   {-# INLINE alternatives #-} 
                  
-instance TypeError (Interp r s PowersetResult) where
+instance TypeError (Interp r s ts PowersetResult) where
   typeError = Interp $ \_ _ -> mempty
   {-# INLINE typeError #-} 
 
-instance (Eq s, Hashable s) => Deduplicate (Interp r s PowersetResult) where
+instance (Eq s, Hashable s, Eq ts, Hashable ts) => Deduplicate (Interp r s ts PowersetResult) where
   dedup (Interp f) = Interp $ \r a -> P.dedup' $ f r a
   {-# INLINE dedup #-} 
 
-instance ArrowTry (Interp r s TypedResult) where
+instance ArrowTry (Interp r s ts TypedResult) where
   fail = Interp $ \_ _ -> T.Fail
   {-# INLINE fail #-} 
   try (Interp f) (Interp g) (Interp h) = Interp $ \e a ->
@@ -248,9 +250,28 @@ instance ArrowTry (Interp r s TypedResult) where
       T.TypeError t -> T.TypeError t
   {-# INLINE try #-} 
 
-instance ArrowJoin (Interp r s TypedResult) where
+instance ArrowJoin (Interp r s ts TypedResult) where
   Interp f <+> Interp g = Interp $ \x -> f x `mappend` g x
   alternatives = Interp $ \_ (as,e) -> (,e) <$> msum (fmap return as)
 
-instance TypeError (Interp r s TypedResult) where
+instance TypeError (Interp r s ts TypedResult) where
   typeError = Interp $ \_ (e,_) -> T.TypeError e
+
+
+data Stack ts addr cell = Stack { timestamp :: ts, store :: M.HashMap addr cell, stacked :: [addr] }
+
+instance (Hashable addr, Eq addr, Monad m, BoundedLattice cell (Interp r s (Stack ts addr cell) m))
+         => HasStack ts addr cell (Interp r s (Stack ts addr cell) m) where
+  getTimeStamp = Interp $ \_ (_,(e,st)) -> return (timestamp st,(e,st))
+  putTimeStamp = Interp $ \_ (ts,(e,st)) -> return ((),(e, st{timestamp=ts}))
+
+  readAddr = Interp $ \_ (addr,(e,st)) -> return (M.lookup addr (store st), (e,st))
+  writeAddr = Interp $ \_ ((addr,cell),(e,st)) -> return ((), (e, st{store=M.insert addr cell (store st)}))
+
+  stack = Interp $ \_ (_,(e,st)) -> return (stacked st,(e,st))
+  localPush addr f = Interp $ \r (x,(e,st)) -> do
+    let addrs = stacked st
+    let pushed = st{stacked=addr:addrs}
+    (y,(e',st')) <- runInterp f r (x,(e,pushed))
+    let popped = st'{stacked=addrs}
+    return (y,(e',popped))
