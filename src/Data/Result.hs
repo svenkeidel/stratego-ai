@@ -16,10 +16,6 @@ import Data.Order
 data Result a = Success a | Fail
   deriving (Eq,Ord,Show)
 
--- isSuccess :: Result a -> Bool
--- isSuccess (Success _) = True
--- isSuccess Fail = False
-
 map :: ArrowChoice c => c x y -> c (Result x) (Result y)
 map f = proc r -> case r of
   Success a -> Success ^<< f -< a
@@ -39,6 +35,14 @@ instance Monad Result where
     Success a -> k a
     Fail -> Fail
   fail _ = Fail
+           
+instance Foldable Result where
+  foldMap f (Success a) = f a 
+  foldMap _ Fail        = mempty 
+
+instance Traversable Result where
+  traverse f (Success a) = Success <$> f a
+  traverse _ Fail        = pure Fail
 
 instance Alternative Result where
   empty = mzero
@@ -62,14 +66,14 @@ instance Hashable a => Hashable (Result a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a
   hashWithSalt s Fail = s `hashWithSalt` (1::Int)
 
-instance (PreOrd a p, ArrowChoice p) => PreOrd (Result a) p where
-  (⊑) = proc m -> case m of
-    (Success a, Success b) -> (⊑) -< (a,b)
-    (Fail, Fail) -> returnA -< True
-    (_,_) -> returnA -< False
+instance PreOrd a => PreOrd (Result a) where
+  x ⊑ y = case (x,y) of
+    (Success a, Success b) -> a ⊑ b
+    (Fail, Fail) -> True
+    (_,_) -> False
 
-instance (PartOrd a p, ArrowChoice p) => PartOrd (Result a) p
+instance (PartOrd a) => PartOrd (Result a)
 
-instance (Galois x y p, ArrowChoice p) => Galois (Result x) (Result y) p where
-  alpha = map alpha
-  gamma = map gamma
+instance Galois x y => Galois (Result x) (Result y) where
+  alpha = fmap alpha
+  gamma = fmap gamma

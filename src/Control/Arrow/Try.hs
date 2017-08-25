@@ -12,13 +12,9 @@ import Data.Complete
 
 class Arrow c => ArrowTry c where
   fail :: c x y
-  try :: Lattice (Complete z) c => c x y -> c y z -> c x z -> c x z
+  try :: Lattice (Complete z) => c x y -> c y z -> c x z -> c x z
 
-instance ArrowTry (->) where
-  fail = error "fail"
-  try f g _ = g . f
-
-success :: ArrowTry p => p a a
+success :: ArrowTry c => c a a
 success = id
 {-# INLINE success #-}
 

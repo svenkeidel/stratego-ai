@@ -79,7 +79,7 @@ instance (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm Term c where
         returnA -< Cons c ts''
       | otherwise ->
         fail -< ()
-    _ -> returnA -< t
+    _ -> fail -< ()
 
   matchTermAgainstString = proc (s,t) -> case t of
     StringLiteral s'
@@ -141,42 +141,36 @@ instance (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm Term c where
   numberLiteral = arr NumberLiteral
   stringLiteral = arr StringLiteral
 
-instance ArrowChoice p => PreOrd Term p where
-  (⊑) = proc (t1,t2) -> case (t1,t2) of
-    (Cons c ts,Cons c' ts') -> do
-      b <- (⊑) -< (ts,ts')
-      returnA -< c == c' && b
-    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
-    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
-    (_, _) -> returnA -< False
+instance PreOrd Term where
+  t1 ⊑ t2 = case (t1,t2) of
+    (Cons c ts,Cons c' ts') -> c == c' && ts ⊑ ts'
+    (StringLiteral s, StringLiteral s') -> s == s'
+    (NumberLiteral n, NumberLiteral n') -> n == n'
+    (_, _) -> False
 
-instance ArrowChoice p => PartOrd Term p
+instance PartOrd Term
 
-instance ArrowChoice p => Lattice (Complete Term) p where
-  (⊔) = proc (t1,t2) -> case (t1,t2) of
+instance Lattice (Complete Term) where
+  t1 ⊔ t2 = case (t1,t2) of
     (Complete (Cons c ts), Complete (Cons c' ts'))
-      | c == c' -> do
-        ts'' <- zipWithA (⊔) -< (Complete <$> ts,Complete <$> ts')
-        returnA -< Cons c <$> sequenceA ts''
-      | otherwise -> returnA -< Top
+      | c == c' ->
+        Cons c <$> (Complete ts ⊔ Complete ts')
+      | otherwise -> Top
     (Complete (StringLiteral s), Complete (StringLiteral s'))
-      | s == s' -> returnA -< Complete (StringLiteral s)
-      | otherwise -> returnA -< Top
+      | s == s' -> Complete (StringLiteral s)
+      | otherwise -> Top
     (Complete (NumberLiteral n), Complete (NumberLiteral n'))
-      | n == n' -> returnA -< Complete (NumberLiteral n)
-      | otherwise -> returnA -< Top
-    (_, _) -> returnA -< Top
+      | n == n' -> Complete (NumberLiteral n)
+      | otherwise -> Top
+    (_, _) -> Top
 
--- instance Lattice (Complete Term) c => BoundedLattice (Complete Term) c where
---   top = arr (const Top)
+instance BoundedLattice (Complete Term) where
+  top = Top
 
 instance TermUtils Term where
   convertToList ts = case ts of
-    (x:xs) ->
-      let l = convertToList xs
-      in Cons "Cons" [x,l]
-    [] ->
-      Cons "Nil" []
+    (x:xs) -> Cons "Cons" [x,convertToList xs]
+    []     -> Cons "Nil"  []
     
   size (Cons _ ts) = sum (size <$> ts) + 1
   size (StringLiteral _) = 1
@@ -187,10 +181,10 @@ instance TermUtils Term where
   height (StringLiteral _) = 1
   height (NumberLiteral _) = 1
   
-instance ArrowChoice c => Lattice Term c where
+instance Lattice Term where
   (⊔) = undefined
 
-instance ArrowChoice c => BoundedLattice Term c where
+instance BoundedLattice Term where
   top = undefined
 
 instance Show Term where

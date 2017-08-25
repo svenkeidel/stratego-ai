@@ -14,10 +14,8 @@ import qualified Syntax as S
 import           Utils
 
 import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
-import           Control.Arrow.Apply
 import           Control.Arrow.Join
 import           Control.Arrow.Try
-import           Control.Arrow.Fix
 import           Control.Category
 
 import qualified Data.HashMap.Lazy as M
@@ -29,14 +27,14 @@ import           Data.Hashable
 import           Data.Powerset (Deduplicate(..))
 
 import           Text.Printf
-import           Debug.Trace
 
 -- Language Constructs
 eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, Deduplicate c,
-          HasStratEnv c, Eq t, Hashable t, IsTerm t c, BoundedLattice t c, IsTermEnv env t c)
+          Lattice (Complete t), BoundedLattice t, 
+          HasStratEnv c, Eq t, Hashable t, IsTerm t c, IsTermEnv env t c)
       => Int -> Strat -> c t t
 eval' n s0
-  | n == 0 = top
+  | n == 0 = fail <+> arr (const top)
   | otherwise = dedup $ case s0 of
     Id -> id
     S.Fail -> fail
@@ -70,7 +68,7 @@ eval' n s0
 prim :: (ArrowTry p, IsTerm t p, IsTermEnv env t p) => StratVar -> [TermVar] -> p t t
 prim = undefined
 
-guardedChoice :: (ArrowTry c, Lattice (Complete z) c) => c x y -> c y z -> c x z -> c x z
+guardedChoice :: (ArrowTry c, Lattice (Complete z)) => c x y -> c y z -> c x z -> c x z
 guardedChoice = try
 {-# INLINE guardedChoice #-}
 
@@ -78,7 +76,7 @@ sequence :: Category c => c x y -> c y z -> c x z
 sequence f g = f >>> g
 {-# INLINE sequence #-}
 
-one :: (ArrowTry c, ArrowJoin c, ArrowChoice c, PartOrd t c, Lattice (Complete t) c) => c t t -> c [t] [t]
+one :: (ArrowTry c, ArrowJoin c, ArrowChoice c, PartOrd t, Lattice (Complete t)) => c t t -> c [t] [t]
 one f = proc l -> case l of
   (t:ts) -> do
     (t',ts') <- first f <+> second (one f) -< (t,ts)
@@ -86,7 +84,7 @@ one f = proc l -> case l of
   [] -> fail -< ()
 {-# INLINE one #-}
 
-some :: (ArrowTry c, ArrowChoice c, PartOrd t c, Lattice (Complete t) c) => c t t -> c [t] [t]
+some :: (ArrowTry c, ArrowChoice c, PartOrd t, Lattice (Complete t)) => c t t -> c [t] [t]
 some f = go
   where
     go = proc l -> case l of
@@ -156,7 +154,7 @@ bindStratArgs ((v,Call v' [] []) : ss) senv =
 bindStratArgs ((v,s) : ss) senv =
     M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
  
-match :: (ArrowChoice c, ArrowJoin c, ArrowTry c, ArrowApply c,
+match :: (ArrowChoice c, ArrowJoin c, ArrowTry c, ArrowApply c, Lattice (Complete t),
           IsTerm t c, IsTermEnv env t c)
       => c (TermPattern,t) t
 match = proc (p,t) -> case p of
@@ -180,7 +178,7 @@ match = proc (p,t) -> case p of
   S.NumberLiteral n ->
     matchTermAgainstNumber -< (n,t)
 
-build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, IsTerm t c, IsTermEnv env t c)
+build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, Lattice (Complete t), IsTerm t c, IsTermEnv env t c)
       => c TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()

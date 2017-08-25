@@ -21,8 +21,6 @@ import qualified Data.Result as R
 import           Data.Order
 import           Data.Foldable (toList)
 
-import           Utils
-
 newtype PowersetResult a = PowRes { unPowRes :: Pow (Result a) }
   deriving (Functor,Monoid)
 
@@ -64,11 +62,10 @@ dedup' :: (Eq a, Hashable a) => PowersetResult a -> PowersetResult a
 dedup' (PowRes a) = PowRes (P.dedup' a)
 {-# INLINE dedup' #-}
 
-instance (PreOrd a p, ArrowChoice p, ArrowApply p) => PreOrd (PowersetResult a) p where
-  (⊑) = proc (PowRes xs,PowRes ys) ->
-    allA (proc x -> anyA (proc y -> (⊑) -< (x,y)) -<< toList ys) -<< toList xs
+instance PreOrd a => PreOrd (PowersetResult a) where
+  PowRes xs ⊑ PowRes ys = all (\x -> any (\y -> x ⊑ y) (toList ys)) (toList xs)
 
-instance (Galois (Pow x) x' p, ArrowChoice p, ArrowApply p, Eq x, Hashable x)
-  => Galois (Pow (Result x)) (PowersetResult x') p where
-  alpha = map (alpha . arr (return :: x -> Pow x)) . arr PowRes
-  gamma = arr (join . fmap collect . unPowRes) . map (gamma :: p x' (Pow x))
+instance (Galois (Pow x) x', Eq x, Hashable x)
+  => Galois (Pow (Result x)) (PowersetResult x') where
+  alpha xs = PowRes (fmap (fmap (\x -> alpha (P.singleton x))) xs)
+  gamma = undefined -- arr (join . fmap collect . unPowRes) . map (gamma :: p x' (Pow x))

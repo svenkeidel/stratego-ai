@@ -1,176 +1,160 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE Arrows #-}
 module Data.Order where
 
 import Prelude hiding ((.),map)
 
-import Control.Category
-import Control.Arrow
-
-import Utils
-
-import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.Hashable
 import Data.Complete
 import Data.Powerset
 import qualified Data.Sequence as S
 
+-- REMINDER TO SELF: DO NOT ADD EXTRA PARAMETER FOR STATIC INFORMATION TO ORDERING FUNCTION!!!
+-- IT MAKES THE CODE MUCH MORE COMPLICATED.
+
 -- | Reflexive, transitive order
-class Arrow c => PreOrd x c where
-  (⊑) :: c (x,x) Bool
+class PreOrd x where
+  (⊑) :: x -> x -> Bool
 
 -- | Reflexive, transitive and anti-symmetric order
-class PreOrd x c => PartOrd x c
+class PreOrd x => PartOrd x
 
 -- | Reflexive, transitive, anti-symmetric and complete order
-class PartOrd x c => Lattice x c where
-  (⊔) :: c (x,x) x
+class PartOrd x => Lattice x where
+  (⊔) :: x -> x -> x
 
-class Lattice x c => BoundedLattice x c where
-  top :: c a x
+class Lattice x => BoundedLattice x where
+  top :: x
 
-lub :: (Lattice x c, ArrowChoice c) => c (Pow x) x
-lub = go . arr (\(Pow a) -> a)
+lub :: Lattice x => Pow x -> x
+lub (Pow xs) = go xs
   where
-    go = proc s -> case S.viewl s of
-      S.EmptyL -> returnA -< error "no lub of empty set"
-      x S.:< xs
-        | null xs -> returnA -< x
-        | otherwise -> do
-          y <- go -< xs
-          (⊔) -< (x,y)
+    go s = case S.viewl s of
+      S.EmptyL -> error "no lub of empty set"
+      a S.:< as
+        | null as -> a
+        | otherwise ->
+          a ⊔ go as
 
-instance (Eq a, Hashable a, Arrow p) => PreOrd (Pow a) p where
-  (⊑) = proc (as,bs) -> (⊑) -< (toHashSet as, toHashSet bs)
+instance (Eq a, Hashable a) => PreOrd (Pow a) where
+  as ⊑ bs = all (`HS.member` toHashSet as) (toHashSet bs)
 
-instance (Eq a, Hashable a, Arrow p) => PartOrd (Pow a) p
+instance (Eq a, Hashable a) => PartOrd (Pow a) 
 
-instance (Eq a, Hashable a, Arrow p) => Lattice (Pow a) p where
-  (⊔) = arr (uncurry union)
+instance (Eq a, Hashable a) => Lattice (Pow a) where
+  as ⊔ bs = as `union` bs
 
-instance (Eq (x,y), Hashable (x,y), Galois (Pow x) x' c, Galois (Pow y) y' c, ArrowChoice c) => Galois (Pow (x,y)) (x',y') c where
-  alpha = (alpha <<< Data.Powerset.map pi1) &&& (Data.Powerset.map pi2 >>> alpha)
-  gamma = cartesian ^<< gamma *** gamma
+instance (Eq (x,y), Hashable (x,y), Galois (Pow x) x', Galois (Pow y) y')
+  => Galois (Pow (x,y)) (x',y') where
+  alpha m = (alpha (fst <$> m),alpha (snd <$> m))
+  gamma m = cartesian (gamma (fst m),gamma (snd m))
 
-instance (PreOrd x c, ArrowChoice c) => PreOrd (Complete x) c where
-  (⊑) = proc (c1,c2) -> case (c1,c2) of
-    (_,Top) -> returnA -< True
-    (Complete x, Complete y) -> (⊑) -< (x,y)
-    (_,_) -> returnA -< False
+instance PreOrd x => PreOrd (Complete x) where
+  c1 ⊑ c2 = case (c1,c2) of
+    (_,Top) -> True
+    (Complete x, Complete y) -> x ⊑ y
+    (_,_) -> False
 
-instance (PartOrd x c, ArrowChoice c) => PartOrd (Complete x) c where
+instance PartOrd x => PartOrd (Complete x) where
 
-instance (PartOrd x c, Lattice (Complete x) c,
-          PartOrd y c, Lattice (Complete y) c,
-          ArrowChoice c) => Lattice (Complete (x,y)) c where
-  (⊔) = proc (c,d) -> case (c,d) of
-    (Complete (x1,y1), Complete (x2,y2)) -> do
-      (x3,y3) <- (⊔) -< ((Complete x1,Complete y1),(Complete x2,Complete y2))
-      returnA -< (,) <$> x3 <*> y3
-    _ -> returnA -< Top
+instance (PartOrd x, Lattice (Complete x),
+          PartOrd y, Lattice (Complete y)) => Lattice (Complete (x,y)) where
+  c ⊔ d = case (c,d) of
+    (Complete (x1,y1), Complete (x2,y2)) ->
+      let (z1,z2) = (Complete x1,Complete y1) ⊔ (Complete x2,Complete y2)
+      in (,) <$> z1 <*> z2
+    _ -> Top
 
-instance (PreOrd a p,PreOrd b p) => PreOrd (a,b) p where
-  (⊑) = proc ((a1,b1),(a2,b2)) ->
-    (&&) ~<< (⊑) *** (⊑) -< ((a1,a2),(b1,b2))
+instance (PreOrd a,PreOrd b) => PreOrd (a,b) where
+  (a1,b1) ⊑ (a2,b2) = a1 ⊑ a2 && b1 ⊑ b2
 
-instance (PartOrd a p, PartOrd b p) => PartOrd (a,b) p
+instance (PartOrd a, PartOrd b) => PartOrd (a,b)
 
-instance (Lattice a p, Lattice b p) => Lattice (a,b) p where
-  (⊔) = proc ((a1,b1),(a2,b2)) ->
-    (⊔) *** (⊔) -< ((a1,a2),(b1,b2))
+instance (Lattice a, Lattice b) => Lattice (a,b) where
+  (a1,b1) ⊔ (a2,b2) = (a1 ⊔ a2,b1 ⊔ b2)
  
-instance (Eq a, Hashable a, Arrow p) => PreOrd (HashSet a) p where
-  (⊑) = arr $ \(xs,ys) -> all (`HS.member` ys) xs
+instance PreOrd a => PreOrd [a] where
+  l1 ⊑ l2 = case (l1,l2) of
+    (a:as,b:bs) -> a ⊑ b && as ⊑ bs
+    ([],[]) -> True
+    (_,_) -> False
 
-instance (Eq a, Hashable a, Arrow p) => PartOrd (HashSet a) p 
+instance PartOrd a => PartOrd [a] where
 
-instance (Eq a, Hashable a, Arrow p) => Lattice (HashSet a) p where
-  (⊔) = arr $ uncurry HS.union
+-- wrapComplete :: ArrowChoice c => c (x,y) (Complete z) -> c (Complete x, Complete y) (Complete z)
+-- wrapComplete f = proc xs -> case xs of
+--   (Complete x, Complete y) -> f -< (x,y)
+--   _ -> returnA -< Top
 
-instance (PreOrd a p, ArrowChoice p)  => PreOrd [a] p where
-  (⊑) = proc (l1,l2) -> case (l1,l2) of
-    (a:as,b:bs) -> (&&) ~<< (⊑) *** (⊑) -< ((a,b),(as, bs))
-    ([],[]) -> returnA -< True
-    (_,_) -> returnA -< False
+instance (PartOrd x, Lattice (Complete x)) => Lattice (Complete [x]) where
+  l1 ⊔ l2 = case (l1,l2) of
+    (Complete (a: as), Complete (b:bs)) ->
+      let c  = Complete a ⊔ Complete b
+          cs = Complete as ⊔ Complete bs
+      in (:) <$> c <*> cs
+    (Complete [], Complete []) -> Complete []
+    (_,_) -> Top
 
-instance (PartOrd a p, ArrowChoice p) => PartOrd [a] p where
+instance PreOrd a => PreOrd (Maybe a) where
+  m1 ⊑ m2 = case (m1,m2) of
+    (Just x,Just y) -> x ⊑ y
+    (Nothing, Nothing) -> True
+    (_,_) -> False
 
-wrapComplete :: ArrowChoice c => c (x,y) (Complete z) -> c (Complete x, Complete y) (Complete z)
-wrapComplete f = proc xs -> case xs of
-  (Complete x, Complete y) -> f -< (x,y)
-  _ -> returnA -< Top
+instance PartOrd a => PartOrd (Maybe a)
 
-instance (PartOrd x c, Lattice (Complete x) c, ArrowChoice c) => Lattice (Complete [x]) c where
-  (⊔) = proc (l1,l2) -> case (l1,l2) of
-    (Complete (a: as), Complete (b:bs)) -> do
-      (c,cs) <- (⊔) *** (⊔) -< ((Complete a,Complete b),(Complete as, Complete bs))
-      returnA -< (:) <$> c <*> cs
-    (Complete [], Complete []) -> returnA -< Complete []
-    (_,_) -> returnA -< Top
+-- instance (PartOrd a c, Lattice (Complete a) c, ArrowChoice c) => Lattice (Complete (Maybe a)) c where
+--   (⊔) = wrapComplete $ proc m -> case m of
+--     (Just x,Just y) -> fmap Just ^<< (⊔) -< (Complete x,Complete y)
+--     (Nothing, Nothing) -> returnA -< Complete Nothing
+--     (_,_) -> returnA -< Top
 
-instance (PreOrd a p, ArrowChoice p) => PreOrd (Maybe a) p where
-  (⊑) = proc m -> case m of
-    (Just x,Just y) -> (⊑) -< (x,y)
-    (Nothing, Nothing) -> returnA -< True
-    (_,_) -> returnA -< False
+-- -- instance (Eq a, Hashable a, PartOrd a c, PartOrd a' c, ArrowChoice c, Galois (Pow a) a' c)
+-- --     => Galois (Pow (Maybe a)) (Complete (Maybe a')) c where
+-- --   alpha = proc xs ->
+-- --     if xs == fromFoldable [Nothing]
+-- --     then returnA -< Complete Nothing
+-- --     else map (Just ^<< alpha) -< traverse maybeComplete xs
+-- --     where
+-- --       maybeComplete :: Maybe a -> Complete a
+-- --       maybeComplete (Just a) = Complete a
+-- --       maybeComplete Nothing  = Top
+-- --   gamma = undefined
 
-instance (PartOrd a c, ArrowChoice c) => PartOrd (Maybe a) c
+instance PreOrd Int where
+  x ⊑ y = x <= y
 
-instance (PartOrd a c, Lattice (Complete a) c, ArrowChoice c) => Lattice (Complete (Maybe a)) c where
-  (⊔) = wrapComplete $ proc m -> case m of
-    (Just x,Just y) -> fmap Just ^<< (⊔) -< (Complete x,Complete y)
-    (Nothing, Nothing) -> returnA -< Complete Nothing
-    (_,_) -> returnA -< Top
+instance PartOrd Int
 
--- instance (Eq a, Hashable a, PartOrd a c, PartOrd a' c, ArrowChoice c, Galois (Pow a) a' c)
---     => Galois (Pow (Maybe a)) (Complete (Maybe a')) c where
---   alpha = proc xs ->
---     if xs == fromFoldable [Nothing]
---     then returnA -< Complete Nothing
---     else map (Just ^<< alpha) -< traverse maybeComplete xs
---     where
---       maybeComplete :: Maybe a -> Complete a
---       maybeComplete (Just a) = Complete a
---       maybeComplete Nothing  = Top
---   gamma = undefined
+instance PreOrd () where
+  () ⊑ () = True
 
-instance Arrow c => PreOrd Int c where
-  (⊑) = arr $ uncurry (<=)
+instance PartOrd ()
 
-instance Arrow c => PartOrd Int c
+instance Lattice () where
+  () ⊔ () = ()
 
-instance Arrow c => PreOrd () c where
-  (⊑) = arr (const True)
+instance Lattice (Complete ()) where
+  c1 ⊔ c2 = case (c1,c2) of
+    (_,Top) -> Top
+    (Top,_) -> Top
+    (Complete (),Complete ()) -> Complete ()
 
-instance Arrow c => PartOrd () c
-
-instance Arrow c => Lattice () c where
-  (⊔) = arr (const ())
-
-instance (ArrowChoice c, Arrow c) => Lattice (Complete ()) c where
-  (⊔) = proc (c1,c2) -> case (c1,c2) of
-    (_,Top) -> returnA -< Top
-    (Top,_) -> returnA -< Top
-    (Complete x,Complete y) -> Complete ^<< (⊔) -< (x,y)
-
--- instance (Arrow p, ArrowZero p) => Lattice (Complete Int) p where
---   (⊔) = proc (x,y) ->
---     if x == y
---       then returnA -< x
---       else zeroArrow -< ()
+-- -- instance (Arrow p, ArrowZero p) => Lattice (Complete Int) p where
+-- --   (⊔) = proc (x,y) ->
+-- --     if x == y
+-- --       then returnA -< x
+-- --       else zeroArrow -< ()
 
 -- | A galois connection consisting of an abstraction function alpha
 -- and a concretization function gamma between two pre-ordered sets
 -- has to satisfy forall x,y. alpha x ⊑ y iff x ⊑ gamma y
-class (PreOrd x p, PreOrd y p) => Galois x y p where
-  alpha :: p x y
-  gamma :: p y x
+class (PreOrd x, PreOrd y) => Galois x y where
+  alpha :: x -> y
+  gamma :: y -> x
 
-instance (Galois x x' p, Galois y y' p) => Galois (x,y) (x',y') p where
-  alpha = alpha *** alpha
-  gamma = gamma *** gamma
-
-
+instance (Galois x x', Galois y y') => Galois (x,y) (x',y') where
+  alpha (x,y) = (alpha x, alpha y)
+  gamma (x',y') = (gamma x', gamma y')

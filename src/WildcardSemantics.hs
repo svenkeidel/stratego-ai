@@ -69,7 +69,7 @@ type TermEnv = AbstractTermEnv Term
 
 -- Instances -----------------------------------------------------------------------------------------
 
-instance Monad m => IsTerm Term (Interp r s m) where
+instance (Monad m, ArrowTry (Interp r s m), ArrowJoin (Interp r s m)) => IsTerm Term (Interp r s m) where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts'
       | c == c' && eqLength ts ts' -> do
@@ -78,7 +78,7 @@ instance Monad m => IsTerm Term (Interp r s m) where
       | otherwise -> fail -< ()
     Wildcard ->
       (returnA <+> fail) -< Cons c [ Wildcard | _ <- [1..(length ts)] ]
-    _ -> returnA -< t
+    _ -> fail -< ()
 
   matchTermAgainstString = proc (s,t) -> case t of
     StringLiteral s'
@@ -132,6 +132,7 @@ instance Monad m => IsTerm Term (Interp r s m) where
 
   convertFromList = proc (c,ts) -> case (c,go ts) of
     (StringLiteral c', Just ts'') -> returnA -< Cons (Constructor c') ts''
+    (Wildcard, Just _)            -> fail <+> success -< Wildcard
     (_,                Nothing)   -> fail <+> success -< Wildcard
     _                             -> fail -< ()
     where
@@ -154,19 +155,16 @@ instance Monad m => IsTerm Term (Interp r s m) where
   numberLiteral = arr NumberLiteral
   stringLiteral = arr StringLiteral
 
-instance Monad m => IsAbstractTerm Term (Interp r s m) where
+instance (Monad m, ArrowTry (Interp r s m), ArrowJoin (Interp r s m)) => IsAbstractTerm Term (Interp r s m) where
   wildcard = arr (const Wildcard)
 
-instance Monad m => BoundedLattice Term (Interp r s m) where
-  top = arr (const Wildcard)
+instance BoundedLattice Term where
+  top = Wildcard
 
 instance TermUtils Term where
   convertToList ts = case ts of
-    (x:xs) ->
-      let l = convertToList xs
-      in Cons "Cons" [x,l]
-    [] ->
-      Cons "Nil" []
+    (x:xs) -> Cons "Cons" [x,convertToList xs]
+    []     -> Cons "Nil" []
     
   size (Cons _ ts) = sum (size <$> ts) + 1
   size (StringLiteral _) = 1
@@ -179,41 +177,39 @@ instance TermUtils Term where
   height (NumberLiteral _) = 1
   height Wildcard = 1
 
-instance ArrowChoice c => PreOrd Term c where
-  (⊑) = proc (t1,t2) -> case (t1,t2) of
-    (_,Wildcard) -> returnA -< True
-    (Cons c ts,Cons c' ts') -> do
-      b <- (⊑) -< (ts,ts')
-      returnA -< c == c' && b
-    (StringLiteral s, StringLiteral s') -> returnA -< s == s'
-    (NumberLiteral n, NumberLiteral n') -> returnA -< n == n'
-    (_, _) -> returnA -< False
+instance PreOrd Term where
+  t1 ⊑ t2 = case (t1,t2) of
+    (_,Wildcard) -> True
+    (Cons c ts,Cons c' ts') -> c == c' && (ts ⊑ ts')
+    (StringLiteral s, StringLiteral s') -> s == s'
+    (NumberLiteral n, NumberLiteral n') -> n == n'
+    (_, _) -> False
 
-instance ArrowChoice c => PartOrd Term c
+instance PartOrd Term
 
-instance ArrowChoice c => Lattice Term c where
-  (⊔) = proc (t1,t2) -> case (t1,t2) of
+instance Lattice Term where
+  t1 ⊔ t2 = case (t1,t2) of
     (Cons c ts, Cons c' ts')
-      | c == c' && eqLength ts ts' -> do
-        ts'' <- zipWithA (⊔) -< (ts,ts')
-        returnA -< Cons c ts''
-      | otherwise -> returnA -< Wildcard
+      | c == c' -> case Complete ts ⊔ Complete ts' of
+        Complete ts'' -> Cons c ts''
+        _             -> Wildcard
+      | otherwise -> Wildcard
     (StringLiteral s, StringLiteral s')
-      | s == s' -> returnA -< StringLiteral s
-      | otherwise -> returnA -< Wildcard
+      | s == s' -> StringLiteral s
+      | otherwise -> Wildcard
     (NumberLiteral n, NumberLiteral n')
-      | n == n' -> returnA -< NumberLiteral n
-      | otherwise -> returnA -< Wildcard
-    (Wildcard, _) -> returnA -< Wildcard
-    (_, Wildcard) -> returnA -< Wildcard
-    (_, _) -> returnA -< Wildcard
+      | n == n' -> NumberLiteral n
+      | otherwise -> Wildcard
+    (Wildcard, _) -> Wildcard
+    (_, Wildcard) -> Wildcard
+    (_, _) -> Wildcard
 
-instance ArrowChoice p => Lattice (Complete Term) p where
-  (⊔) = proc (x,y) -> case (x,y) of
-    (Complete t1, Complete t2) -> Complete ^<< (⊔) -< (t1,t2)
-    (_,_) -> returnA -< Top
+instance Lattice (Complete Term) where
+  x ⊔ y = case (x,y) of
+    (Complete t1, Complete t2) -> Complete (t1 ⊔ t2)
+    (_,_) -> Top
 
-instance ArrowChoice p => Galois (Pow C.Term) Term p where
+instance Galois (Pow C.Term) Term where
   alpha = lub <<< P.map go
     where
       go = proc t -> case t of

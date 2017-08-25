@@ -29,6 +29,9 @@ map f = proc (Pow s) -> case viewl s of
     Pow ys <- map f -< Pow xs
     returnA -< Pow (y <| ys)
 
+singleton :: a -> Pow a
+singleton x = Pow (S.singleton x)
+
 union :: Pow a -> Pow a -> Pow a
 union = mappend
 

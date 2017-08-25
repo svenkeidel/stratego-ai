@@ -6,7 +6,6 @@ module WildcardSemanticsSpec(main, spec) where
 import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map,(<=))
 
 import qualified ConcreteSemantics as C
-import           SharedSemantics
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
 import qualified WildcardSemanticsDelayed as W
@@ -23,7 +22,7 @@ import           Data.TermEnv
 import           Data.Term(TermUtils(..))
 import           Data.Powerset (Pow,fromFoldable)
 import qualified Data.Powerset as P
-import           Data.PowersetResult (PowersetResult)
+import           Data.PowersetResult (PowersetResult(..))
     
 import           Text.Printf
 
@@ -108,7 +107,7 @@ spec = do
     sound' :: Int -> Strat -> [(C.Term,[(TermVar,C.Term)])] -> Property
     sound' i s xs = sound'' (C.eval'' s) (W.eval'' i s) (fmap (\(t,tenv) -> (t,concreteTermEnv tenv)) xs)
 
-    sound'' :: (Eq a, Eq b, Hashable a, Hashable b, Galois (Pow a) a' (->), Galois (Pow b) b' (->), Show b, Show b')
+    sound'' :: (Eq a, Eq b, Hashable a, Hashable b, Galois (Pow a) a', Galois (Pow b) b', Show b, Show b')
             => Interp StratEnv (ConcreteTermEnv C.Term) Result a b
             -> Interp StratEnv (AbstractTermEnv W.Term) PowersetResult a' b'
             -> [(a,ConcreteTermEnv C.Term)]
@@ -119,7 +118,7 @@ spec = do
     showLub = curry (show <<< (alpha :: Pow C.Term -> W.Term) <<< arr (\(t1,t2) -> P.fromFoldable [t1,t2]))
 
     shouldBe' :: Pow (Result W.Term) -> Pow (Result W.Term) -> Property
-    shouldBe' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) (((⊑) (s2,s1)) `shouldBe` True)
+    shouldBe' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) (PowRes s2 ⊑ PowRes s1 `shouldBe` True)
     infix 1 `shouldBe'`
 
     map = Strategy ["f"] ["l"] (Scope ["x","xs","x'","xs'"] (

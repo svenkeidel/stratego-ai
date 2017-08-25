@@ -9,7 +9,7 @@ import Data.Order
 import Data.Complete
 
 class Arrow c => ArrowJoin c where
-  (<+>) :: Lattice (Complete y) c => c x y -> c x y -> c x y
+  (<+>) :: Lattice (Complete y) => c x y -> c x y -> c x y
   alternatives :: (Functor f, Foldable f) => c (f x) x
 
 instance MonadPlus m => ArrowJoin (Kleisli m) where

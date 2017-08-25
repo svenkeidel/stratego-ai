@@ -23,7 +23,6 @@ instance Applicative UncertainResult where
   pure = return
   (<*>) = ap
 
-
 instance Monad UncertainResult where
   return = arr Success
   f >>= k = mu (fmap k f)
@@ -53,25 +52,25 @@ instance MonadPlus UncertainResult where
     (SuccessOrFail x, SuccessOrFail _) -> SuccessOrFail x
 
 
-instance (PreOrd a p, ArrowChoice p) => PreOrd (UncertainResult a) p where
-  (⊑) = proc m -> case m of
-    (Fail, Fail) -> returnA -< True
-    (Success a, Success b) -> (⊑) -< (a,b)
-    (Success a, SuccessOrFail b) -> (⊑) -< (a,b)
-    (Fail, SuccessOrFail _) -> returnA -< True
-    (_, _) -> returnA -< False
+instance PreOrd a => PreOrd (UncertainResult a) where
+  m1 ⊑ m2 = case (m1,m2) of
+    (Fail, Fail) -> True
+    (Success a, Success b) -> a ⊑ b
+    (Success a, SuccessOrFail b) -> a ⊑ b
+    (Fail, SuccessOrFail _) -> True
+    (_, _) -> False
 
-instance (PartOrd a p, ArrowChoice p) => PartOrd (UncertainResult a) p
+instance PartOrd a => PartOrd (UncertainResult a)
 
-instance (Lattice a p, ArrowChoice p) => Lattice (UncertainResult a) p where
-  (⊔) = proc m -> case m of
-    (Success x, Success y) -> Success ^<< (⊔) -< (x,y)
-    (Success x, Fail) -> returnA -< SuccessOrFail x
-    (Fail, Success y) -> returnA -< SuccessOrFail y
-    (Fail, Fail) -> returnA -< Fail
-    (SuccessOrFail x, Success y) -> SuccessOrFail ^<< (⊔) -< (x,y)
-    (Success x, SuccessOrFail y) -> SuccessOrFail ^<< (⊔) -< (x,y)
-    (SuccessOrFail x, Fail) -> returnA -< SuccessOrFail x
-    (Fail, SuccessOrFail y) -> returnA -< SuccessOrFail y
-    (SuccessOrFail x, SuccessOrFail y) -> SuccessOrFail ^<< (⊔) -< (x,y)
+instance Lattice a => Lattice (UncertainResult a) where
+  m1 ⊔ m2 = case (m1,m2) of
+    (Success x, Success y) -> Success (x ⊔ y)
+    (Success x, Fail) -> SuccessOrFail x
+    (Fail, Success y) -> SuccessOrFail y
+    (Fail, Fail) -> Fail
+    (SuccessOrFail x, Success y) -> SuccessOrFail (x ⊔ y)
+    (Success x, SuccessOrFail y) -> SuccessOrFail (x ⊔ y)
+    (SuccessOrFail x, Fail) -> SuccessOrFail x
+    (Fail, SuccessOrFail y) -> SuccessOrFail y
+    (SuccessOrFail x, SuccessOrFail y) -> SuccessOrFail (x ⊔ y)
 
