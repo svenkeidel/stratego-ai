@@ -2,32 +2,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Control.Arrow.Try where
 
-import Prelude hiding (id,(.))
+import Prelude hiding (id,(.),fail)
 
 import Control.Category
 import Control.Arrow
 
-import Data.Order
-import Data.Complete
+import Control.Monad.Try
 
 class Arrow c => ArrowTry c where
-  fail :: c x y
-  try :: Lattice (Complete z) => c x y -> c y z -> c x z -> c x z
+  failA :: c x y
+  tryA :: c x y -> c y z -> c x z -> c x z
 
 success :: ArrowTry c => c a a
 success = id
 {-# INLINE success #-}
 
-instance ArrowTry (Kleisli Maybe) where
-  fail = Kleisli $ const Nothing
-  try e s f = Kleisli $ \a ->
-                case runKleisli e a of
-                  Just b -> runKleisli s b
-                  Nothing -> runKleisli f a
-
-instance ArrowTry (Kleisli []) where
-  fail = Kleisli $ const []
-  try e s f = Kleisli $ \a ->
-                case runKleisli e a of
-                  [] -> runKleisli f a
-                  bs -> bs >>= runKleisli s
+instance MonadTry m => ArrowTry (Kleisli m) where
+  failA = Kleisli $ const fail
+  tryA (Kleisli f) (Kleisli g) (Kleisli h) = Kleisli $ \x -> try (f x) g (h x)

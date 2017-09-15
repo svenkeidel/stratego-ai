@@ -16,6 +16,7 @@ import           Utils
 import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
 import           Control.Arrow.Join
 import           Control.Arrow.Try
+import           Control.Arrow.Deduplicate
 import           Control.Category
 
 import qualified Data.HashMap.Lazy as M
@@ -24,52 +25,35 @@ import           Data.Complete
 import           Data.Term
 import           Data.TermEnv
 import           Data.Hashable
-import           Data.Powerset (Deduplicate(..))
+import           Data.Stack
 
 import           Text.Printf
 
 -- Language Constructs
-eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, Deduplicate c,
-          Lattice (Complete t), BoundedLattice t, 
-          HasStratEnv c, Eq t, Hashable t, IsTerm t c, IsTermEnv env t c)
-      => Int -> Strat -> c t t
-eval' n s0
-  | n == 0 = fail <+> arr (const top)
-  | otherwise = dedup $ case s0 of
+eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, ArrowDeduplicate c,
+          Lattice (Complete t), BoundedLattice t, Eq t, Hashable t, 
+          HasStratEnv c, HasStack c, IsTerm t c, IsTermEnv env t c)
+      => Strat -> c t t
+eval' s0 = dedupA $ case s0 of
     Id -> id
-    S.Fail -> fail
-    Seq s1 s2 -> (eval' n s2) . (eval' n s1)
-    GuardedChoice s1 s2 s3 -> try (eval' n s1) (eval' n s2) (eval' n s3)
-    One s -> lift (one (eval' n s))
-    Some s -> lift (some (eval' n s))
-    All s -> lift (all (eval' n s))
-    Scope xs s -> scope xs (eval' n s)
+    S.Fail -> failA
+    Seq s1 s2 -> eval' s2 . eval' s1
+    GuardedChoice s1 s2 s3 -> tryA (eval' s1) (eval' s2) (eval' s3)
+    One s -> lift (one (eval' s))
+    Some s -> lift (some (eval' s))
+    All s -> lift (all (eval' s))
+    Scope xs s -> scope xs (eval' s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
-    Let bnds body -> let_ bnds body (eval' n)
-    Call f ss ps -> call f ss ps (eval' (n-1))
+    Let bnds body -> let_ bnds body eval'
+    Call f ss ps -> call f ss ps eval'
     Prim f _ ps -> prim f ps
                   
--- eval' n m = fixA' n m $ \(evalD,evalS) -> dedup $ uncurry $ arr $ \s0 -> case s0 of
---     Id -> id
---     S.Fail -> fail
---     Seq s1 s2 -> (evalS $$ s2) . (evalS $$ s1)
---     GuardedChoice s1 s2 s3 -> try (evalS $$ s1) (evalS $$ s2) (evalS $$ s3)
---     One s -> lift (one (evalS $$ s))
---     Some s -> lift (some (evalS $$ s))
---     All s -> lift (all (evalS $$ s))
---     Scope xs s -> scope xs (evalS $$ s)
---     Match f -> proc t -> match -< (f,t)
---     Build f -> proc _ -> build -< f
---     Let bnds body -> let_ bnds body evalS
---     Call f ss ps -> call f ss ps evalD
---     Prim f _ ps -> prim f ps
-
 prim :: (ArrowTry p, IsTerm t p, IsTermEnv env t p) => StratVar -> [TermVar] -> p t t
 prim = undefined
 
 guardedChoice :: (ArrowTry c, Lattice (Complete z)) => c x y -> c y z -> c x z -> c x z
-guardedChoice = try
+guardedChoice = tryA
 {-# INLINE guardedChoice #-}
 
 sequence :: Category c => c x y -> c y z -> c x z
@@ -81,7 +65,7 @@ one f = proc l -> case l of
   (t:ts) -> do
     (t',ts') <- first f <+> second (one f) -< (t,ts)
     returnA -< (t':ts')
-  [] -> fail -< ()
+  [] -> failA -< ()
 {-# INLINE one #-}
 
 some :: (ArrowTry c, ArrowChoice c, PartOrd t, Lattice (Complete t)) => c t t -> c [t] [t]
@@ -89,13 +73,13 @@ some f = go
   where
     go = proc l -> case l of
       (t:ts) -> do
-        (t',ts') <- try (first f) (second go') (second go) -< (t,ts)
+        (t',ts') <- tryA (first f) (second go') (second go) -< (t,ts)
         returnA -< t':ts'
       -- the strategy did not succeed for any of the subterms, i.e. some(s) fails
-      [] -> fail -< ()
+      [] -> failA -< ()
     go' = proc l -> case l of
       (t:ts) -> do
-        (t',ts') <- try (first f) (second go') (second go') -< (t,ts)
+        (t',ts') <- tryA (first f) (second go') (second go') -< (t,ts)
         returnA -< t':ts'
       [] -> returnA -< []
 {-# INLINE some #-}
@@ -118,10 +102,10 @@ let_ :: (ArrowApply c, HasStratEnv c) => [(StratVar,Strategy)] -> Strat -> (Stra
 let_ ss body interp = proc a -> do
   let ss' = [ (v,Closure s' M.empty) | (v,s') <- ss ]
   senv <- readStratEnv -< ()
-  localStratEnv (interp body) -< (a,M.union (M.fromList ss') senv) 
+  localStratEnv (M.union (M.fromList ss') senv) (interp body) -<< a 
 {-# INLINE let_ #-}
 
-call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c)
+call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c, HasStack c)
      => StratVar
      -> [Strat]
      -> [TermVar]
@@ -130,19 +114,20 @@ call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv
 call f actualStratArgs actualTermArgs interp = proc a -> do
   senv <- readStratEnv -< ()
   case M.lookup f senv of
-    Just (Closure (Strategy formalStratArgs formalTermArgs body) senv') -> do
+    Just (Closure strat@(Strategy formalStratArgs formalTermArgs body) senv') -> do
       tenv <- getTermEnv -< ()
       mapA bindTermArg -< zip actualTermArgs formalTermArgs
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
-      b <- localStratEnv (interp body) -<< (a,senv'')
+          callSignature = (strat,actualStratArgs,actualTermArgs)
+      b <- localStratEnv senv'' (stackPush callSignature (interp body)) -<< a
       tenv' <- getTermEnv -< ()
       putTermEnv <<< unionTermEnvs -< (formalTermArgs,tenv,tenv')
       returnA -< b
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
   where
     bindTermArg = proc (actual,formal) ->
-      lookupTermVar (proc t -> insertTerm -< (formal,t)) fail -<< actual
+      lookupTermVar (proc t -> insertTerm -< (formal,t)) failA -<< actual
     {-# INLINE bindTermArg #-}
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
@@ -183,7 +168,7 @@ build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, Lattice (Complete t), IsTerm t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x ->
-    lookupTermVar returnA fail -< x
+    lookupTermVar returnA failA -< x
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     cons -< (c,ts')

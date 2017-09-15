@@ -7,7 +7,6 @@ import           Prelude hiding (log)
 import           Grammar.RegularTreeGrammar
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
-import qualified WildcardSemanticsDelayed as W
 import qualified Soundness as U
 
 import qualified Pretty.Haskell as H
@@ -193,7 +192,7 @@ caseStudy name function maxDepth analysis = do
     Right module_ ->
       forM_ ([1..maxDepth]::[Int]) $ \depth -> do
 
-        let res = unPow $ W.eval depth (stratEnv module_) (Call (fromString function) [] []) (W.Wildcard,AbstractTermEnv M.empty)
+        let res = unPow $ fst $ W.eval (Call (fromString function) [] []) (stratEnv module_) (AbstractTermEnv M.empty) undefined W.Wildcard
         let terms = H.fromList $ toList $ filterResults res
         let failed = hasFail res
 

@@ -6,11 +6,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 module ConcreteSemantics where
 
 import           Prelude hiding (id,(.),fail,all,curry,uncurry)
 
-import           InterpreterArrow
+-- import           InterpreterArrow
 import           SharedSemantics
 import           Syntax (TermPattern)
 import qualified Syntax as S
@@ -21,8 +24,10 @@ import           Control.Arrow
 import           Control.Arrow.Try
 import           Control.Arrow.Join
 import           Control.Arrow.Apply
+import           Control.Arrow.Deduplicate
+import           Control.Monad.Reader hiding (fail)
+import           Control.Monad.State hiding (fail)
 import           Control.Category
-import           Control.Monad hiding (fail)
 
 import           Data.Constructor
 import           Data.Hashable
@@ -32,7 +37,10 @@ import           Data.Term (IsTerm(..),TermUtils(..))
 import           Data.TermEnv
 import           Data.Text (Text)
 import           Data.Order
+import           Data.Stack
 import           Data.Complete
+import qualified Data.HashMap.Lazy as M
+import           Data.Foldable (foldr')
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -44,12 +52,14 @@ data Term
 
 type TermEnv = ConcreteTermEnv Term
 
-eval'' :: Strat -> Interp StratEnv TermEnv Result Term Term
-eval'' = eval' (-1)
+newtype Interp a b = Interp ( Kleisli (ReaderT StratEnv (StateT TermEnv Result)) a b )
+  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
 
-eval :: StratEnv -> Strat -> (Term,TermEnv) -> Result (Term,TermEnv)
-eval senv s = runInterp (eval' (-1) s) senv
--- eval senv s = runInterp (eval' 0 0 $$ s) senv
+runInterp :: Interp a b -> StratEnv -> TermEnv -> a -> Result (b,TermEnv)
+runInterp (Interp f) senv tenv t = runStateT (runReaderT (runKleisli f t) senv) tenv
+
+eval :: Strat -> StratEnv -> TermEnv -> Term -> Result (Term,TermEnv)
+eval = runInterp . eval'
 
 -- prim f ps = proc _ -> case f of
 --   "strcat" -> do
@@ -70,28 +80,54 @@ eval senv s = runInterp (eval' (-1) s) senv
 --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
 
 -- Instances -----------------------------------------------------------------------------------------
+liftK :: (a -> _ b) -> Interp a b
+liftK f = Interp (Kleisli f)
 
-instance (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm Term c where
+instance HasStratEnv Interp where
+  readStratEnv = liftK (const ask)
+  localStratEnv senv (Interp (Kleisli f)) = liftK (local (const senv) . f)
+
+instance HasStack Interp where
+  stackPush _ = id
+
+instance IsTermEnv TermEnv Term Interp where
+  getTermEnv = liftK (const get)
+  putTermEnv = liftK put
+  lookupTermVar f g = proc v -> do
+    ConcreteTermEnv env <- getTermEnv -< ()
+    case M.lookup v env of
+      Just t -> f -< t
+      Nothing -> g -< ()
+  insertTerm = proc (v,t) -> do
+    ConcreteTermEnv env <- getTermEnv -< ()
+    putTermEnv -< ConcreteTermEnv (M.insert v t env)
+  deleteTermVars = proc vars -> do
+    ConcreteTermEnv e <- getTermEnv -< ()
+    putTermEnv -< ConcreteTermEnv (foldr' M.delete e vars)
+  unionTermEnvs = arr (\(vars, ConcreteTermEnv e1, ConcreteTermEnv e2) ->
+    ConcreteTermEnv (M.union e1 (foldr' M.delete e2 vars)))
+
+instance IsTerm Term Interp where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts'
       | c == c' && eqLength ts ts' -> do
         ts'' <- matchSubterms -< (ts,ts')
         returnA -< Cons c ts''
       | otherwise ->
-        fail -< ()
-    _ -> fail -< ()
+        failA -< ()
+    _ -> failA -< ()
 
   matchTermAgainstString = proc (s,t) -> case t of
     StringLiteral s'
       | s == s' -> returnA -< t
-      | otherwise -> fail -< ()
-    _ -> fail -< ()
+      | otherwise -> failA -< ()
+    _ -> failA -< ()
 
   matchTermAgainstNumber = proc (n,t) -> case t of
     NumberLiteral n'
       | n == n' -> returnA -< t
-      | otherwise -> fail -< ()
-    _ -> fail -< ()
+      | otherwise -> failA -< ()
+    _ -> failA -< ()
 
   matchTermAgainstExplode matchCons matchSubterms = proc t -> case t of
       Cons (Constructor c) ts -> do
@@ -111,18 +147,18 @@ instance (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm Term c where
           | c == c' && eqLength ts ts' -> do
           ts'' <- zipWithA equal -< (ts,ts')
           cons -< (c,ts'')
-          | otherwise -> fail -< ()
+          | otherwise -> failA -< ()
       (StringLiteral s, StringLiteral s')
           | s == s' -> success -< t1
-          | otherwise -> fail -< ()
+          | otherwise -> failA -< ()
       (NumberLiteral n, NumberLiteral n')
           | n == n' -> success -< t1
-          | otherwise -> fail -< ()
-      (_,_) -> fail -< ()
+          | otherwise -> failA -< ()
+      (_,_) -> failA -< ()
 
   convertFromList = proc (c,ts) -> case (c,go ts) of
     (StringLiteral c', Just ts') -> returnA -< Cons (Constructor c') ts'
-    _                            -> fail -< ()
+    _                            -> failA -< ()
     where
       go t = case t of
         Cons "Cons" [x,tl] -> (x:) <$> go tl

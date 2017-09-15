@@ -6,6 +6,8 @@ module Data.Result where
 import Prelude hiding (map)
 
 import Control.Monad
+import Control.Monad.Try
+import Control.Monad.Deduplicate
 import Control.Applicative
 import Control.Arrow
 
@@ -53,18 +55,26 @@ instance MonadPlus Result where
   mplus (Success a) _ = Success a
   mplus Fail r = r
 
+instance MonadTry Result where
+  fail = Fail
+  try Fail _ m2 = m2
+  try (Success a) k _ = k a
+
 instance Semigroup (Result a) where
-  Success a <> _ = Success a
-  Fail <> Success b = Success b
-  Fail <> Fail = Fail
+  (<>) = mappend
 
 instance Monoid (Result a) where
   mempty = Fail
-  mappend = (<>)
+  mappend (Success a) _ = Success a
+  mappend Fail (Success b) = Success b
+  mappend Fail Fail = Fail
 
 instance Hashable a => Hashable (Result a) where
   hashWithSalt s (Success a) = s `hashWithSalt` (0::Int) `hashWithSalt` a
   hashWithSalt s Fail = s `hashWithSalt` (1::Int)
+
+instance MonadDeduplicate Result where
+  dedup = id
 
 instance PreOrd a => PreOrd (Result a) where
   x ⊑ y = case (x,y) of

@@ -3,12 +3,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE DeriveTraversable #-}
 module Data.Powerset where
 
 import           Prelude hiding (map,(.),id)
 
 import           Control.Category
 import           Control.Arrow 
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Deduplicate
 
 import           Data.Sequence (Seq,(|>),(<|),viewl,ViewL(..))
 import qualified Data.Sequence as S
@@ -19,8 +23,8 @@ import           Data.Foldable (foldl',toList)
 -- import           Data.Order
 import           Data.List (intercalate)
 
-newtype Pow a = Pow {unPow :: Seq a} deriving (Eq, Functor, Applicative, Monad, Monoid, Foldable)
-
+newtype Pow a = Pow {unPow :: Seq a} deriving (Eq, Functor, Applicative, Monad, Alternative, MonadPlus, Monoid, Foldable, Traversable)
+    
 map :: ArrowChoice c => c x y -> c (Pow x) (Pow y)
 map f = proc (Pow s) -> case viewl s of
   EmptyL -> returnA -< Pow S.empty
@@ -47,9 +51,6 @@ cartesian (as,bs) = do
   b <- bs
   return (a,b)
 
-class Arrow p => Deduplicate p where
-  dedup :: (Hashable b,Eq b) => p a b -> p a b
-
 toHashSet :: (Hashable a, Eq a) => Pow a -> HashSet a
 toHashSet (Pow as) = foldl' (flip H.insert) H.empty as
 {-# INLINE toHashSet #-}
@@ -57,7 +58,7 @@ toHashSet (Pow as) = foldl' (flip H.insert) H.empty as
 fromFoldable :: Foldable f => f a -> Pow a
 fromFoldable = Pow . foldl' (|>) mempty 
 {-# INLINE fromFoldable #-}
+           
+instance MonadDeduplicate Pow where
+  dedup = fromFoldable . toHashSet
 
-dedup' :: (Eq a, Hashable a) => Pow a -> Pow a
-dedup' = fromFoldable . toHashSet
-{-# INLINE dedup' #-}

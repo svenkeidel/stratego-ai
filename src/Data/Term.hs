@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 -- {-# LANGUAGE Arrows #-}
 -- {-# LANGUAGE OverloadedStrings #-}
 module Data.Term where
@@ -21,7 +22,7 @@ import Control.Arrow.Join
 type (:+:) = Either
 infixr :+:
 
-class (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm t c where
+class (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm t c | c -> t where
   matchTermAgainstConstructor :: c ([t'],[t]) [t] -> c (Constructor, [t'], t) t 
   matchTermAgainstString :: c (Text,t) t
   matchTermAgainstNumber :: c (Int,t) t

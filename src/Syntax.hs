@@ -62,7 +62,7 @@ data Strat
 
 class Arrow c => HasStratEnv c where
   readStratEnv :: c a StratEnv
-  localStratEnv :: c a b -> c (a,StratEnv) b
+  localStratEnv :: StratEnv -> c a b -> c a b
 
 leftChoice :: Strat -> Strat -> Strat
 leftChoice f = GuardedChoice f Id
