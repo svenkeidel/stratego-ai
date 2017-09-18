@@ -1,9 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE ConstraintKinds #-}
 -- {-# LANGUAGE Arrows #-}
 -- {-# LANGUAGE OverloadedStrings #-}
 module Data.Term where
@@ -17,26 +13,22 @@ import Control.Arrow hiding ((<+>))
 import Control.Arrow.Try
 import Control.Arrow.Join
 
--- import Utils
+type Ar c = (ArrowChoice c, ArrowTry c, ArrowJoin c)
+class IsTerm t where
+  matchTermAgainstConstructor :: Ar c => c ([t'],[t]) [t] -> c (Constructor, [t'], t) t 
+  matchTermAgainstString :: Ar c => c (Text,t) t
+  matchTermAgainstNumber :: Ar c => c (Int,t) t
+  matchTermAgainstExplode :: Ar c => c t t -> c t t -> c t t
+  equal :: Ar c => c (t,t) t
+  convertFromList :: Ar c => c (t,t) t
+  lift :: Ar c => c [t] [t] -> c t t
 
-type (:+:) = Either
-infixr :+:
+  cons :: Ar c => c (Constructor,[t]) t
+  numberLiteral :: Ar c => c Int t
+  stringLiteral :: Ar c => c Text t
 
-class (ArrowChoice c, ArrowTry c, ArrowJoin c) => IsTerm t c | c -> t where
-  matchTermAgainstConstructor :: c ([t'],[t]) [t] -> c (Constructor, [t'], t) t 
-  matchTermAgainstString :: c (Text,t) t
-  matchTermAgainstNumber :: c (Int,t) t
-  matchTermAgainstExplode :: c t t -> c t t -> c t t
-  equal :: c (t,t) t
-  convertFromList :: c (t,t) t
-  lift :: c [t] [t] -> c t t
-
-  cons :: Arrow c => c (Constructor,[t]) t
-  numberLiteral :: Arrow c => c Int t
-  stringLiteral :: Arrow c => c Text t
-
-class IsTerm t c => IsAbstractTerm t c where
-  wildcard :: Arrow c => c () t
+class IsTerm t => IsAbstractTerm t where
+  wildcard :: Ar c => c () t
 
 class TermUtils t where
   size :: t -> Int

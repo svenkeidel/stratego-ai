@@ -26,30 +26,31 @@ import           Data.Term
 import           Data.TermEnv
 import           Data.Hashable
 import           Data.Stack
+import           Data.Proxy
 
 import           Text.Printf
 
 -- Language Constructs
 eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, ArrowDeduplicate c,
           Lattice (Complete t), BoundedLattice t, Eq t, Hashable t, 
-          HasStratEnv c, HasStack c, IsTerm t c, IsTermEnv env t c)
-      => Strat -> c t t
-eval' s0 = dedupA $ case s0 of
+          HasStratEnv c, HasStack c, IsTerm t, HasTermEnv env c, IsTermEnv env t)
+      => Proxy env -> Strat -> c t t
+eval' p s0 = dedupA $ case s0 of
     Id -> id
     S.Fail -> failA
-    Seq s1 s2 -> eval' s2 . eval' s1
-    GuardedChoice s1 s2 s3 -> tryA (eval' s1) (eval' s2) (eval' s3)
-    One s -> lift (one (eval' s))
-    Some s -> lift (some (eval' s))
-    All s -> lift (all (eval' s))
-    Scope xs s -> scope xs (eval' s)
+    Seq s1 s2 -> eval' p s2 . eval' p s1
+    GuardedChoice s1 s2 s3 -> tryA (eval' p s1) (eval' p s2) (eval' p s3)
+    One s -> lift (one (eval' p s))
+    Some s -> lift (some (eval' p s))
+    All s -> lift (all (eval' p s))
+    Scope xs s -> scope xs (eval' p s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
-    Let bnds body -> let_ bnds body eval'
-    Call f ss ps -> call f ss ps eval'
+    Let bnds body -> let_ bnds body (eval' p)
+    Call f ss ps -> call f ss ps (eval' p)
     Prim f _ ps -> prim f ps
                   
-prim :: (ArrowTry p, IsTerm t p, IsTermEnv env t p) => StratVar -> [TermVar] -> p t t
+prim :: (ArrowTry p) => StratVar -> [TermVar] -> p t t
 prim = undefined
 
 guardedChoice :: (ArrowTry c, Lattice (Complete z)) => c x y -> c y z -> c x z -> c x z
@@ -88,12 +89,12 @@ all :: ArrowChoice c => c x y -> c [x] [y]
 all = mapA
 {-# INLINE all #-}
 
-scope :: (Arrow c, IsTermEnv env t c) => [TermVar] -> c x y -> c x y
+scope :: (Ar c, HasTermEnv env c, IsTermEnv env t) => [TermVar] -> c x y -> c x y
 scope vars s = proc t -> do
-  env  <- getTermEnv     -< ()
-  _    <- deleteTermVars -< vars
-  t'   <- s              -< t
-  env' <- getTermEnv     -< ()
+  env  <- getTermEnv      -< ()
+  _    <- deleteTermVars' -< vars
+  t'   <- s               -< t
+  env' <- getTermEnv      -< ()
   putTermEnv <<< unionTermEnvs -< (vars,env,env')
   returnA -< t'
 {-# INLINE scope #-}
@@ -105,7 +106,8 @@ let_ ss body interp = proc a -> do
   localStratEnv (M.union (M.fromList ss') senv) (interp body) -<< a 
 {-# INLINE let_ #-}
 
-call :: (ArrowTry c, ArrowChoice c, ArrowApply c, IsTermEnv env t c, HasStratEnv c, HasStack c)
+call :: (Ar c, ArrowApply c, HasTermEnv env c, IsTermEnv env t, HasStratEnv c, HasStack c,
+         BoundedLattice t)
      => StratVar
      -> [Strat]
      -> [TermVar]
@@ -127,7 +129,7 @@ call f actualStratArgs actualTermArgs interp = proc a -> do
     Nothing -> error (printf "strategy %s not in scope" (show f)) -< ()
   where
     bindTermArg = proc (actual,formal) ->
-      lookupTermVar (proc t -> insertTerm -< (formal,t)) failA -<< actual
+      lookupTermVar' (proc t -> insertTerm' -< (formal,t)) failA -<< actual
     {-# INLINE bindTermArg #-}
 
 bindStratArgs :: [(StratVar,Strat)] -> StratEnv -> StratEnv
@@ -140,7 +142,7 @@ bindStratArgs ((v,s) : ss) senv =
     M.insert v (Closure (Strategy [] [] s) senv) (bindStratArgs ss senv)
  
 match :: (ArrowChoice c, ArrowJoin c, ArrowTry c, ArrowApply c, Lattice (Complete t),
-          IsTerm t c, IsTermEnv env t c)
+          IsTerm t, HasTermEnv env c, IsTermEnv env t)
       => c (TermPattern,t) t
 match = proc (p,t) -> case p of
   S.As v p2 -> do
@@ -149,9 +151,9 @@ match = proc (p,t) -> case p of
   S.Var "_" ->
     success -< t
   S.Var x ->
-    lookupTermVar
+    lookupTermVar'
       (proc t' -> equal -< (t,t'))
-      (proc () -> do insertTerm -< (x,t); returnA -< t) -<< x
+      (proc () -> do insertTerm' -< (x,t); returnA -< t) -<< x
   S.Cons c ts ->
     matchTermAgainstConstructor (zipWithA match) -< (c,ts,t)
   S.Explode c ts ->
@@ -163,12 +165,12 @@ match = proc (p,t) -> case p of
   S.NumberLiteral n ->
     matchTermAgainstNumber -< (n,t)
 
-build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, Lattice (Complete t), IsTerm t c, IsTermEnv env t c)
+build :: (ArrowChoice c, ArrowJoin c, ArrowTry c, Lattice (Complete t), IsTerm t, HasTermEnv env c, IsTermEnv env t)
       => c TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()
   S.Var x ->
-    lookupTermVar returnA failA -< x
+    lookupTermVar' returnA failA -< x
   S.Cons c ts -> do
     ts' <- mapA build -< ts
     cons -< (c,ts')

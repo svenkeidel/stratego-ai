@@ -27,7 +27,6 @@ class PartOrd x => Lattice x where
 
 class Lattice x => BoundedLattice x where
   top :: x
-  bot :: x
 
 lub :: Lattice x => Pow x -> x
 lub (Pow xs) = go xs

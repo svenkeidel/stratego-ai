@@ -30,7 +30,6 @@ import           Control.Monad.State hiding (fail)
 import           Control.Category
 
 import           Data.Constructor
-import           Data.Hashable
 import           Data.Result
 import           Data.String (IsString(..))
 import           Data.Term (IsTerm(..),TermUtils(..))
@@ -39,8 +38,11 @@ import           Data.Text (Text)
 import           Data.Order
 import           Data.Stack
 import           Data.Complete
-import qualified Data.HashMap.Lazy as M
 import           Data.Foldable (foldr')
+import           Data.Proxy
+import           Data.Hashable
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -50,7 +52,7 @@ data Term
   | NumberLiteral Int
   deriving (Eq)
 
-type TermEnv = ConcreteTermEnv Term
+newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Eq,Hashable)
 
 newtype Interp a b = Interp ( Kleisli (ReaderT StratEnv (StateT TermEnv Result)) a b )
   deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
@@ -59,7 +61,7 @@ runInterp :: Interp a b -> StratEnv -> TermEnv -> a -> Result (b,TermEnv)
 runInterp (Interp f) senv tenv t = runStateT (runReaderT (runKleisli f t) senv) tenv
 
 eval :: Strat -> StratEnv -> TermEnv -> Term -> Result (Term,TermEnv)
-eval = runInterp . eval'
+eval = runInterp . eval' Proxy
 
 -- prim f ps = proc _ -> case f of
 --   "strcat" -> do
@@ -90,24 +92,23 @@ instance HasStratEnv Interp where
 instance HasStack Interp where
   stackPush _ = id
 
-instance IsTermEnv TermEnv Term Interp where
+instance HasTermEnv TermEnv Interp where
   getTermEnv = liftK (const get)
   putTermEnv = liftK put
-  lookupTermVar f g = proc v -> do
-    ConcreteTermEnv env <- getTermEnv -< ()
+
+instance IsTermEnv TermEnv Term where
+  lookupTermVar f g = proc (v,TermEnv env) ->
     case M.lookup v env of
       Just t -> f -< t
       Nothing -> g -< ()
-  insertTerm = proc (v,t) -> do
-    ConcreteTermEnv env <- getTermEnv -< ()
-    putTermEnv -< ConcreteTermEnv (M.insert v t env)
-  deleteTermVars = proc vars -> do
-    ConcreteTermEnv e <- getTermEnv -< ()
-    putTermEnv -< ConcreteTermEnv (foldr' M.delete e vars)
-  unionTermEnvs = arr (\(vars, ConcreteTermEnv e1, ConcreteTermEnv e2) ->
-    ConcreteTermEnv (M.union e1 (foldr' M.delete e2 vars)))
+  insertTerm = arr $ \(v,t,TermEnv env) ->
+    TermEnv (M.insert v t env)
+  deleteTermVars = arr $ \(vars,TermEnv env) ->
+    TermEnv (foldr' M.delete env vars)
+  unionTermEnvs = arr (\(vars, TermEnv e1, TermEnv e2) ->
+    TermEnv (M.union e1 (foldr' M.delete e2 vars)))
 
-instance IsTerm Term Interp where
+instance IsTerm Term where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts'
       | c == c' && eqLength ts ts' -> do

@@ -8,40 +8,29 @@
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 module WildcardSemantics where
 
-import           Prelude hiding (id,fail,concat,sequence,all,(.),uncurry)
+import           Prelude hiding (id,fail,concat,sequence,(.),uncurry)
 
 import qualified ConcreteSemantics as C
-import           Syntax (Strat,StratEnv)
 import           Utils
-import           SharedSemantics
 import           Syntax hiding (Fail,TermPattern(..))
 
 import           Control.DeepSeq
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
-import           Control.Monad.Reader hiding (fail,sequence)
-import           Control.Monad.State hiding (fail,sequence)
-import           Control.Monad.Result
-import           Control.Monad.Powerset
-import           Control.Monad.Join (JoinT(..))
-import qualified Control.Monad.Join as J
-import           Control.Monad.Identity hiding (fail,sequence)
 import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Try
 import           Control.Arrow.Join
 import           Control.Arrow.Apply
-import           Control.Arrow.Deduplicate
 
 import           Data.Complete
 import           Data.Constructor
 import           Data.Foldable (foldr')
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Order
 import           Data.Powerset
 import qualified Data.Powerset as P
-import           Data.Result
-import           Data.Stack
 import           Data.Term (IsTerm(..),IsAbstractTerm(..),stringLiteral,TermUtils(..))
 import           Data.TermEnv
 import           Data.Text (Text)
@@ -55,17 +44,7 @@ data Term
     | Wildcard
     deriving (Eq)
 
-type TermEnv = AbstractTermEnv Term
-
--- ReaderT StratEnv (StateT TermEnv (ResultT (PowT (JoinT Stack Identity)))) a = StratEnv -> TermEnv -> Stack -> (Pow (Result (a,TermEnv)), Stack)
-newtype Interp a b = Interp (Kleisli (ReaderT StratEnv (StateT TermEnv (ResultT (PowT (JoinT Stack Identity))))) a b )
-  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
-
-runInterp :: Interp a b -> StratEnv -> TermEnv -> Stack -> a -> (Pow (Result (b,TermEnv)), Stack)
-runInterp (Interp f) senv tenv st a = runIdentity (runJoinT (runPowT (runResultT (runStateT (runReaderT (runKleisli f a) senv) tenv))) st)
-
-eval :: Strat -> StratEnv -> TermEnv -> Stack -> Term -> (Pow (Result (Term,TermEnv)), Stack)
-eval = runInterp . eval'
+newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Eq,Hashable)
 
 -- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
 --      => StratVar -> [TermVar] -> p a t
@@ -95,34 +74,19 @@ eval = runInterp . eval'
 -- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
 
 -- Instances -----------------------------------------------------------------------------------------
-liftK :: (a -> _ b) -> Interp a b
-liftK f = Interp (Kleisli f)
-
-instance HasStratEnv Interp where
-  readStratEnv = liftK (const ask)
-  localStratEnv senv (Interp (Kleisli f)) = liftK (local (const senv) . f)
-
-instance HasStack Interp where
-  stackPush = undefined
-
-instance (IsAbstractTerm Term Interp) => IsTermEnv TermEnv Term Interp where
-  getTermEnv = liftK (const get)
-  putTermEnv = liftK put
-  lookupTermVar f g = proc v -> do
-    AbstractTermEnv env <- getTermEnv -< ()
+instance IsTermEnv TermEnv Term where
+  lookupTermVar f g = proc (v,TermEnv env) ->
     case M.lookup v env of
       Just t -> f -< t
       Nothing -> (f <<< wildcard) <+> g -< ()
-  insertTerm = proc (v,t) -> do
-    AbstractTermEnv env <- getTermEnv -< ()
-    putTermEnv -< AbstractTermEnv (M.insert v t env)
-  deleteTermVars = proc vars -> do
-    AbstractTermEnv e <- getTermEnv -< ()
-    putTermEnv -< AbstractTermEnv (foldr' M.delete e vars)
-  unionTermEnvs = arr (\(vars,AbstractTermEnv e1, AbstractTermEnv e2) ->
-    AbstractTermEnv (M.union e1 (foldr' M.delete e2 vars)))
+  insertTerm = arr $ \(v,t,TermEnv env) ->
+    TermEnv (M.insert v t env)
+  deleteTermVars = arr $ \(vars,TermEnv env) ->
+    TermEnv (foldr' M.delete env vars)
+  unionTermEnvs = arr (\(vars,TermEnv e1,TermEnv e2) ->
+    TermEnv (M.union e1 (foldr' M.delete e2 vars)))
 
-instance IsTerm Term Interp where
+instance IsTerm Term where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts'
       | c == c' && eqLength ts ts' -> do
@@ -208,7 +172,7 @@ instance IsTerm Term Interp where
   numberLiteral = arr NumberLiteral
   stringLiteral = arr StringLiteral
 
-instance IsAbstractTerm Term Interp where
+instance IsAbstractTerm Term where
   wildcard = arr (const Wildcard)
 
 instance BoundedLattice Term where
@@ -319,3 +283,35 @@ arbitraryTerm h w = do
   c <- arbitrary
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
+
+internal :: Arrow c => c (HashMap TermVar Term) (HashMap TermVar Term) -> c TermEnv TermEnv
+internal f = arr TermEnv . f . arr (\(TermEnv e) -> e)
+
+map :: ArrowChoice c => c Term Term -> c TermEnv TermEnv
+map f = internal (arr M.fromList . mapA (second f) . arr M.toList)
+
+newtype AbstractTermEnv t = AbstractTermEnv (HashMap TermVar t)
+  deriving (Eq,Hashable,Show)
+
+dom :: HashMap TermVar t -> [TermVar]
+dom = M.keys
+
+instance PreOrd TermEnv where
+  TermEnv env1 ⊑ TermEnv env2 =
+    Prelude.all (\v -> M.lookup v env1 ⊑ M.lookup v env2) (dom env2)
+
+instance PartOrd TermEnv
+
+instance Lattice TermEnv where
+  TermEnv env1' ⊔ TermEnv env2' = go (dom env1') env1' env2' M.empty
+    where
+      go vars env1 env2 env3 = case vars of
+        (v:vs) -> case (M.lookup v env1,M.lookup v env2) of
+          (Just t1,Just t2) -> go vs env1 env2 (M.insert v (t1⊔t2) env3)
+          _                 -> go vs env1 env2 env3
+        [] -> TermEnv env3
+
+-- instance (Eq t, Hashable t, Lattice t', Galois (Pow t) t') =>
+--   Galois (Pow (ConcreteTermEnv t)) (AbstractTermEnv t') where
+--   alpha cenvs = lub (fmap (\(ConcreteTermEnv e) -> AbstractTermEnv (fmap (alpha . P.singleton) e)) cenvs)
+--   gamma = undefined
