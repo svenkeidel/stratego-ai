@@ -21,6 +21,7 @@ import           Control.Monad.Result
 import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Try
 import           Control.Arrow.Join
+import           Control.Arrow.Debug
 import           Control.Arrow.Deduplicate
 
 import           Data.Powerset
@@ -30,7 +31,8 @@ import           Data.TermEnv
 import           Data.Proxy
 import           Data.Order
 
-data Stack = Stack
+import           Debug.Trace
+import           Text.Printf
 
 newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (ResultT Pow))) a b)
   deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
@@ -38,8 +40,8 @@ newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (Re
 runInterp :: Interp a b -> Int -> StratEnv -> TermEnv -> a -> Pow (Result (b,TermEnv))
 runInterp (Interp f) i senv tenv a = runResultT (runStateT (runReaderT (runKleisli f a) (senv,i)) tenv)
 
-eval :: Strat -> Int -> StratEnv -> TermEnv -> Term -> Pow (Result (Term,TermEnv))
-eval = runInterp . eval' Proxy
+eval :: Int -> Strat -> StratEnv -> TermEnv -> Term -> Pow (Result (Term,TermEnv))
+eval i s = runInterp (eval' Proxy s) i
 
 liftK :: (a -> _ b) -> Interp a b
 liftK f = Interp (Kleisli f)
@@ -54,8 +56,8 @@ getFuel = liftK (const (snd <$> ask))
 localFuel :: Interp a b -> Interp (Int,a) b
 localFuel (Interp (Kleisli f)) = liftK $ \(i,a) -> local (second (const i)) (f a)
 
-instance HasStack Interp where
-  stackPush _ f = proc a -> do
+instance HasStack Term Interp where
+  stackPush _ _ f = proc a -> do
     i <- liftK (const (snd <$> ask)) -< ()
     if i <= 0
     then returnA -< top
@@ -64,3 +66,15 @@ instance HasStack Interp where
 instance HasTermEnv TermEnv Interp where
   getTermEnv = liftK (const get)
   putTermEnv = liftK (modify . const)
+
+instance ArrowDebug Interp where
+  debug str (Interp (Kleisli f)) = liftK $ \a -> ReaderT $ \r -> StateT $ \s -> ResultT $
+    let b = trace (printf "CALL: %s(%s)" str (show (a,s))) $ runResultT (runStateT (runReaderT (f a) r) s)
+        bFiltered = filterSuccess b
+    in trace (printf "RETURN: %s(%s) -> %s" str (show (a,s)) (show bFiltered)) b
+    where
+      filterSuccess :: Pow (Result a) -> Pow a
+      filterSuccess = foldMap $ \r -> case r of
+        Success a -> return a
+        Fail -> mempty
+

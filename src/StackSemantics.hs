@@ -25,6 +25,7 @@ import           Control.Monad.Powerset
 import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Try
 import           Control.Arrow.Join
+import           Control.Arrow.Debug
 import           Control.Arrow.Deduplicate
 
 import           Data.Powerset
@@ -51,9 +52,12 @@ instance HasStratEnv Interp where
   readStratEnv = liftK (const ask)
   localStratEnv senv (Interp (Kleisli f)) = liftK (local (const senv) . f)
 
-instance HasStack Interp where
+instance HasStack Term Interp where
   stackPush = undefined
 
 instance HasTermEnv TermEnv Interp where
   getTermEnv = liftK (const get)
   putTermEnv = liftK (modify . const)
+
+instance ArrowDebug Interp where
+  debug _ f = f

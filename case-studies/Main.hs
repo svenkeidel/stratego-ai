@@ -4,14 +4,14 @@ module Main where
 
 import           Prelude hiding (log)
 
-import           Grammar.RegularTreeGrammar
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
-import qualified Soundness as U
+import qualified FuelSemantics as F
+import qualified CachedSemantics as C
 
 import qualified Pretty.Haskell as H
-import qualified Pretty.JavaScript as J
-import qualified Pretty.PCF as P
+-- import qualified Pretty.JavaScript as J
+-- import qualified Pretty.PCF as P
 import           Pretty.Results
 
 import           Paths_system_s
@@ -22,20 +22,15 @@ import qualified Criterion.Types as CT
 
 import           Data.ATerm
 import           Data.Foldable
-import qualified Data.HashMap.Lazy as M
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as H
-import           Data.Hashable
-import           Data.Maybe
-import           Data.Monoid
 import           Data.Result
 import qualified Data.Sequence as S
 import           Data.String
 import qualified Data.Text.IO as TIO
 import           Data.Term (TermUtils)
 import qualified Data.Term as T
-import           Data.TermEnv
-import           Data.Powerset(unPow)
+import           Data.Powerset(Pow,unPow)
 
 import           System.IO
 
@@ -43,14 +38,10 @@ import           Text.PrettyPrint hiding (sep,(<>))
 import           Text.Printf
 
 main :: IO ()
-main =
-  sizeAnalysisSetup $ \sizeAnalysis ->
-  heightAnalysisSetup $ \heightAnalysis -> do
-  -- wittnessAnalysisSetup $ \wittnessAnalysis ->
-  -- ruleInvocationsAnalysisSetup $ \ruleInvocationsAnalysis ->
-  -- classificationSetup $ \classification -> do
+main = do
     CM.initializeTime
-
+    prettyPrint H.ppHaskell =<< caseStudy (F.eval 3) "arrows" "desugar_arrow_0_0"
+    prettyPrint H.ppHaskell =<< caseStudy (C.eval 3 mempty) "arrows" "desugar_arrow_0_0"
     -- activate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
     --   prettyPrint H.ppHaskell <>
     --   sizeAnalysis <>
@@ -63,18 +54,18 @@ main =
   --     heightAnalysis <>
   --     wittnessAnalysis
 
-    activate $ caseStudy "arith" "eval_0_0" 3 $
-      prettyPrint P.ppPCF <>
-      sizeAnalysis <>
-      heightAnalysis
+    -- activate $ caseStudy "arith" "eval_0_0" 3 $
+    --   prettyPrint P.ppPCF <>
+    --   sizeAnalysis <>
+    --   heightAnalysis
 
     -- activate $ caseStudy "pcf" "eval_0_0" 4 $
     --   prettyPrint P.ppPCF <>
     --   sizeAnalysis <>
     --   heightAnalysis
-  --     wittnessAnalysis <>
-  --     ruleInvocationsAnalysis pcfEvalGrammar <>
-  --     classification pcfEvalGrammar 4
+    --   wittnessAnalysis <>
+    --   ruleInvocationsAnalysis pcfEvalGrammar <>
+    --   classification pcfEvalGrammar 4
 
   --   activate $ caseStudy "pcf" "check_eval_0_0" 5 $
   --     prettyPrint P.ppPCF <>
@@ -90,18 +81,11 @@ main =
   --     heightAnalysis <>
   --     wittnessAnalysis
 
-  where
-    activate :: IO () -> IO ()
-    activate cs = cs
-
-    deactivate :: IO () -> IO ()
-    deactivate _ = return ()
-
-prettyPrint :: (W.Term -> Doc) -> Analysis W.Term
-prettyPrint pprint _ _ _ res =
+prettyPrint :: (W.Term -> Doc) -> HashSet W.Term -> IO ()
+prettyPrint pprint res =
   if H.size res <= 200
      then print $ ppResults pprint (toList res)
-     else printf "Output ommited because of result set contains %d element\n" (H.size res)
+     else printf "Output ommited because the result set contains %d elements\n" (H.size res)
 
 sizeAnalysisSetup :: (Show t, TermUtils t) => (Analysis t -> IO ()) -> IO ()
 sizeAnalysisSetup k =
@@ -183,26 +167,18 @@ measure analysisName action = do
 
 type Analysis t = String -> String -> Int -> HashSet t -> IO ()
 
-caseStudy :: String -> String -> Int -> Analysis W.Term -> IO ()
-caseStudy name function maxDepth analysis = do
+caseStudy :: (Strat -> StratEnv -> W.TermEnv -> W.Term -> Pow (Result (W.Term,W.TermEnv))) -> String -> String -> IO (HashSet W.Term)
+caseStudy eval name function = do
   printf "------------------ case study: %s ----------------------\n" name
   file <- TIO.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
   case parseModule =<< parseATerm file of
     Left e -> fail (show e)
-    Right module_ ->
-      forM_ ([1..maxDepth]::[Int]) $ \depth -> do
+    Right module_ -> do
+      let res = unPow $ eval (Call (fromString function) [] []) (stratEnv module_) W.emptyEnv W.Wildcard
+      let terms = H.fromList $ toList $ filterResults res
 
-        let res = unPow $ fst $ W.eval (Call (fromString function) [] []) (stratEnv module_) (AbstractTermEnv M.empty) undefined W.Wildcard
-        let terms = H.fromList $ toList $ filterResults res
-        let failed = hasFail res
-
-        (m,_) <- CM.measure (CT.nfIO (return terms)) 1
-        printf "function: %s, recursion depth: %d, results: %d, fail: %s, time: %s\n" function depth (H.size terms) (yesno failed) (CM.secs (CT.measCpuTime m))
-        analysis name function depth terms
-        putStrLn "\n"
+      _ <- CM.measure (CT.nfIO (return terms)) 1
+      return terms
  where
    filterResults = fmap (\r -> case r of Success (t,_) -> t; Fail -> error "")
                  . S.filter (\r -> case r of Success _ -> True; _ -> False)
-   hasFail = isJust . S.findIndexL (\r -> case r of Fail -> True; _ -> False)
-   yesno :: Bool -> String
-   yesno b = if b then "yes" else "no"

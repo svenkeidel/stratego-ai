@@ -24,6 +24,7 @@ import           Control.Arrow
 import           Control.Arrow.Try
 import           Control.Arrow.Join
 import           Control.Arrow.Apply
+import           Control.Arrow.Debug
 import           Control.Arrow.Deduplicate
 import           Control.Monad.Reader hiding (fail)
 import           Control.Monad.State hiding (fail)
@@ -46,13 +47,16 @@ import qualified Data.HashMap.Lazy as M
 
 import           Test.QuickCheck hiding (Result(..))
 
+import           Debug.Trace
+import           Text.Printf
+
 data Term
   = Cons Constructor [Term]
   | StringLiteral Text
   | NumberLiteral Int
   deriving (Eq)
 
-newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Eq,Hashable)
+newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
 
 newtype Interp a b = Interp ( Kleisli (ReaderT StratEnv (StateT TermEnv Result)) a b )
   deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
@@ -85,12 +89,17 @@ eval = runInterp . eval' Proxy
 liftK :: (a -> _ b) -> Interp a b
 liftK f = Interp (Kleisli f)
 
+instance ArrowDebug Interp where
+  debug s f = proc a -> do
+    b <- f -< a
+    returnA -< trace (printf "%s: %s -> %s" s (show a) (show b)) b
+
 instance HasStratEnv Interp where
   readStratEnv = liftK (const ask)
   localStratEnv senv (Interp (Kleisli f)) = liftK (local (const senv) . f)
 
-instance HasStack Interp where
-  stackPush _ = id
+instance HasStack Term Interp where
+  stackPush _ _ = id
 
 instance HasTermEnv TermEnv Interp where
   getTermEnv = liftK (const get)

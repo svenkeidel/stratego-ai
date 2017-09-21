@@ -29,7 +29,7 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Order
-import           Data.Powerset
+import           Data.Powerset hiding (size)
 import qualified Data.Powerset as P
 import           Data.Term (IsTerm(..),IsAbstractTerm(..),stringLiteral,TermUtils(..))
 import           Data.TermEnv
@@ -44,7 +44,10 @@ data Term
     | Wildcard
     deriving (Eq)
 
-newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Eq,Hashable)
+newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
+
+emptyEnv :: TermEnv
+emptyEnv = TermEnv M.empty
 
 -- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
 --      => StratVar -> [TermVar] -> p a t
@@ -78,7 +81,11 @@ instance IsTermEnv TermEnv Term where
   lookupTermVar f g = proc (v,TermEnv env) ->
     case M.lookup v env of
       Just t -> f -< t
-      Nothing -> (f <<< wildcard) <+> g -< ()
+      Nothing ->
+        (do
+          putTermEnv -< TermEnv (M.insert v Wildcard env)
+          f -< Wildcard)
+        <+> (g -< ())
   insertTerm = arr $ \(v,t,TermEnv env) ->
     TermEnv (M.insert v t env)
   deleteTermVars = arr $ \(vars,TermEnv env) ->

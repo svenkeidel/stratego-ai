@@ -22,7 +22,8 @@ import qualified Data.HashSet as H
 import           Data.Foldable (foldl',toList)
 -- import           Data.Order
 import           Data.List (intercalate)
-
+import           Debug.Trace
+ 
 newtype Pow a = Pow {unPow :: Seq a} deriving (Eq, Functor, Applicative, Monad, Alternative, MonadPlus, Monoid, Foldable, Traversable)
     
 map :: ArrowChoice c => c x y -> c (Pow x) (Pow y)
@@ -58,6 +59,9 @@ toHashSet (Pow as) = foldl' (flip H.insert) H.empty as
 fromFoldable :: Foldable f => f a -> Pow a
 fromFoldable = Pow . foldl' (|>) mempty 
 {-# INLINE fromFoldable #-}
+
+size :: Pow a -> Int
+size (Pow s) = S.length s
            
 instance MonadDeduplicate Pow where
   dedup = fromFoldable . toHashSet

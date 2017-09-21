@@ -5,6 +5,7 @@ module Data.Order where
 
 import Prelude hiding ((.),map)
 
+import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
 import Data.Hashable
 import Data.Complete
@@ -37,6 +38,14 @@ lub (Pow xs) = go xs
         | null as -> a
         | otherwise ->
           a ⊔ go as
+
+instance (Eq a, Hashable a) => PreOrd (HashSet a) where
+  h1 ⊑ h2 = all (\x -> x `HS.member` h2) h1
+
+instance (Eq a, Hashable a) => PartOrd (HashSet a)
+
+instance (Eq a, Hashable a) => Lattice (HashSet a) where
+  (⊔) = HS.union
 
 instance (Eq a, Hashable a) => PreOrd (Pow a) where
   as ⊑ bs = all (`HS.member` toHashSet as) (toHashSet bs)

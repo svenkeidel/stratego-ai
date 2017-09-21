@@ -16,10 +16,10 @@ class HasTermEnv env c | c -> env where
   putTermEnv :: c env ()
 
 class IsTermEnv env t | env -> t where
-  lookupTermVar :: Ar c => c t a -> c () a -> c (TermVar,env) a
-  insertTerm :: Ar c => c (TermVar,t,env) env
-  deleteTermVars :: Ar c => c ([TermVar],env) env
-  unionTermEnvs :: Ar c => c ([TermVar],env,env) env
+  lookupTermVar :: (Ar c, HasTermEnv env c) => c t a -> c () a -> c (TermVar,env) a
+  insertTerm :: (Ar c, HasTermEnv env c) => c (TermVar,t,env) env
+  deleteTermVars :: (Ar c, HasTermEnv env c) => c ([TermVar],env) env
+  unionTermEnvs :: (Ar c, HasTermEnv env c) => c ([TermVar],env,env) env
 
 lookupTermVar' :: (Ar c, HasTermEnv env c, IsTermEnv env t) => c t a -> c () a -> c TermVar a
 lookupTermVar' f g = proc v -> do
