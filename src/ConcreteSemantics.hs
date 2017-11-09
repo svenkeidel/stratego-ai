@@ -119,12 +119,9 @@ instance IsTermEnv TermEnv Term where
 
 instance IsTerm Term where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
-    Cons c' ts'
-      | c == c' && eqLength ts ts' -> do
-        ts'' <- matchSubterms -< (ts,ts')
-        returnA -< Cons c ts''
-      | otherwise ->
-        failA -< ()
+    Cons c' ts' | c == c' && eqLength ts ts' -> do
+      ts'' <- matchSubterms -< (ts,ts')
+      returnA -< Cons c ts''
     _ -> failA -< ()
 
   matchTermAgainstString = proc (s,t) -> case t of
