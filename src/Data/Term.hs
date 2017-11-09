@@ -21,7 +21,7 @@ class IsTerm t where
   matchTermAgainstExplode :: Ar c => c t t -> c t t -> c t t
   equal :: Ar c => c (t,t) t
   convertFromList :: Ar c => c (t,t) t
-  lift :: Ar c => c [t] [t] -> c t t
+  mapSubterms :: Ar c => c [t] [t] -> c t t
 
   cons :: Ar c => c (Constructor,[t]) t
   numberLiteral :: Ar c => c Int t

@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> {} }:
 
-let hsEnv = pkgs.profiledHaskellPackages.ghcWithPackages(p: with p; [
+let hsEnv = pkgs.haskellPackages.ghcWithPackages(p: with p; [
     Cabal cabal-install attoparsec hlint text containers unordered-containers hspec mtl
     pretty arrows fgl criterion stylish-haskell
   ]);

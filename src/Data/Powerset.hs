@@ -22,10 +22,9 @@ import qualified Data.HashSet as H
 import           Data.Foldable (foldl',toList)
 -- import           Data.Order
 import           Data.List (intercalate)
-import           Debug.Trace
  
 newtype Pow a = Pow {unPow :: Seq a} deriving (Eq, Functor, Applicative, Monad, Alternative, MonadPlus, Monoid, Foldable, Traversable)
-    
+
 map :: ArrowChoice c => c x y -> c (Pow x) (Pow y)
 map f = proc (Pow s) -> case viewl s of
   EmptyL -> returnA -< Pow S.empty

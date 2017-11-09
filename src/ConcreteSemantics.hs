@@ -175,7 +175,7 @@ instance IsTerm Term where
         Cons "Nil" [] -> Just []
         _ -> Nothing
 
-  lift f = proc t ->
+  mapSubterms f = proc t ->
     case t of
       Cons c ts -> do
         ts' <- f -< ts

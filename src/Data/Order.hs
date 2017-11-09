@@ -164,6 +164,8 @@ class (PreOrd x, PreOrd y) => Galois x y where
   alpha :: x -> y
   gamma :: y -> x
 
+
+
 instance (Galois x x', Galois y y') => Galois (x,y) (x',y') where
   alpha (x,y) = (alpha x, alpha y)
   gamma (x',y') = (gamma x', gamma y')

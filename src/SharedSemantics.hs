@@ -34,7 +34,7 @@ import           Text.Printf
 -- Language Constructs
 eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, ArrowDeduplicate c,
           ArrowDebug c, Show t,
-          BoundedLattice t, Eq t, Hashable t, 
+          Eq t, Hashable t, 
           HasStratEnv c, HasStack t c, IsTerm t, HasTermEnv env c, IsTermEnv env t)
       => Proxy env -> Strat -> c t t
 eval' p s0 = dedupA $ case s0 of
@@ -42,9 +42,9 @@ eval' p s0 = dedupA $ case s0 of
     S.Fail -> failA
     Seq s1 s2 -> eval' p s2 . eval' p s1
     GuardedChoice s1 s2 s3 -> tryA (eval' p s1) (eval' p s2) (eval' p s3)
-    One s -> lift (one (eval' p s))
-    Some s -> lift (some (eval' p s))
-    All s -> lift (all (eval' p s))
+    One s -> mapSubterms (one (eval' p s))
+    Some s -> mapSubterms (some (eval' p s))
+    All s -> mapSubterms (all (eval' p s))
     Scope xs s -> scope xs (eval' p s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
@@ -111,7 +111,7 @@ let_ ss body interp = proc a -> do
 call :: (Ar c, ArrowApply c, ArrowDebug c,
          HasTermEnv env c, IsTermEnv env t,
          HasStratEnv c, HasStack t c,
-         Show t, BoundedLattice t)
+         Show t)
      => StratVar
      -> [Strat]
      -> [TermVar]
