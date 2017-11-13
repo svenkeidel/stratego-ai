@@ -20,7 +20,7 @@ import           Control.Monad.State hiding (fail,sequence)
 import           Control.Monad.Result
 import           Control.Arrow hiding ((<+>))
 import           Control.Arrow.Try
-import           Control.Arrow.Join
+import           Control.Arrow.Fix
 import           Control.Arrow.Debug
 import           Control.Arrow.Deduplicate
 
@@ -35,7 +35,7 @@ import           Debug.Trace
 import           Text.Printf
 
 newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (ResultT Pow))) a b)
-  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
+  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowZero,ArrowPlus,ArrowDeduplicate)
 
 runInterp :: Interp a b -> Int -> StratEnv -> TermEnv -> a -> Pow (Result (b,TermEnv))
 runInterp (Interp f) i senv tenv a = runResultT (runStateT (runReaderT (runKleisli f a) (senv,i)) tenv)
@@ -55,6 +55,13 @@ getFuel = liftK (const (snd <$> ask))
 
 localFuel :: Interp a b -> Interp (Int,a) b
 localFuel (Interp (Kleisli f)) = liftK $ \(i,a) -> local (second (const i)) (f a)
+
+instance ArrowFix Interp Term where
+  fixA f z = proc x -> do
+    i <- liftK (const (snd <$> ask)) -< ()
+    if i <= 0
+    then returnA -< top
+    else localFuel _ -< (i-1,x)
 
 instance HasStack Term Interp where
   stackPush _ _ f = proc a -> do

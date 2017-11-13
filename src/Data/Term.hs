@@ -13,7 +13,7 @@ import Control.Arrow hiding ((<+>))
 import Control.Arrow.Try
 import Control.Arrow.Join
 
-type Ar c = (ArrowChoice c, ArrowTry c, ArrowJoin c)
+type Ar c = (ArrowChoice c, ArrowTry c, ArrowPlus c)
 class IsTerm t where
   matchTermAgainstConstructor :: Ar c => c ([t'],[t]) [t] -> c (Constructor, [t'], t) t 
   matchTermAgainstString :: Ar c => c (Text,t) t

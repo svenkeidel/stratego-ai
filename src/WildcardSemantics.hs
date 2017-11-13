@@ -17,9 +17,8 @@ import           Syntax hiding (Fail,TermPattern(..))
 import           Control.DeepSeq
 import           Control.Category
 import           Control.Monad hiding (fail,sequence)
-import           Control.Arrow hiding ((<+>))
+import           Control.Arrow
 import           Control.Arrow.Try
-import           Control.Arrow.Join
 import           Control.Arrow.Apply
 
 import           Data.Complete

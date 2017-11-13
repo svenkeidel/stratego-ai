@@ -6,18 +6,17 @@
 {-# LANGUAGE ConstraintKinds #-}
 module SharedSemantics where
 
-import           Prelude hiding (fail,(.),id,sum,flip,uncurry,all)
+import           Prelude hiding (fail,(.),id,sum,flip,uncurry,all,sequence)
 
 import           Syntax hiding (Fail,TermPattern(..))
 import           Syntax (TermPattern)
 import qualified Syntax as S
 import           Utils
 
-import           Control.Arrow hiding (ArrowZero(..),ArrowPlus(..))
-import           Control.Arrow.Join
+import           Control.Arrow
 import           Control.Arrow.Try
+import           Control.Arrow.Fix
 import           Control.Arrow.Deduplicate
-import           Control.Arrow.Debug
 import           Control.Category
 
 import qualified Data.HashMap.Lazy as M
@@ -32,28 +31,23 @@ import           Data.Proxy
 import           Text.Printf
 
 -- Language Constructs
-eval' :: (ArrowChoice c, ArrowTry c, ArrowJoin c, ArrowApply c, ArrowDeduplicate c,
-          ArrowDebug c, Show t,
-          Eq t, Hashable t, 
+eval' :: (ArrowChoice c, ArrowTry c, ArrowPlus c, ArrowApply c, ArrowFix c t,
+          ArrowDeduplicate c, Eq t, Hashable t, 
           HasStratEnv c, HasStack t c, IsTerm t, HasTermEnv env c, IsTermEnv env t)
-      => Proxy env -> Strat -> c t t
-eval' p s0 = dedupA $ case s0 of
+      => Proxy env -> (Strat -> c t t)
+eval' p = fixA $ \ev s0 -> dedupA $ case s0 of
     Id -> id
     S.Fail -> failA
-    Seq s1 s2 -> eval' p s2 . eval' p s1
-    GuardedChoice s1 s2 s3 -> tryA (eval' p s1) (eval' p s2) (eval' p s3)
-    One s -> mapSubterms (one (eval' p s))
-    Some s -> mapSubterms (some (eval' p s))
-    All s -> mapSubterms (all (eval' p s))
-    Scope xs s -> scope xs (eval' p s)
+    Seq s1 s2 -> sequence (ev s1) (ev s2)
+    GuardedChoice s1 s2 s3 -> tryA (ev s1) (ev s2) (ev s3)
+    One s -> mapSubterms (one (ev s))
+    Some s -> mapSubterms (some (ev s))
+    All s -> mapSubterms (all (ev s))
+    Scope xs s -> scope xs (ev s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
     Let bnds body -> let_ bnds body (eval' p)
-    Call f ss ps -> call f ss ps (eval' p)
-    Prim f _ ps -> prim f ps
-                  
-prim :: (ArrowTry p) => StratVar -> [TermVar] -> p t t
-prim = undefined
+    Call f ss ps -> call f ss ps ev
 
 guardedChoice :: (ArrowTry c, Lattice (Complete z)) => c x y -> c y z -> c x z -> c x z
 guardedChoice = tryA
@@ -108,10 +102,8 @@ let_ ss body interp = proc a -> do
   localStratEnv (M.union (M.fromList ss') senv) (interp body) -<< a 
 {-# INLINE let_ #-}
 
-call :: (Ar c, ArrowApply c, ArrowDebug c,
-         HasTermEnv env c, IsTermEnv env t,
-         HasStratEnv c, HasStack t c,
-         Show t)
+call :: (Ar c, ArrowApply c, HasTermEnv env c, IsTermEnv env t,
+         HasStratEnv c)
      => StratVar
      -> [Strat]
      -> [TermVar]
@@ -126,7 +118,7 @@ call f actualStratArgs actualTermArgs interp = proc a -> do
       let senv'' = bindStratArgs (zip formalStratArgs actualStratArgs)
                                  (if M.null senv' then senv else senv')
           callSignature = (strat,actualStratArgs,actualTermArgs)
-      b <- localStratEnv senv'' (stackPush f callSignature (interp body)) -<< a
+      b <- localStratEnv senv'' (interp body) -<< a
       tenv' <- getTermEnv -< ()
       putTermEnv <<< unionTermEnvs -< (formalTermArgs,tenv,tenv')
       returnA -< b

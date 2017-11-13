@@ -21,8 +21,8 @@ import           Syntax hiding (Fail,TermPattern(..))
 import           Utils
 
 import           Control.Arrow
+import           Control.Arrow.Fix
 import           Control.Arrow.Try
-import           Control.Arrow.Join
 import           Control.Arrow.Apply
 import           Control.Arrow.Debug
 import           Control.Arrow.Deduplicate
@@ -59,7 +59,7 @@ data Term
 newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
 
 newtype Interp a b = Interp ( Kleisli (ReaderT StratEnv (StateT TermEnv Result)) a b )
-  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowJoin,ArrowDeduplicate)
+  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowZero,ArrowPlus,ArrowDeduplicate)
 
 runInterp :: Interp a b -> StratEnv -> TermEnv -> a -> Result (b,TermEnv)
 runInterp (Interp f) senv tenv t = runStateT (runReaderT (runKleisli f t) senv) tenv
@@ -88,6 +88,9 @@ eval = runInterp . eval' Proxy
 -- Instances -----------------------------------------------------------------------------------------
 liftK :: (a -> _ b) -> Interp a b
 liftK f = Interp (Kleisli f)
+
+instance ArrowFix Interp Term where
+  fixA f = f (fixA f)
 
 instance ArrowDebug Interp where
   debug s f = proc a -> do
