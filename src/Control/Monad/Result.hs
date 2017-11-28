@@ -15,6 +15,7 @@ import           Control.Monad.Join (MonadJoin)
 import qualified Control.Monad.Join as J
 
 import           Data.Result
+import           Data.Order
 
 newtype ResultT m a = ResultT { runResultT :: m (Result a) }
 
@@ -67,3 +68,12 @@ instance MonadJoin j m => MonadJoin j (ResultT m) where
 
 instance MonadDeduplicate m => MonadDeduplicate (ResultT m) where
   dedup = mapResultT dedup
+
+instance PreOrd (m (Result a)) => PreOrd (ResultT m a) where
+  (ResultT m1) ⊑ (ResultT m2) = m1 ⊑ m2
+
+instance PartOrd (m (Result a)) => PartOrd (ResultT m a) where
+
+instance Lattice (m (Result a)) => Lattice (ResultT m a) where
+  (ResultT m1) ⊔ (ResultT m2) = ResultT (m1 ⊔ m2)
+

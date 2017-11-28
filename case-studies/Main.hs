@@ -7,7 +7,6 @@ import           Prelude hiding (log)
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
 import qualified FuelSemantics as F
-import qualified CachedSemantics as C
 
 import qualified Pretty.Haskell as H
 -- import qualified Pretty.JavaScript as J

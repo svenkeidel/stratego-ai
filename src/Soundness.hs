@@ -4,7 +4,6 @@
 module Soundness where
 
 import           Prelude hiding (abs)
-import           InterpreterArrow
 
 import           Data.Powerset (Pow)
 import           Data.Order

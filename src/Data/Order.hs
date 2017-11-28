@@ -1,9 +1,14 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Data.Order where
 
 import Prelude hiding ((.),map)
+
+import Control.Arrow
+import Control.Monad.Reader
+import Control.Monad.State
 
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HS
@@ -114,24 +119,6 @@ instance PreOrd a => PreOrd (Maybe a) where
 
 instance PartOrd a => PartOrd (Maybe a)
 
--- instance (PartOrd a c, Lattice (Complete a) c, ArrowChoice c) => Lattice (Complete (Maybe a)) c where
---   (⊔) = wrapComplete $ proc m -> case m of
---     (Just x,Just y) -> fmap Just ^<< (⊔) -< (Complete x,Complete y)
---     (Nothing, Nothing) -> returnA -< Complete Nothing
---     (_,_) -> returnA -< Top
-
--- -- instance (Eq a, Hashable a, PartOrd a c, PartOrd a' c, ArrowChoice c, Galois (Pow a) a' c)
--- --     => Galois (Pow (Maybe a)) (Complete (Maybe a')) c where
--- --   alpha = proc xs ->
--- --     if xs == fromFoldable [Nothing]
--- --     then returnA -< Complete Nothing
--- --     else map (Just ^<< alpha) -< traverse maybeComplete xs
--- --     where
--- --       maybeComplete :: Maybe a -> Complete a
--- --       maybeComplete (Just a) = Complete a
--- --       maybeComplete Nothing  = Top
--- --   gamma = undefined
-
 instance PreOrd Int where
   x ⊑ y = x <= y
 
@@ -151,11 +138,29 @@ instance Lattice (Complete ()) where
     (Top,_) -> Top
     (Complete (),Complete ()) -> Complete ()
 
--- -- instance (Arrow p, ArrowZero p) => Lattice (Complete Int) p where
--- --   (⊔) = proc (x,y) ->
--- --     if x == y
--- --       then returnA -< x
--- --       else zeroArrow -< ()
+instance PreOrd (m b) => PreOrd (Kleisli m a b) where
+  _ ⊑ _ = error "pointwise ordering on function space"
+
+instance PartOrd (m b) => PartOrd (Kleisli m a b) where
+
+instance Lattice (m b) => Lattice (Kleisli m a b) where
+  Kleisli f ⊔ Kleisli g = Kleisli $ \x -> f x ⊔ g x
+
+instance PreOrd (m a) => PreOrd (ReaderT r m a) where
+  _ ⊑ _ = error "pointwise ordering on function space"
+
+instance PartOrd (m a) => PartOrd (ReaderT r m a) where
+
+instance Lattice (m a) => Lattice (ReaderT r m a) where
+  ReaderT f ⊔ ReaderT g = ReaderT $ \r -> f r ⊔ g r
+
+instance PreOrd (m (a,s)) => PreOrd (StateT s m a) where
+  _ ⊑ _ = error "pointwise ordering on function space"
+
+instance PartOrd (m (a,s)) => PartOrd (StateT s m a) where
+
+instance Lattice (m (a,s)) => Lattice (StateT s m a) where
+  StateT f ⊔ StateT g = StateT $ \s -> f s ⊔ g s
 
 -- | A galois connection consisting of an abstraction function alpha
 -- and a concretization function gamma between two pre-ordered sets
@@ -163,8 +168,6 @@ instance Lattice (Complete ()) where
 class (PreOrd x, PreOrd y) => Galois x y where
   alpha :: x -> y
   gamma :: y -> x
-
-
 
 instance (Galois x x', Galois y y') => Galois (x,y) (x',y') where
   alpha (x,y) = (alpha x, alpha y)

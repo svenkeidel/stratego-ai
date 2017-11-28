@@ -90,7 +90,7 @@ instance HasTermEnv TermEnv Interp where
   getTermEnv = liftK (const get)
   putTermEnv = liftK put
 
-instance IsTermEnv TermEnv Term where
+instance IsTermEnv TermEnv Term Interp where
   lookupTermVar f g = proc (v,TermEnv env) ->
     case M.lookup v env of
       Just t -> f -< t
@@ -102,7 +102,7 @@ instance IsTermEnv TermEnv Term where
   unionTermEnvs = arr (\(vars, TermEnv e1, TermEnv e2) ->
     TermEnv (M.union e1 (foldr' M.delete e2 vars)))
 
-instance IsTerm Term where
+instance IsTerm Term Interp where
   matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
     Cons c' ts' | c == c' && eqLength ts ts' -> do
       ts'' <- matchSubterms -< (ts,ts')

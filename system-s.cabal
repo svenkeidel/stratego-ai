@@ -48,8 +48,6 @@ library
                        ConcreteSemantics,
                        WildcardSemantics,
                        FuelSemantics,
-                       StackSemantics,
-                       CachedSemantics,
                        Soundness
   build-depends:       base,
                        arrows,

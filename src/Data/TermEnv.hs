@@ -8,30 +8,29 @@ import           Prelude hiding ((.),id,map)
 import           Syntax (TermVar)
 
 import           Control.Category
+import           Control.Arrow
 
-import           Data.Term
-
-class HasTermEnv env c | c -> env where
+class ArrowChoice c => HasTermEnv env c | c -> env where
   getTermEnv :: c () env
   putTermEnv :: c env ()
 
-class IsTermEnv env t | env -> t where
-  lookupTermVar :: (Ar c, HasTermEnv env c) => c t a -> c () a -> c (TermVar,env) a
-  insertTerm :: (Ar c, HasTermEnv env c) => c (TermVar,t,env) env
-  deleteTermVars :: (Ar c, HasTermEnv env c) => c ([TermVar],env) env
-  unionTermEnvs :: (Ar c, HasTermEnv env c) => c ([TermVar],env,env) env
+class HasTermEnv env c => IsTermEnv env t c | env -> t where
+  lookupTermVar :: c t t -> c () t -> c (TermVar,env) t
+  insertTerm :: c (TermVar,t,env) env
+  deleteTermVars :: c ([TermVar],env) env
+  unionTermEnvs :: c ([TermVar],env,env) env
 
-lookupTermVar' :: (Ar c, HasTermEnv env c, IsTermEnv env t) => c t a -> c () a -> c TermVar a
+lookupTermVar' :: (HasTermEnv env c, IsTermEnv env t c) => c t t -> c () t -> c TermVar t
 lookupTermVar' f g = proc v -> do
   env <- getTermEnv -< ()
   lookupTermVar f g -< (v,env)
 
-insertTerm' :: (Ar c, HasTermEnv env c, IsTermEnv env t) => c (TermVar,t) ()
+insertTerm' :: (HasTermEnv env c, IsTermEnv env t c) => c (TermVar,t) ()
 insertTerm' = proc (v,t) -> do
   env <- getTermEnv -< ()
   putTermEnv <<< insertTerm -< (v,t,env)
 
-deleteTermVars' :: (Ar c, HasTermEnv env c, IsTermEnv env t) => c [TermVar] ()
+deleteTermVars' :: (HasTermEnv env c, IsTermEnv env t c) => c [TermVar] ()
 deleteTermVars' = proc vs -> do
   env <- getTermEnv -< ()
   putTermEnv <<< deleteTermVars -< (vs,env)
