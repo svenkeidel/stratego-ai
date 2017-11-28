@@ -8,9 +8,7 @@ import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map,(<=))
 import qualified ConcreteSemantics as C
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
-import qualified WildcardSemanticsDelayed as W
 import           Soundness
-import           InterpreterArrow
 
 
 import           Control.Arrow
@@ -22,7 +20,7 @@ import           Data.TermEnv
 import           Data.Term(TermUtils(..))
 import           Data.Powerset (Pow,fromFoldable)
 import qualified Data.Powerset as P
-import           Data.PowersetResult (PowersetResult(..))
+-- import           Data.PowersetResult (PowersetResult(..))
     
 import           Text.Printf
 

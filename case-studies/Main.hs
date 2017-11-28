@@ -6,7 +6,6 @@ import           Prelude hiding (log)
 
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
-import qualified FuelSemantics as F
 
 import qualified Pretty.Haskell as H
 -- import qualified Pretty.JavaScript as J
@@ -39,8 +38,7 @@ import           Text.Printf
 main :: IO ()
 main = do
     CM.initializeTime
-    prettyPrint H.ppHaskell =<< caseStudy (F.eval 3) "arrows" "desugar_arrow_0_0"
-    prettyPrint H.ppHaskell =<< caseStudy (C.eval 3 mempty) "arrows" "desugar_arrow_0_0"
+    prettyPrint H.ppHaskell =<< caseStudy (W.eval 3) "arrows" "desugar_arrow_0_0"
     -- activate $ caseStudy "arrows" "desugar_arrow_0_0" 4 $
     --   prettyPrint H.ppHaskell <>
     --   sizeAnalysis <>

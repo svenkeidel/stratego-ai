@@ -40,7 +40,6 @@ import           Data.Order
 import           Data.Stack
 import           Data.Complete
 import           Data.Foldable (foldr')
-import           Data.Proxy
 import           Data.Hashable
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -65,7 +64,7 @@ runInterp :: Interp a b -> StratEnv -> TermEnv -> a -> Result (b,TermEnv)
 runInterp (Interp f) senv tenv t = runStateT (runReaderT (runKleisli f t) senv) tenv
 
 eval :: Strat -> StratEnv -> TermEnv -> Term -> Result (Term,TermEnv)
-eval = runInterp . eval' Proxy
+eval = runInterp . eval'
 
 -- Instances -----------------------------------------------------------------------------------------
 liftK :: (a -> _ b) -> Interp a b
@@ -86,11 +85,9 @@ instance HasStratEnv Interp where
 instance HasStack Term Interp where
   stackPush _ _ = id
 
-instance HasTermEnv TermEnv Interp where
+instance IsTermEnv TermEnv Term Interp where
   getTermEnv = liftK (const get)
   putTermEnv = liftK put
-
-instance IsTermEnv TermEnv Term Interp where
   lookupTermVar f g = proc (v,TermEnv env) ->
     case M.lookup v env of
       Just t -> f -< t

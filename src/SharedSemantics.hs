@@ -23,7 +23,6 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Term
 import           Data.TermEnv
 import           Data.Hashable
-import           Data.Proxy
 
 import           Text.Printf
 
@@ -31,8 +30,8 @@ import           Text.Printf
 eval' :: (ArrowChoice c, ArrowTry c, ArrowPlus c, ArrowApply c, ArrowFix c t,
           ArrowDeduplicate c, Eq t, Hashable t, 
           HasStratEnv c, IsTerm t c, IsTermEnv env t c)
-      => Proxy env -> (Strat -> c t t)
-eval' p = fixA $ \ev s0 -> dedupA $ case s0 of
+      => (Strat -> c t t)
+eval' = fixA $ \ev s0 -> dedupA $ case s0 of
     Id -> id
     S.Fail -> failA
     Seq s1 s2 -> sequence (ev s1) (ev s2)
@@ -43,7 +42,7 @@ eval' p = fixA $ \ev s0 -> dedupA $ case s0 of
     Scope xs s -> scope xs (ev s)
     Match f -> proc t -> match -< (f,t)
     Build f -> proc _ -> build -< f
-    Let bnds body -> let_ bnds body (eval' p)
+    Let bnds body -> let_ bnds body eval'
     Call f ss ps -> call f ss ps ev
 
 guardedChoice :: ArrowTry c => c x y -> c y z -> c x z -> c x z
@@ -93,7 +92,7 @@ let_ ss body interp = proc a -> do
   localStratEnv (M.union (M.fromList ss') senv) (interp body) -<< a 
 
 call :: (ArrowChoice c, ArrowTry c, ArrowPlus c, ArrowApply c,
-         HasTermEnv env c, IsTermEnv env t c, HasStratEnv c)
+         IsTermEnv env t c, HasStratEnv c)
      => StratVar
      -> [Strat]
      -> [TermVar]
@@ -149,7 +148,7 @@ match = proc (p,t) -> case p of
   S.NumberLiteral n ->
     matchTermAgainstNumber -< (n,t)
 
-build :: (ArrowTry c, IsTerm t c, IsTermEnv env t c)
+build :: (ArrowChoice c, ArrowTry c, IsTerm t c, IsTermEnv env t c)
       => c TermPattern t
 build = proc p -> case p of
   S.As _ _ -> error "As-pattern in build is disallowed" -< ()

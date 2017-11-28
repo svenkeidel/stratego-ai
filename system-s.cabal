@@ -47,7 +47,6 @@ library
                        SharedSemantics,
                        ConcreteSemantics,
                        WildcardSemantics,
-                       FuelSemantics,
                        Soundness
   build-depends:       base,
                        arrows,

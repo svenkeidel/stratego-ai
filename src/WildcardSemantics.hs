@@ -10,16 +10,22 @@ module WildcardSemantics where
 
 import           Prelude hiding (id,fail,concat,sequence,(.),uncurry)
 
+import           SharedSemantics
 import qualified ConcreteSemantics as C
 import           Utils
 import           Syntax hiding (Fail,TermPattern(..))
 
-import           Control.DeepSeq
-import           Control.Category
-import           Control.Monad hiding (fail,sequence)
 import           Control.Arrow
-import           Control.Arrow.Try
 import           Control.Arrow.Apply
+import           Control.Arrow.Try
+import           Control.Arrow.Fix
+import           Control.Category
+import           Control.DeepSeq
+import           Control.Monad hiding (fail,sequence)
+import           Control.Monad.Reader hiding (fail,sequence)
+import           Control.Monad.Result
+import           Control.Monad.State hiding (fail,sequence)
+import           Control.Arrow.Deduplicate
 
 import           Data.Complete
 import           Data.Constructor
@@ -30,9 +36,10 @@ import           Data.Hashable
 import           Data.Order
 import           Data.Powerset hiding (size)
 import qualified Data.Powerset as P
-import           Data.Term (TermUtils(..))
+import           Data.Term
 import           Data.TermEnv
 import           Data.Text (Text)
+import           Data.Result
 
 import           Test.QuickCheck hiding (Result(..))
 
@@ -44,132 +51,142 @@ data Term
     deriving (Eq)
 
 newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
+newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (ResultT Pow))) a b)
+  deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowZero,ArrowPlus,ArrowDeduplicate,PreOrd,PartOrd,Lattice)
+
+runInterp :: Interp a b -> Int -> StratEnv -> TermEnv -> a -> Pow (Result (b,TermEnv))
+runInterp (Interp f) i senv tenv a = runResultT (runStateT (runReaderT (runKleisli f a) (senv,i)) tenv)
+
+eval :: Int -> Strat -> StratEnv -> TermEnv -> Term -> Pow (Result (Term,TermEnv))
+eval i s = runInterp (eval' s) i
+
+liftK :: (a -> _ b) -> Interp a b
+liftK f = Interp (Kleisli f)
 
 emptyEnv :: TermEnv
 emptyEnv = TermEnv M.empty
 
 -- Instances -----------------------------------------------------------------------------------------
-lookupTermVarDefault :: (ArrowApply c, HasTermEnv TermEnv c, Lattice (c () a)) => c Term a -> c () a -> c (TermVar,TermEnv) a
-lookupTermVarDefault f g = proc (v,TermEnv env) ->
-  case M.lookup v env of
-    Just t -> f -< t
-    Nothing ->
-      (proc () -> do
-        putTermEnv -< TermEnv (M.insert v Wildcard env)
-        f -< Wildcard)
-      ⊔ g
-      -<< ()
+instance HasStratEnv Interp where
+  readStratEnv = liftK (const (fst <$> ask))
+  localStratEnv senv (Interp (Kleisli f)) = liftK (local (first (const senv)) . f)
 
-insertTermDefault :: (ArrowApply c, HasTermEnv TermEnv c, Lattice (c () Term)) => c (TermVar,Term,TermEnv) TermEnv
-insertTermDefault = arr $ \(v,t,TermEnv env) -> TermEnv (M.insert v t env)
+instance IsTermEnv TermEnv Term Interp where
+  getTermEnv = liftK (const get)
+  putTermEnv = liftK (modify . const)
+  lookupTermVar f g = proc (v,TermEnv env) ->
+    case M.lookup v env of
+      Just t -> f -< t
+      Nothing ->
+        (proc () -> do
+          putTermEnv -< TermEnv (M.insert v Wildcard env)
+          f -< Wildcard)
+        ⊔ g
+        -<< ()
+  insertTerm = arr $ \(v,t,TermEnv env) -> TermEnv (M.insert v t env)
+  deleteTermVars = arr $ \(vars,TermEnv env) -> TermEnv (foldr' M.delete env vars)
+  unionTermEnvs = arr (\(vars,TermEnv e1,TermEnv e2) -> TermEnv (M.union e1 (foldr' M.delete e2 vars)))
 
-deleteTermVarsDefault :: (ArrowApply c, HasTermEnv TermEnv c, Lattice (c () Term)) => c ([TermVar],TermEnv) TermEnv
-deleteTermVarsDefault = arr $ \(vars,TermEnv env) -> TermEnv (foldr' M.delete env vars)
-
-unionTermEnvsDefault :: (ArrowApply c, HasTermEnv TermEnv c, Lattice (c () Term)) => c ([TermVar],TermEnv,TermEnv) TermEnv
-unionTermEnvsDefault = arr (\(vars,TermEnv e1,TermEnv e2) -> TermEnv (M.union e1 (foldr' M.delete e2 vars)))
-
-matchTermAgainstConstructorDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c ([ps],[Term]) [Term] -> c (Constructor,[ps],Term) Term
-matchTermAgainstConstructorDefault matchSubterms = proc (c,ts,t) -> case t of
-  Cons c' ts' | c == c' && eqLength ts ts' -> do
-    ts'' <- matchSubterms -< (ts,ts')
-    returnA -< Cons c ts''
-  Wildcard -> do
-    ts'' <- matchSubterms -< (ts,[ Wildcard | _ <- [1..(length ts)] ])
-    returnA ⊔ failA -< Cons c ts''
-  _ -> failA -< ()
-
-matchTermAgainstStringDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c (Text,Term) Term
-matchTermAgainstStringDefault = proc (s,t) -> case t of
-  StringLiteral s'
-    | s == s' -> returnA -< t
-    | otherwise -> failA -< ()
-  Wildcard ->
-    returnA ⊔ failA -< StringLiteral s
-  _ -> failA -< ()
-
-matchTermAgainstNumberDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c (Int,Term) Term
-matchTermAgainstNumberDefault = proc (n,t) -> case t of
-  NumberLiteral n'
-    | n == n' -> returnA -< t
-    | otherwise -> failA -< ()
-  Wildcard ->
-    success ⊔ failA -< NumberLiteral n
-  _ -> failA -< ()
-
-matchTermAgainstExplodeDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c Term Term -> c Term Term -> c Term Term  
-matchTermAgainstExplodeDefault matchCons matchSubterms = proc t -> case t of
-    Cons (Constructor c) ts -> do
-      matchCons -< StringLiteral c
-      matchSubterms -< convertToList ts
-      returnA -< t
-    StringLiteral _ -> do
-      matchSubterms -< convertToList []
-      returnA -< t
-    NumberLiteral _ -> do
-      matchSubterms -< convertToList []
-      returnA -< t
+instance IsTerm Term Interp where
+  matchTermAgainstConstructor matchSubterms = proc (c,ts,t) -> case t of
+    Cons c' ts' | c == c' && eqLength ts ts' -> do
+      ts'' <- matchSubterms -< (ts,ts')
+      returnA -< Cons c ts''
+    Wildcard -> do
+      ts'' <- matchSubterms -< (ts,[ Wildcard | _ <- [1..(length ts)] ])
+      returnA ⊔ failA -< Cons c ts''
+    _ -> failA -< ()
+  
+  matchTermAgainstString = proc (s,t) -> case t of
+    StringLiteral s'
+      | s == s' -> returnA -< t
+      | otherwise -> failA -< ()
     Wildcard ->
-      (proc t -> do
-         matchCons -< Wildcard
-         matchSubterms -< Wildcard
-         returnA -< t)
-      ⊔
-      (proc t -> do
-         matchSubterms -< convertToList []
-         returnA -< t)
-      -< t
+      returnA ⊔ failA -< StringLiteral s
+    _ -> failA -< ()
+  
+  matchTermAgainstNumber = proc (n,t) -> case t of
+    NumberLiteral n'
+      | n == n' -> returnA -< t
+      | otherwise -> failA -< ()
+    Wildcard ->
+      success ⊔ failA -< NumberLiteral n
+    _ -> failA -< ()
+  
+  matchTermAgainstExplode matchCons matchSubterms = proc t -> case t of
+      Cons (Constructor c) ts -> do
+        matchCons -< StringLiteral c
+        matchSubterms -< convertToList ts
+        returnA -< t
+      StringLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+      NumberLiteral _ -> do
+        matchSubterms -< convertToList []
+        returnA -< t
+      Wildcard ->
+        (proc t -> do
+           matchCons -< Wildcard
+           matchSubterms -< Wildcard
+           returnA -< t)
+        ⊔
+        (proc t -> do
+           matchSubterms -< convertToList []
+           returnA -< t)
+        -< t
+  
+  equal = proc (t1,t2) ->
+    case (t1,t2) of
+      (Cons c ts, Cons c' ts')
+          | c == c' && eqLength ts ts' -> do
+          ts'' <- zipWithA equal -< (ts,ts')
+          returnA -< Cons c ts''
+          | otherwise -> failA -< ()
+      (StringLiteral s, StringLiteral s')
+          | s == s' -> success -< t1
+          | otherwise -> failA -< ()
+      (NumberLiteral n, NumberLiteral n')
+          | n == n' -> success -< t1
+          | otherwise -> failA -< ()
+      (Wildcard, t) -> failA ⊔ success -< t
+      (t, Wildcard) -> failA ⊔ success -< t
+      (_,_) -> failA -< ()
+  
+  convertFromList = proc (c,ts) -> case (c,go ts) of
+    (StringLiteral c', Just ts'') -> returnA -< Cons (Constructor c') ts''
+    (Wildcard, Just _)            -> failA ⊔ success -< Wildcard
+    (_,                Nothing)   -> failA ⊔ success -< Wildcard
+    _                             -> failA -< ()
+    where
+      go t = case t of
+        Cons "Cons" [x,tl] -> (x:) <$> go tl
+        Cons "Nil" [] -> Just []
+        Wildcard -> Nothing 
+        _ -> Nothing
+  
+  mapSubterms f = proc t ->
+    case t of
+      Cons c ts -> do
+        ts' <- f -< ts
+        returnA -< Cons c ts'
+      StringLiteral _ -> returnA -< t
+      NumberLiteral _ -> returnA -< t
+      Wildcard -> failA ⊔ success -< Wildcard
+  
+  
+  cons = arr (uncurry Cons)
+  numberLiteral = arr NumberLiteral
+  stringLiteral = arr StringLiteral
 
-equalDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c (Term,Term) Term
-equalDefault = proc (t1,t2) ->
-  case (t1,t2) of
-    (Cons c ts, Cons c' ts')
-        | c == c' && eqLength ts ts' -> do
-        ts'' <- zipWithA equalDefault -< (ts,ts')
-        returnA -< Cons c ts''
-        | otherwise -> failA -< ()
-    (StringLiteral s, StringLiteral s')
-        | s == s' -> success -< t1
-        | otherwise -> failA -< ()
-    (NumberLiteral n, NumberLiteral n')
-        | n == n' -> success -< t1
-        | otherwise -> failA -< ()
-    (Wildcard, t) -> failA ⊔ success -< t
-    (t, Wildcard) -> failA ⊔ success -< t
-    (_,_) -> failA -< ()
-
-convertFromListDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c (Term,Term) Term
-convertFromListDefault = proc (c,ts) -> case (c,go ts) of
-  (StringLiteral c', Just ts'') -> returnA -< Cons (Constructor c') ts''
-  (Wildcard, Just _)            -> failA ⊔ success -< Wildcard
-  (_,                Nothing)   -> failA ⊔ success -< Wildcard
-  _                             -> failA -< ()
-  where
-    go t = case t of
-      Cons "Cons" [x,tl] -> (x:) <$> go tl
-      Cons "Nil" [] -> Just []
-      Wildcard -> Nothing 
-      _ -> Nothing
-
-mapSubtermsDefault :: (ArrowChoice c, ArrowTry c, Lattice (c Term Term)) => c [Term] [Term] -> c Term Term
-mapSubtermsDefault f = proc t ->
-  case t of
-    Cons c ts -> do
-      ts' <- f -< ts
-      returnA -< Cons c ts'
-    StringLiteral _ -> returnA -< t
-    NumberLiteral _ -> returnA -< t
-    Wildcard -> failA ⊔ success -< Wildcard
-
-
-consDefault :: Arrow c => c (Constructor,[Term]) Term
-consDefault = arr (uncurry Cons)
-
-numberLiteralDefault :: Arrow c => c Int Term
-numberLiteralDefault = arr NumberLiteral
-
-stringLiteralDefault :: Arrow c => c Text Term
-stringLiteralDefault = arr StringLiteral
+instance ArrowFix Interp Term where
+  fixA f z = proc x -> do
+    i <- getFuel -< ()
+    if i <= 0
+    then returnA -< top
+    else localFuel (f (fixA f) z) -< (i-1,x)
+    where
+      getFuel = liftK (const (snd <$> ask))
+      localFuel (Interp (Kleisli g)) = liftK $ \(i,a) -> local (second (const i)) (g a)
 
 instance BoundedLattice Term where
   top = Wildcard
