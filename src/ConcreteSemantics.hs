@@ -67,24 +67,6 @@ runInterp (Interp f) senv tenv t = runStateT (runReaderT (runKleisli f t) senv) 
 eval :: Strat -> StratEnv -> TermEnv -> Term -> Result (Term,TermEnv)
 eval = runInterp . eval' Proxy
 
--- prim f ps = proc _ -> case f of
---   "strcat" -> do
---     tenv <- getTermEnv -< ()
---     case mapM (`M.lookup` tenv) ps of
---       Just [t1, t2] -> do
---         m <- matchTerm *** matchTerm -< (t1,t2)
---         case m of
---           (T.StringLiteral s1,T.StringLiteral s2) ->
---             T.stringLiteral -< s1 `Text.append` s2
---           _ -> fail -< ()
---       _ -> fail -< ()
---   "SSL_newname" -> do
---     tenv <- getTermEnv -< ()
---     case mapM (`M.lookup` tenv) ps of
---       Just [_] -> undefined -< ()
---       _ -> fail -< ()
---   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
-
 -- Instances -----------------------------------------------------------------------------------------
 liftK :: (a -> _ b) -> Interp a b
 liftK f = Interp (Kleisli f)
@@ -300,3 +282,20 @@ arbitraryTerm h w = do
   fmap (Cons c) $ vectorOf w' $ join $
     arbitraryTerm <$> choose (0,h-1) <*> pure w
 
+-- prim f ps = proc _ -> case f of
+--   "strcat" -> do
+--     tenv <- getTermEnv -< ()
+--     case mapM (`M.lookup` tenv) ps of
+--       Just [t1, t2] -> do
+--         m <- matchTerm *** matchTerm -< (t1,t2)
+--         case m of
+--           (T.StringLiteral s1,T.StringLiteral s2) ->
+--             T.stringLiteral -< s1 `Text.append` s2
+--           _ -> fail -< ()
+--       _ -> fail -< ()
+--   "SSL_newname" -> do
+--     tenv <- getTermEnv -< ()
+--     case mapM (`M.lookup` tenv) ps of
+--       Just [_] -> undefined -< ()
+--       _ -> fail -< ()
+--   _ -> error ("unrecognized primitive function: " ++ show f) -< ()

@@ -1,7 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ConstraintKinds #-}
--- {-# LANGUAGE Arrows #-}
--- {-# LANGUAGE OverloadedStrings #-}
 module Data.Term where
 
 import Prelude hiding (fail)
@@ -9,9 +7,8 @@ import Prelude hiding (fail)
 import Data.Constructor
 import Data.Text(Text)
 
-import Control.Arrow hiding ((<+>))
+import Control.Arrow
 import Control.Arrow.Try
-import Control.Arrow.Join
 
 type Ar c = (ArrowChoice c, ArrowTry c, ArrowPlus c)
 class IsTerm t where
@@ -34,21 +31,3 @@ class TermUtils t where
   size :: t -> Int
   height :: t -> Int
   convertToList :: [t] -> t
-
--- size :: IsTerm t p => p t Int
--- size = proc t -> do
---   t' <- matchTerm -< t
---   case t' of
---     Cons _ ts ->
---       arr (succ . sum) <<< mapA size -< ts
---     _ -> returnA -< 1
-         
--- height :: IsTerm t p => p t Int
--- height = proc t -> do
---   t' <- matchTerm -< t
---   case t' of
---     Cons _ ts
---       | null ts -> returnA -< 1
---       | otherwise -> arr (succ . maximum) <<< mapA height -< ts
---     _ -> returnA -< 1
-

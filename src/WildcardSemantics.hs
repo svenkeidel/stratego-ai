@@ -48,33 +48,6 @@ newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
 emptyEnv :: TermEnv
 emptyEnv = TermEnv M.empty
 
--- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
---      => StratVar -> [TermVar] -> p a t
--- prim f ps = undefined
-  -- proc _ -> case f of
-  --   "SSL_strcat" -> do
-  --     args <- lookupTermArgs -< ps
-  --     case args of
-  --       [T.StringLiteral t1, T.StringLiteral t2] -> stringLiteral -< t1 `append` t2
-  --       [T.Wildcard, _] -> wildcard -< ()
-  --       [_, T.Wildcard] -> wildcard -< ()
-  --       _ -> fail -< ()
-  --   "SSL_newname" -> do
-  --     args <- lookupTermArgs -< ps
-  --     case args of
-  --       [T.StringLiteral _] -> wildcard -< ()
-  --       [T.Wildcard] -> wildcard -< ()
-  --       _ -> fail -< ()
-  --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
-  -- where
-  --   lookupTermArgs = undefined
-      -- proc args -> do
-      -- tenv <- getTermEnv -< ()
-      -- case mapM (`M.lookup` tenv) args of
-      --   Just t -> mapA matchTerm -< t
-      --   Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
--- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
-
 -- Instances -----------------------------------------------------------------------------------------
 instance IsTermEnv TermEnv Term where
   lookupTermVar f g = proc (v,TermEnv env) ->
@@ -131,9 +104,11 @@ instance IsTerm Term where
         returnA -< t
       Wildcard ->
         (do matchCons -< Wildcard
-            matchSubterms -< Wildcard)
+            matchSubterms -< Wildcard
+            returnA -< t)
         <+>
-        (matchSubterms -< convertToList [])
+        (do matchSubterms -< convertToList []
+            returnA -< t)
 
   equal = proc (t1,t2) ->
     case (t1,t2) of
@@ -320,3 +295,30 @@ instance Lattice TermEnv where
 --   Galois (Pow (ConcreteTermEnv t)) (AbstractTermEnv t') where
 --   alpha cenvs = lub (fmap (\(ConcreteTermEnv e) -> AbstractTermEnv (fmap (alpha . P.singleton) e)) cenvs)
 --   gamma = undefined
+
+-- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
+--      => StratVar -> [TermVar] -> p a t
+-- prim f ps = undefined
+  -- proc _ -> case f of
+  --   "SSL_strcat" -> do
+  --     args <- lookupTermArgs -< ps
+  --     case args of
+  --       [T.StringLiteral t1, T.StringLiteral t2] -> stringLiteral -< t1 `append` t2
+  --       [T.Wildcard, _] -> wildcard -< ()
+  --       [_, T.Wildcard] -> wildcard -< ()
+  --       _ -> fail -< ()
+  --   "SSL_newname" -> do
+  --     args <- lookupTermArgs -< ps
+  --     case args of
+  --       [T.StringLiteral _] -> wildcard -< ()
+  --       [T.Wildcard] -> wildcard -< ()
+  --       _ -> fail -< ()
+  --   _ -> error ("unrecognized primitive function: " ++ show f) -< ()
+  -- where
+  --   lookupTermArgs = undefined
+      -- proc args -> do
+      -- tenv <- getTermEnv -< ()
+      -- case mapM (`M.lookup` tenv) args of
+      --   Just t -> mapA matchTerm -< t
+      --   Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
+-- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
