@@ -10,12 +10,7 @@ import Control.Arrow
 import Control.Monad.Reader
 import Control.Monad.State
 
-import Data.HashSet (HashSet)
-import qualified Data.HashSet as HS
-import Data.Hashable
 import Data.Complete
-import Data.Powerset
-import qualified Data.Sequence as S
 
 -- REMINDER TO SELF: DO NOT ADD EXTRA PARAMETER FOR STATIC INFORMATION TO ORDERING FUNCTION!!!
 -- IT MAKES THE CODE MUCH MORE COMPLICATED.
@@ -34,36 +29,8 @@ class PartOrd x => Lattice x where
 class Lattice x => BoundedLattice x where
   top :: x
 
-lub :: Lattice x => Pow x -> x
-lub (Pow xs) = go xs
-  where
-    go s = case S.viewl s of
-      S.EmptyL -> error "no lub of empty set"
-      a S.:< as
-        | null as -> a
-        | otherwise ->
-          a ⊔ go as
-
-instance (Eq a, Hashable a) => PreOrd (HashSet a) where
-  h1 ⊑ h2 = all (\x -> x `HS.member` h2) h1
-
-instance (Eq a, Hashable a) => PartOrd (HashSet a)
-
-instance (Eq a, Hashable a) => Lattice (HashSet a) where
-  (⊔) = HS.union
-
-instance (Eq a, Hashable a) => PreOrd (Pow a) where
-  as ⊑ bs = all (`HS.member` toHashSet as) (toHashSet bs)
-
-instance (Eq a, Hashable a) => PartOrd (Pow a) 
-
-instance (Eq a, Hashable a) => Lattice (Pow a) where
-  as ⊔ bs = as `union` bs
-
-instance (Eq (x,y), Hashable (x,y), Galois (Pow x) x', Galois (Pow y) y')
-  => Galois (Pow (x,y)) (x',y') where
-  alpha m = (alpha (fst <$> m),alpha (snd <$> m))
-  gamma m = cartesian (gamma (fst m),gamma (snd m))
+lub :: (Foldable f, Lattice x) => f x -> x
+lub = foldr1 (⊔)
 
 instance PreOrd x => PreOrd (Complete x) where
   c1 ⊑ c2 = case (c1,c2) of
@@ -161,14 +128,3 @@ instance PartOrd (m (a,s)) => PartOrd (StateT s m a) where
 
 instance Lattice (m (a,s)) => Lattice (StateT s m a) where
   StateT f ⊔ StateT g = StateT $ \s -> f s ⊔ g s
-
--- | A galois connection consisting of an abstraction function alpha
--- and a concretization function gamma between two pre-ordered sets
--- has to satisfy forall x,y. alpha x ⊑ y iff x ⊑ gamma y
-class (PreOrd x, PreOrd y) => Galois x y where
-  alpha :: x -> y
-  gamma :: y -> x
-
-instance (Galois x x', Galois y y') => Galois (x,y) (x',y') where
-  alpha (x,y) = (alpha x, alpha y)
-  gamma (x',y') = (gamma x', gamma y')

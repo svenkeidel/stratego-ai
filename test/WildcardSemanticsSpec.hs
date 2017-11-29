@@ -3,23 +3,23 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module WildcardSemanticsSpec(main, spec) where
 
-import           Prelude hiding ((.),id,succ,pred,all,fail,sequence,map,(<=))
-
+import           Prelude hiding (map)
+    
 import qualified ConcreteSemantics as C
+import           SharedSemantics
+import           Soundness
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
-import           Soundness
-
 
 import           Control.Arrow
+
 import qualified Data.HashMap.Lazy as M
-import           Data.Hashable
-import           Data.Result
+import           Data.Result hiding (map)
 import           Data.Order
-import           Data.TermEnv
+import           Data.GaloisConnection
 import           Data.Term(TermUtils(..))
-import           Data.Powerset (Pow,fromFoldable)
-import qualified Data.Powerset as P
+import qualified Data.Powerset as C
+import qualified Data.AbstractPowerset as A
 -- import           Data.PowersetResult (PowersetResult(..))
     
 import           Text.Printf
@@ -42,7 +42,7 @@ spec = do
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"])) t
         `shouldBe'`
-           fromFoldable
+           C.fromFoldable
              [ Success $ convertToList [1]
              , Success $ convertToList [1,1]
              , Success $ convertToList [1,1,1]
@@ -60,7 +60,7 @@ spec = do
       let t2 = convertToList l2
       return $ counterexample (printf "t: %s\n"
                                       (showLub t1 t2))
-             $ sound' 2 (Let [("map", map)]
+             $ sound' (Let [("map", map)]
                   (Match "x" `Seq`
                    Call "map" [Build 1] ["x"]))
                   [(t1,[]),(t2,[])]
@@ -70,21 +70,19 @@ spec = do
     prop "should handle inconsistent environments" $ do
       let t1 = C.Cons "f" []
           t2 = C.Cons "g" []
-      sound' 1 (Match "x") [(t1, [("x", t1)]), (t2, [("y", t2)])]
+      sound' (Match "x") [(t1, [("x", t1)]), (t2, [("y", t2)])]
 
     prop "should be sound" $ do
-      i <- choose (0,1)
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       return $ counterexample
-                 (printf "i: %d\npattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
-                    i (show matchPattern) (show t2) (show t3)
+                 (printf "pattern: %s\n %s ⊔ %s = %s"
+                    (show matchPattern) (show t2) (show t3)
                     (showLub t2 t3))
-             $ sound' i (Match matchPattern) [(t2,[]),(t3,[])]
+             $ sound' (Match matchPattern) [(t2,[]),(t3,[])]
 
   describe "build" $
     prop "should be sound" $ do
-      i <- choose (0,1)
       [t1,t2,t3] <- C.similarTerms 3 7 2 10
       matchPattern <- C.similarTermPattern t1 3
       let vars = patternVars' matchPattern
@@ -94,29 +92,23 @@ spec = do
                  (printf "match pattern: %s\nbuild pattern: %s\nt2: %s\nt3: %s\nlub t2 t3 = %s"
                     (show matchPattern) (show buildPattern) (show t2) (show t3)
                     (showLub t2 t3))
-             $ sound' i (Match matchPattern `Seq` Build buildPattern) [(t2,[]),(t3,[])]
+             $ sound' (Match matchPattern `Seq` Build buildPattern) [(t2,[]),(t3,[])]
 
   -- describe "lookupTermVar" $
-  --   prop "should be sound" $
-  --     sound'' lookupTermVar lookupTermVar 
+  --   prop "should be sound" $ do
+  --     sound M.empty lookupTermVar lookupTermVar 
 
   where
-    
-    sound' :: Int -> Strat -> [(C.Term,[(TermVar,C.Term)])] -> Property
-    sound' i s xs = sound'' (C.eval'' s) (W.eval'' i s) (fmap (\(t,tenv) -> (t,concreteTermEnv tenv)) xs)
+    sound' :: Strat -> [(C.Term,[(TermVar,C.Term)])] -> Property
+    sound' s xs = sound M.empty (C.fromFoldable $ fmap (second termEnv) xs) (eval' s) (eval' s :: W.Interp W.Term W.Term)
 
-    sound'' :: (Eq a, Eq b, Hashable a, Hashable b, Galois (Pow a) a', Galois (Pow b) b', Show b, Show b')
-            => Interp StratEnv (ConcreteTermEnv C.Term) Result a b
-            -> Interp StratEnv (AbstractTermEnv W.Term) PowersetResult a' b'
-            -> [(a,ConcreteTermEnv C.Term)]
-            -> Property
-    sound'' f g xs = sound M.empty f g (fromFoldable xs)
+    termEnv = C.TermEnv . M.fromList
 
     showLub :: C.Term -> C.Term -> String
-    showLub = curry (show <<< (alpha :: Pow C.Term -> W.Term) <<< arr (\(t1,t2) -> P.fromFoldable [t1,t2]))
+    showLub t1 t2 = show (alpha (C.fromFoldable [t1,t2] :: C.Pow C.Term) :: W.Term) 
 
-    shouldBe' :: Pow (Result W.Term) -> Pow (Result W.Term) -> Property
-    shouldBe' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) (PowRes s2 ⊑ PowRes s1 `shouldBe` True)
+    shouldBe' :: A.Pow (Result W.Term) -> A.Pow (Result W.Term) -> Property
+    shouldBe' s1 s2 = counterexample (printf "%s < %s\n" (show s1) (show s2)) (s2 ⊑ s1 `shouldBe` True)
     infix 1 `shouldBe'`
 
     map = Strategy ["f"] ["l"] (Scope ["x","xs","x'","xs'"] (
@@ -131,5 +123,5 @@ spec = do
                Build (Cons "Cons" ["x'", "xs'"]))
               (Build (Cons "Nil" []))))
 
-    weval :: Int -> Strat -> W.Term -> Pow (Result (W.Term,W.TermEnv))
-    weval i s t = W.eval i M.empty s (t,AbstractTermEnv M.empty)
+    weval :: Int -> Strat -> W.Term -> A.Pow (Result (W.Term,W.TermEnv))
+    weval i s t = W.eval i s M.empty (W.TermEnv M.empty) t

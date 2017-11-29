@@ -57,6 +57,8 @@ data Term
 
 newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
 
+-- Kleisli m a b = a -> m b
+-- M a = StratEnv -> TermEnv -> Result (a,TermEnv)
 newtype Interp a b = Interp ( Kleisli (ReaderT StratEnv (StateT TermEnv Result)) a b )
   deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowZero,ArrowPlus,ArrowDeduplicate)
 
@@ -81,9 +83,6 @@ instance ArrowDebug Interp where
 instance HasStratEnv Interp where
   readStratEnv = liftK (const ask)
   localStratEnv senv (Interp (Kleisli f)) = liftK (local (const senv) . f)
-
-instance HasStack Term Interp where
-  stackPush _ _ = id
 
 instance IsTermEnv TermEnv Term Interp where
   getTermEnv = liftK (const get)

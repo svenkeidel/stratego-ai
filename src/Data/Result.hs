@@ -14,6 +14,7 @@ import Control.Arrow
 import Data.Hashable
 import Data.Semigroup
 import Data.Order
+import Data.GaloisConnection
 
 data Result a = Success a | Fail
   deriving (Eq,Ord,Show)

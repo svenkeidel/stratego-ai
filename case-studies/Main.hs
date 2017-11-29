@@ -6,6 +6,7 @@ import           Prelude hiding (log)
 
 import           Syntax hiding (Fail)
 import qualified WildcardSemantics as W
+import qualified Data.AbstractPowerset as W
 
 import qualified Pretty.Haskell as H
 -- import qualified Pretty.JavaScript as J
@@ -23,12 +24,10 @@ import           Data.Foldable
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as H
 import           Data.Result
-import qualified Data.Sequence as S
 import           Data.String
 import qualified Data.Text.IO as TIO
 import           Data.Term (TermUtils)
 import qualified Data.Term as T
-import           Data.Powerset(Pow,unPow)
 
 import           System.IO
 
@@ -164,18 +163,18 @@ measure analysisName action = do
 
 type Analysis t = String -> String -> Int -> HashSet t -> IO ()
 
-caseStudy :: (Strat -> StratEnv -> W.TermEnv -> W.Term -> Pow (Result (W.Term,W.TermEnv))) -> String -> String -> IO (HashSet W.Term)
+caseStudy :: (Strat -> StratEnv -> W.TermEnv -> W.Term -> W.Pow (Result (W.Term,W.TermEnv))) -> String -> String -> IO (HashSet W.Term)
 caseStudy eval name function = do
   printf "------------------ case study: %s ----------------------\n" name
   file <- TIO.readFile =<< getDataFileName (printf "case-studies/%s/%s.aterm" name name)
   case parseModule =<< parseATerm file of
     Left e -> fail (show e)
     Right module_ -> do
-      let res = unPow $ eval (Call (fromString function) [] []) (stratEnv module_) W.emptyEnv W.Wildcard
-      let terms = H.fromList $ toList $ filterResults res
+      let res = eval (Call (fromString function) [] []) (stratEnv module_) W.emptyEnv W.Wildcard
+      let terms = H.fromList $ toList $ filterResults (toList res)
 
       _ <- CM.measure (CT.nfIO (return terms)) 1
       return terms
  where
    filterResults = fmap (\r -> case r of Success (t,_) -> t; Fail -> error "")
-                 . S.filter (\r -> case r of Success _ -> True; _ -> False)
+                 . filter (\r -> case r of Success _ -> True; _ -> False)

@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Arrows #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Signature(Signature, HasSignature(..), Sort(..), Fun(..), SortId(..),
                  empty, insertType, lookupType, insertSubtype, subtype, inhabitants) where
@@ -17,7 +16,6 @@ import           Data.Constructor
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Maybe
-import           Data.Order
 
 import           Control.Arrow
 

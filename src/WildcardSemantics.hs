@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -Wno-partial-type-signatures #-}
+{-# OPTIONS_GHC -Wno-partial-type-signatures -fno-warn-orphans #-}
 module WildcardSemantics where
 
 import           Prelude hiding (id,fail,concat,sequence,(.),uncurry)
@@ -14,18 +14,19 @@ import           SharedSemantics
 import qualified ConcreteSemantics as C
 import           Utils
 import           Syntax hiding (Fail,TermPattern(..))
-
+import           Soundness
+    
 import           Control.Arrow
 import           Control.Arrow.Apply
 import           Control.Arrow.Try
 import           Control.Arrow.Fix
+import           Control.Arrow.Deduplicate
 import           Control.Category
 import           Control.DeepSeq
-import           Control.Monad hiding (fail,sequence)
 import           Control.Monad.Reader hiding (fail,sequence)
 import           Control.Monad.Result
 import           Control.Monad.State hiding (fail,sequence)
-import           Control.Arrow.Deduplicate
+import           Control.Monad.Deduplicate
 
 import           Data.Complete
 import           Data.Constructor
@@ -34,14 +35,17 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
 import           Data.Order
+import           Data.GaloisConnection
 import           Data.Powerset hiding (size)
 import qualified Data.Powerset as P
+import qualified Data.AbstractPowerset as A
 import           Data.Term
 import           Data.TermEnv
 import           Data.Text (Text)
 import           Data.Result
 
 import           Test.QuickCheck hiding (Result(..))
+import           Text.Printf
 
 data Term
     = Cons Constructor [Term]
@@ -51,13 +55,13 @@ data Term
     deriving (Eq)
 
 newtype TermEnv = TermEnv (HashMap TermVar Term) deriving (Show,Eq,Hashable)
-newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (ResultT Pow))) a b)
+newtype Interp a b = Interp (Kleisli (ReaderT (StratEnv,Int) (StateT TermEnv (ResultT A.Pow))) a b)
   deriving (Category,Arrow,ArrowChoice,ArrowApply,ArrowTry,ArrowZero,ArrowPlus,ArrowDeduplicate,PreOrd,PartOrd,Lattice)
 
-runInterp :: Interp a b -> Int -> StratEnv -> TermEnv -> a -> Pow (Result (b,TermEnv))
+runInterp :: Interp a b -> Int -> StratEnv -> TermEnv -> a -> A.Pow (Result (b,TermEnv))
 runInterp (Interp f) i senv tenv a = runResultT (runStateT (runReaderT (runKleisli f a) (senv,i)) tenv)
 
-eval :: Int -> Strat -> StratEnv -> TermEnv -> Term -> Pow (Result (Term,TermEnv))
+eval :: Int -> Strat -> StratEnv -> TermEnv -> Term -> A.Pow (Result (Term,TermEnv))
 eval i s = runInterp (eval' s) i
 
 liftK :: (a -> _ b) -> Interp a b
@@ -178,15 +182,26 @@ instance IsTerm Term Interp where
   numberLiteral = arr NumberLiteral
   stringLiteral = arr StringLiteral
 
+instance BoundedLattice (Interp () Term) where
+  top = proc () -> success ⊔ failA -< Wildcard
+
 instance ArrowFix Interp Term where
   fixA f z = proc x -> do
     i <- getFuel -< ()
     if i <= 0
-    then returnA -< top
+    then top -< ()
     else localFuel (f (fixA f) z) -< (i-1,x)
     where
       getFuel = liftK (const (snd <$> ask))
       localFuel (Interp (Kleisli g)) = liftK $ \(i,a) -> local (second (const i)) (g a)
+
+instance Soundness Interp where
+  sound senv xs f g = forAll (choose (0,3)) $ \i ->
+    let con :: A.Pow (Result (_,TermEnv))
+        con = dedup $ alpha (fmap (\(x,tenv) -> C.runInterp f senv tenv x) xs)
+        abst :: A.Pow (Result (_,TermEnv))
+        abst = dedup $ runInterp g i senv (alpha (fmap snd xs)) (alpha (fmap fst xs))
+    in counterexample (printf "%s ⊑/ %s" (show con) (show abst)) $ con ⊑ abst
 
 instance BoundedLattice Term where
   top = Wildcard
@@ -239,15 +254,12 @@ instance Lattice (Complete Term) where
     (Complete t1, Complete t2) -> Complete (t1 ⊔ t2)
     (_,_) -> Top
 
-instance Galois (Pow C.Term) Term where
-  alpha = lub <<< P.map go
+instance Galois (P.Pow C.Term) Term where
+  alpha = lub . fmap go
     where
-      go = proc t -> case t of
-        C.Cons c ts -> do
-          ts' <- mapA go -< ts
-          returnA -< Cons c ts'
-        C.StringLiteral s -> returnA -< StringLiteral s
-        C.NumberLiteral s -> returnA -< NumberLiteral s
+      go (C.Cons c ts) = Cons c (fmap go ts)
+      go (C.StringLiteral s) = StringLiteral s
+      go (C.NumberLiteral s) = NumberLiteral s
   gamma = error "Infinite"
 
 instance Show Term where
@@ -303,9 +315,6 @@ internal f = arr TermEnv . f . arr (\(TermEnv e) -> e)
 map :: ArrowChoice c => c Term Term -> c TermEnv TermEnv
 map f = internal (arr M.fromList . mapA (second f) . arr M.toList)
 
-newtype AbstractTermEnv t = AbstractTermEnv (HashMap TermVar t)
-  deriving (Eq,Hashable,Show)
-
 dom :: HashMap TermVar t -> [TermVar]
 dom = M.keys
 
@@ -324,10 +333,13 @@ instance Lattice TermEnv where
           _                 -> go vs env1 env2 env3
         [] -> TermEnv env3
 
--- instance (Eq t, Hashable t, Lattice t', Galois (Pow t) t') =>
---   Galois (Pow (ConcreteTermEnv t)) (AbstractTermEnv t') where
---   alpha cenvs = lub (fmap (\(ConcreteTermEnv e) -> AbstractTermEnv (fmap (alpha . P.singleton) e)) cenvs)
---   gamma = undefined
+instance Galois (Pow C.TermEnv) TermEnv where
+  alpha = lub . fmap (\(C.TermEnv e) -> TermEnv (fmap alphaSing e))
+  gamma = undefined
+
+instance (Eq x, Hashable x, Eq x', Hashable x', Galois (Pow x) x') => Galois (Pow (Result x)) (A.Pow (Result x')) where
+  alpha = P.fromFoldable . fmap (fmap alphaSing)
+  gamma = undefined
 
 -- prim :: (ArrowTry p, ArrowAppend p, IsTerm t p, IsTermEnv (AbstractTermEnv t) t p)
 --      => StratVar -> [TermVar] -> p a t
@@ -355,3 +367,4 @@ instance Lattice TermEnv where
       --   Just t -> mapA matchTerm -< t
       --   Nothing -> fail <+> success -< [T.Wildcard | _ <- args]
 -- {-# SPECIALISE prim :: StratVar -> [TermVar] -> Interp StratEnv TermEnv PowersetResult Term Term #-}
+ 
